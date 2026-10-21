@@ -8,7 +8,7 @@ export type Dot = { x: number; y: number; t: number };
 
 export const DESIGN = {
   width: 3620,
-  cell: 10,
+  cell: 8,
   scale: 0.81,
   brightness: 1,
   contrast: -0.82,

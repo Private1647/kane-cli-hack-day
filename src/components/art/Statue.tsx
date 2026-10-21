@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { computeDots, inkLayers, loadImage, tintToLime, type InkLayer } from "@/components/hero/halftone";
+import { DESIGN, computeDots, inkLayers, loadImage, tintToLime, type InkLayer } from "@/components/hero/halftone";
 import { LENS, LENS_MEDIA, attachLens, buildHitMask, drawLens, hits, type HitMask } from "@/components/hero/lens";
 
 // A classical sculpture printed as a halftone, with the same lime lens as the
@@ -10,8 +10,7 @@ import { LENS, LENS_MEDIA, attachLens, buildHitMask, drawLens, hits, type HitMas
 // Assets live in /public/halftone/<name>/: `source.webp` (greyscale cut-out
 // on black, drives the dots) and `photo.webp` (the full cut-out, for the lens).
 
-const DOT_PX = 2.6; // on-screen size of one halftone cell, in CSS px
-const CELL = 10; // design px per cell (halftone DESIGN.cell)
+const DOT_PX = 1.8; // on-screen size of one halftone cell, in CSS px
 // The statue sources are already contrast-stretched, so map tone almost linearly.
 const STATUE_TONE = { blackPoint: 0.15, whitePoint: 1, brightness: 0, contrast: 0, gamma: 1 };
 
@@ -44,7 +43,7 @@ function load(name: StatueName) {
 // stays ~DOT_PX on screen whether the statue is small or large.
 const grids = new Map<string, Dots>();
 function dotsFor(name: StatueName, source: HTMLImageElement, cssWidth: number): Dots {
-  const W = Math.max(400, Math.round((cssWidth / DOT_PX) * CELL));
+  const W = Math.max(400, Math.round((cssWidth / DOT_PX) * DESIGN.cell));
   const key = `${name}:${W}`;
   let d = grids.get(key);
   if (!d) {
