@@ -24,7 +24,7 @@ export default function Navbar() {
       <nav className="container-page flex h-16 items-center justify-between gap-6">
         <Link href="/" className="flex items-center gap-2.5" onClick={() => setOpen(false)}>
           {/* eslint-disable-next-line @next/next/no-img-element -- tiny static logo */}
-          <img src="/logos/kane-ascii-nav.png" alt="" width={96} height={93} className="h-9 w-auto" />
+          <img src="/logos/kaneai-mascot.png" alt="" width={140} height={122} className="h-9 w-auto" />
           <span className="font-pixel text-xs uppercase tracking-[0.18em] text-bright">{event.name}</span>
         </Link>
 
