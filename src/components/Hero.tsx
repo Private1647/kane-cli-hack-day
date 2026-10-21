@@ -1,65 +1,65 @@
-import Countdown from "./Countdown";
-import { hackathon } from "@/data/hackathon";
+/* eslint-disable @next/next/no-img-element -- small inline SVG logos */
+import HalftoneHand from "./hero/HalftoneHand";
+import DissolveWordmark from "./hero/DissolveWordmark";
+import HeroLens from "./hero/HeroLens";
+import LensText from "./hero/LensText";
+import Button from "./ui/Button";
+import { ctas, event } from "@/data/hackday";
+
+const WORDMARK = ["Kane CLI", "Hack Day"];
 
 export default function Hero() {
   return (
-    <section id="top" className="relative overflow-hidden">
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_top,rgba(139,92,246,0.25),transparent_60%)]"
+    <HeroLens
+      id="top"
+      className="relative grid grid-cols-2 content-center items-center gap-y-12 overflow-x-clip bg-black pt-8 pb-16 text-[#f2f2f2] lg:min-h-[calc(100svh-64px-57px)] lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] lg:gap-y-0 lg:pb-24"
+    >
+      <HalftoneHand
+        id="hero-hand-left"
+        side="left"
+        alt="A hand reaching to the right, printed as a halftone"
+        className="w-full lg:-translate-y-[12%]"
       />
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 -z-10 bg-[linear-gradient(to_right,rgba(255,255,255,0.04)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.04)_1px,transparent_1px)] bg-[size:48px_48px] [mask-image:radial-gradient(ellipse_at_center,black_30%,transparent_75%)]"
+      <HalftoneHand
+        id="hero-hand-right"
+        side="right"
+        alt="A hand reaching to the left, printed as a halftone"
+        className="w-full lg:order-3 lg:translate-y-[18%]"
       />
 
-      <div className="mx-auto max-w-6xl px-4 pb-20 pt-20 sm:pb-28 sm:pt-28">
-        <div className="mx-auto max-w-3xl text-center">
-          <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-zinc-300">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-            {hackathon.dateLabel} · {hackathon.location}
+      <div className="relative z-10 col-span-2 flex flex-col items-center px-4 text-center lg:order-2 lg:col-span-1 lg:px-8">
+        <LensText
+          text="Welcome to"
+          className="font-pixel text-xl uppercase tracking-[0.25em] text-[#8a8a8a] sm:text-2xl"
+        />
+
+        <h1 className="mt-3 inline-block w-[min(clamp(15.2rem,30.4vw,28.85rem),calc(100vw-2rem))]">
+          <span className="sr-only">Kane CLI Hack Day</span>
+          <DissolveWordmark lines={WORDMARK} fontVar="--font-display" />
+        </h1>
+
+        <div className="mt-5 flex flex-col items-center gap-3 font-plex text-[21px] text-[#8a8a8a]">
+          <span className="flex items-center gap-2">
+            by
+            <img src="/logos/testmu-ai.svg" alt="TestMu AI" width={1388} height={215} className="h-6 w-auto" />
           </span>
-
-          <h1 className="mt-6 text-5xl font-semibold tracking-tight sm:text-7xl">
-            {hackathon.name}
-          </h1>
-          <p className="mt-4 bg-gradient-to-r from-violet-300 via-fuchsia-300 to-amber-200 bg-clip-text text-2xl font-medium text-transparent sm:text-3xl">
-            {hackathon.tagline}
-          </p>
-          <p className="mx-auto mt-6 max-w-xl text-lg text-zinc-400">{hackathon.description}</p>
-
-          <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-            <a
-              href={hackathon.registerUrl}
-              className="w-full rounded-full bg-white px-6 py-3 text-center font-medium text-zinc-900 transition hover:bg-zinc-200 sm:w-auto"
-            >
-              Register now
-            </a>
-            <a
-              href="#tracks"
-              className="w-full rounded-full border border-white/15 px-6 py-3 text-center font-medium text-white transition hover:bg-white/10 sm:w-auto"
-            >
-              Explore tracks
-            </a>
-          </div>
+          <span className="flex items-baseline gap-2">
+            supported by
+            <span className="font-[family-name:var(--font-display)] text-[30px] font-bold tracking-tight text-[#f2f2f2]">OpenAI</span>
+          </span>
         </div>
 
-        <div className="mx-auto mt-14 max-w-2xl">
-          <p className="mb-3 text-center text-xs uppercase tracking-widest text-zinc-500">
-            Hacking starts in
-          </p>
-          <Countdown target={hackathon.startDate} />
+        <p className="mt-8 max-w-md font-plex text-sm leading-relaxed text-lightgray">{event.tagline}</p>
+        <div className="mt-6 flex flex-wrap justify-center gap-3">
+          <Button href={ctas.submitIdea.href} variant="secondary">
+            {ctas.submitIdea.label}
+          </Button>
+          <Button href={ctas.submitProject.href}>{ctas.submitProject.label}</Button>
+          <Button href={ctas.helpDesk.href} variant="secondary">
+            {ctas.helpDesk.label}
+          </Button>
         </div>
-
-        <dl className="mx-auto mt-14 grid max-w-3xl grid-cols-2 gap-6 text-center sm:grid-cols-4">
-          {hackathon.stats.map((s) => (
-            <div key={s.label}>
-              <dt className="text-sm text-zinc-500">{s.label}</dt>
-              <dd className="mt-1 text-3xl font-semibold tracking-tight">{s.value}</dd>
-            </div>
-          ))}
-        </dl>
       </div>
-    </section>
+    </HeroLens>
   );
 }

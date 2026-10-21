@@ -1,16 +1,96 @@
-import { hackathon } from "@/data/hackathon";
+import Link from "next/link";
+import { event } from "@/data/hackday";
+
+// Link columns over a giant dot-matrix wordmark, as in gradium.ai's footer.
+const columns = [
+  {
+    title: "The day",
+    links: [
+      { href: "/#setup", label: "Do this first" },
+      { href: "/#schedule", label: "Schedule" },
+      { href: "/#challenge", label: "The challenge" },
+      { href: "/#prizes", label: "Prizes" },
+      { href: "/#rules", label: "Rules" },
+    ],
+  },
+  {
+    title: "Submit",
+    links: [
+      { href: "/submit#team", label: "Team registration" },
+      { href: "/submit#idea", label: "Idea submission" },
+      { href: "/submit#final", label: "Final submission" },
+      { href: "/content-hour", label: "Content hour" },
+    ],
+  },
+  {
+    title: "Judging",
+    links: [
+      { href: "/judging#mid", label: "Mid evaluation" },
+      { href: "/judging#final", label: "Final evaluation" },
+      { href: "/judging#rubric", label: "Rubric" },
+      { href: "/judging#stage", label: "Stage demos" },
+    ],
+  },
+  {
+    title: "Resources",
+    links: [
+      { href: "/resources#kane-cli", label: "Kane CLI" },
+      { href: "/resources#assurance-loop", label: "Assurance loop" },
+      { href: "/resources#openai", label: "OpenAI" },
+      { href: "/resources#content-skills", label: "Content skills" },
+    ],
+  },
+  {
+    title: "Help",
+    links: [
+      { href: "/#help", label: "Help desk" },
+      { href: "/#share", label: "Share you’re here" },
+    ],
+  },
+];
 
 export default function Footer() {
   return (
-    <footer className="border-t border-white/10 py-10">
-      <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-4 text-sm text-zinc-500 sm:flex-row">
-        <p>
-          © {hackathon.year} {hackathon.name}. All rights reserved.
+    <footer className="border-t border-hairline bg-gradient-to-t from-[#0f1011] to-ink pt-16">
+      <div className="container-page">
+        <div className="grid grid-cols-2 gap-10 sm:grid-cols-3 lg:grid-cols-[auto_repeat(5,minmax(0,1fr))]">
+          {/* The Kane CLI mascot, drawn in ASCII. */}
+          {/* eslint-disable-next-line @next/next/no-img-element -- static artwork */}
+          <img
+            src="/logos/kane-ascii-lg.png"
+            alt="Kane CLI"
+            width={480}
+            height={465}
+            loading="lazy"
+            className="col-span-2 w-36 sm:col-span-3 lg:col-span-1 lg:w-44"
+          />
+          {columns.map((c) => (
+            <div key={c.title}>
+              <p className="font-plex text-sm text-bright">{c.title}</p>
+              <ul className="mt-3 space-y-2">
+                {c.links.map((l) => (
+                  <li key={l.href}>
+                    <Link href={l.href} className="font-plex text-sm text-lightgray transition-colors hover:text-bright">
+                      {l.label}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+        <div className="mt-14 h-px bg-hairline" />
+        <p
+          aria-hidden
+          className="mt-6 select-none font-dots text-[17vw] leading-[0.85] font-black tracking-[-0.04em] text-[#3a3a3a] lg:text-[13.5rem]"
+        >
+          Kane CLI
         </p>
-        <div className="flex gap-6">
-          <a href="#" className="hover:text-white">Code of conduct</a>
-          <a href="#" className="hover:text-white">Contact</a>
-          <a href="#" className="hover:text-white">Twitter</a>
+        <div className="flex flex-col gap-2 py-6 font-plex text-xs text-lightgray sm:flex-row sm:justify-between">
+          <p>
+            {event.name} {event.city} · by TestMu AI · supported by {event.supporter}
+          </p>
+          <p>{event.hashtag}</p>
         </div>
       </div>
     </footer>
