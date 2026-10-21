@@ -100,15 +100,89 @@ export const challenge = {
 
 // ── Assurance loop ───────────────────────────────────────────────────────────
 
+export type LoopActor = "codex" | "kane";
+export type AcState = "untested" | "proven" | "failing" | "blocked";
+
 export const loop = {
   summary:
     "Kane sits between your agent and your app. The agent writes code, Kane runs the flows in a real browser or device, the result goes back to the agent, the agent fixes and reruns. Nothing ships on the agent’s word alone.",
-  steps: [
-    { title: "Agent writes", body: "Your OpenAI agent changes the code." },
-    { title: "Kane runs", body: "Kane CLI drives the real flows in a browser or device." },
-    { title: "Report returns", body: "Pass, fail and evidence go back to the agent." },
-    { title: "Agent fixes", body: "It reads the report, fixes, and Kane reruns." },
-  ],
+  // The requirement the demo works from, and its acceptance criteria.
+  requirement: "PRD · checkout.md",
+  criteria: ["Add an item to the cart", "Cart total updates", "Pay with a test card", "Order confirmation shows"],
+  // One beat per step. `hop` is who talks to whom; `ac` is each criterion's state after the step.
+  story: [
+    {
+      title: "Codex builds",
+      caption: "You ask Codex for a feature. It writes the code and your app changes.",
+      hop: { from: "codex", to: "app", label: "edits code" },
+      codex: ['› codex "add a checkout flow"', "✎ app/checkout.tsx  +84"],
+      kane: [],
+      app: "built",
+      ac: ["untested", "untested", "untested", "untested"],
+    },
+    {
+      title: "Codex calls Kane",
+      caption: "Codex doesn’t mark its own homework. It calls Kane CLI to check the change.",
+      hop: { from: "codex", to: "kane", label: "calls kane-cli" },
+      codex: ['› codex "add a checkout flow"', "✎ app/checkout.tsx  +84", "⏵ kane-cli testmd run checkout_test.md"],
+      kane: ["kane-cli · 4 criteria from checkout.md"],
+      app: "built",
+      ac: ["untested", "untested", "untested", "untested"],
+    },
+    {
+      title: "Kane drives the app",
+      caption: "Kane runs the real flows in a browser, step by step, against the requirement.",
+      hop: { from: "kane", to: "app", label: "drives real browser" },
+      codex: ['› codex "add a checkout flow"', "✎ app/checkout.tsx  +84", "⏵ kane-cli testmd run checkout_test.md"],
+      kane: ["kane-cli · 4 criteria from checkout.md", "✓ add item to cart", "✗ cart total stayed $0"],
+      app: "bug",
+      ac: ["proven", "failing", "blocked", "blocked"],
+    },
+    {
+      title: "Verdict goes back",
+      caption: "Kane seals the run as evidence and hands Codex a verdict with a root-cause fix prompt.",
+      hop: { from: "kane", to: "codex", label: "verdict + fix prompt" },
+      codex: ["← verdict  1/4 proven", "← fix prompt: total reads stale cart state"],
+      kane: ["✗ cart total stayed $0", "sealed  run-4821.evidence", "root cause → fix prompt"],
+      app: "bug",
+      ac: ["proven", "failing", "blocked", "blocked"],
+    },
+    {
+      title: "Codex fixes",
+      caption: "Codex reads the evidence, fixes the cause, and calls Kane again.",
+      hop: { from: "codex", to: "app", label: "fixes code" },
+      codex: ["← fix prompt: total reads stale cart state", "✎ app/cart.ts  fix total selector", "⏵ kane-cli testmd run checkout_test.md"],
+      kane: ["sealed  run-4821.evidence"],
+      app: "fixed",
+      ac: ["proven", "failing", "blocked", "blocked"],
+    },
+    {
+      title: "Kane proves it",
+      caption: "Kane reruns every flow. All four criteria pass, with evidence for each.",
+      hop: { from: "kane", to: "app", label: "reruns flows" },
+      codex: ["✎ app/cart.ts  fix total selector", "⏵ kane-cli testmd run checkout_test.md"],
+      kane: ["✓ add item to cart", "✓ cart total updates", "✓ pay with a test card", "✓ order confirmation shows"],
+      app: "done",
+      ac: ["proven", "proven", "proven", "proven"],
+    },
+    {
+      title: "Ship it",
+      caption: "4/4 proven, sealed as evidence. Now it ships, not on the agent’s word alone.",
+      hop: { from: "kane", to: "codex", label: "4/4 proven" },
+      codex: ["← verdict  4/4 proven", "✓ verified by kane-cli, ready to ship"],
+      kane: ["✓ order confirmation shows", "sealed  run-4822.evidence", "coverage  4/4 proven"],
+      app: "done",
+      ac: ["proven", "proven", "proven", "proven"],
+    },
+  ] as {
+    title: string;
+    caption: string;
+    hop: { from: LoopActor | "app"; to: LoopActor | "app"; label: string };
+    codex: string[];
+    kane: string[];
+    app: "built" | "bug" | "fixed" | "done";
+    ac: AcState[];
+  }[],
   links: [
     { label: "How it works", href: "[doc link]" },
     { label: "Wiring it with OpenAI", href: "[sample repo or guide]" },

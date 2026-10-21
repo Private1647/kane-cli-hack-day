@@ -1,7 +1,7 @@
 import SmartLink from "@/components/ui/SmartLink";
 import { loop } from "@/data/hackday";
 import { Fold, SectionHeading } from "@/components/ui/Section";
-import AssuranceFigure from "./AssuranceFigure";
+import AssuranceLoop from "./AssuranceLoop";
 
 // The seven Kane CLI assurance stages, from testmuai.com/assurance-loop.
 const STAGES = ["Capture", "Extract", "Review", "Design", "Execute", "Measure", "Maintain"];
@@ -9,10 +9,10 @@ const STAGES = ["Capture", "Extract", "Review", "Design", "Execute", "Measure", 
 export default function Loop() {
   return (
     <Fold id="loop" className="bg-surface">
-      <div className="grid gap-12 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:items-center">
+      <div className="grid gap-8 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] lg:items-end">
+        <SectionHeading eyebrow="The Assurance loop" dim="Codex builds," bright="Kane proves it." intro={loop.summary} />
         <div>
-          <SectionHeading eyebrow="The Assurance loop" dim="From requirement" bright="to proof." intro={loop.summary} />
-          <ul className="mt-8 flex flex-wrap gap-x-6 gap-y-2">
+          <ul className="flex flex-wrap gap-x-6 gap-y-2 lg:justify-end">
             {loop.links.map((l) => (
               <li key={l.label}>
                 <SmartLink href={l.href} className="font-plex text-sm text-bright underline decoration-hairline underline-offset-4 hover:text-lime">
@@ -22,8 +22,9 @@ export default function Loop() {
             ))}
           </ul>
         </div>
-        <AssuranceFigure />
       </div>
+
+      <AssuranceLoop className="mt-14" />
 
       <ol className="mt-16 grid grid-cols-2 gap-px border border-dashed border-hairline bg-hairline sm:grid-cols-4 lg:grid-cols-7">
         {STAGES.map((s, i) => (

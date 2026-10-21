@@ -48,6 +48,11 @@
       transform: translateX(-50%);
     }
   }
+  @keyframes hop-flow {
+    to {
+      background-position: 10px 0;
+    }
+  }
   @keyframes blink {
     50% {
       opacity: 0.25;
