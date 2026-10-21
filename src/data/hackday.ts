@@ -113,6 +113,7 @@ export const loop = {
   story: [
     {
       title: "Codex builds",
+      round: 1,
       caption: "You ask Codex for a feature. It writes the code and your app changes.",
       hop: { from: "codex", to: "app", label: "edits code" },
       codex: ['› codex "add a checkout flow"', "✎ app/checkout.tsx  +84"],
@@ -122,6 +123,7 @@ export const loop = {
     },
     {
       title: "Codex calls Kane",
+      round: 1,
       caption: "Codex doesn’t mark its own homework. It calls Kane CLI to check the change.",
       hop: { from: "codex", to: "kane", label: "calls kane-cli" },
       codex: ['› codex "add a checkout flow"', "✎ app/checkout.tsx  +84", "⏵ kane-cli testmd run checkout_test.md"],
@@ -131,6 +133,7 @@ export const loop = {
     },
     {
       title: "Kane drives the app",
+      round: 1,
       caption: "Kane runs the real flows in a browser, step by step, against the requirement.",
       hop: { from: "kane", to: "app", label: "drives real browser" },
       codex: ['› codex "add a checkout flow"', "✎ app/checkout.tsx  +84", "⏵ kane-cli testmd run checkout_test.md"],
@@ -140,6 +143,7 @@ export const loop = {
     },
     {
       title: "Verdict goes back",
+      round: 1,
       caption: "Kane seals the run as evidence and hands Codex a verdict with a root-cause fix prompt.",
       hop: { from: "kane", to: "codex", label: "verdict + fix prompt" },
       codex: ["← verdict  1/4 proven", "← fix prompt: total reads stale cart state"],
@@ -149,6 +153,7 @@ export const loop = {
     },
     {
       title: "Codex fixes",
+      round: 2,
       caption: "Codex reads the evidence, fixes the cause, and calls Kane again.",
       hop: { from: "codex", to: "app", label: "fixes code" },
       codex: ["← fix prompt: total reads stale cart state", "✎ app/cart.ts  fix total selector", "⏵ kane-cli testmd run checkout_test.md"],
@@ -158,6 +163,7 @@ export const loop = {
     },
     {
       title: "Kane proves it",
+      round: 2,
       caption: "Kane reruns every flow. All four criteria pass, with evidence for each.",
       hop: { from: "kane", to: "app", label: "reruns flows" },
       codex: ["✎ app/cart.ts  fix total selector", "⏵ kane-cli testmd run checkout_test.md"],
@@ -167,6 +173,7 @@ export const loop = {
     },
     {
       title: "Ship it",
+      round: 2,
       caption: "4/4 proven, sealed as evidence. Now it ships, not on the agent’s word alone.",
       hop: { from: "kane", to: "codex", label: "4/4 proven" },
       codex: ["← verdict  4/4 proven", "✓ verified by kane-cli, ready to ship"],
@@ -176,6 +183,8 @@ export const loop = {
     },
   ] as {
     title: string;
+    /** Which pass through the loop this beat belongs to. */
+    round: number;
     caption: string;
     hop: { from: LoopActor | "app"; to: LoopActor | "app"; label: string };
     codex: string[];

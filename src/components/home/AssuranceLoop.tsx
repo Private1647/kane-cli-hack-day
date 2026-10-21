@@ -107,48 +107,70 @@ export default function AssuranceLoop({ className = "" }: { className?: string }
         if (!e.currentTarget.contains(e.relatedTarget)) setFocused(false);
       }}
       aria-label="The Assurance loop: Codex builds and calls Kane CLI, Kane drives the app in a real browser against the requirement and returns a verdict with evidence and a fix prompt, Codex fixes and Kane reruns until every criterion is proven. Use the left and right arrow keys to step through."
-      className={`outline-none focus-visible:ring-1 focus-visible:ring-lime focus-visible:ring-offset-4 focus-visible:ring-offset-surface ${className}`}
+      className={`border border-hairline bg-ink shadow-[0_30px_80px_-30px_rgba(218,255,82,0.12)] outline-none focus-visible:ring-1 focus-visible:ring-lime focus-visible:ring-offset-4 focus-visible:ring-offset-surface ${className}`}
     >
-      {/* Who is talking to whom right now. */}
-      <Hop from={beat.hop.from} to={beat.hop.to} label={beat.hop.label} animate={!reduced} />
-
-      <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)_minmax(0,1fr)]">
-        <Terminal name="Codex" role="your agent" lines={beat.codex} lit={active("codex")} target={target("codex")} stepKey={shown} />
-        <AppMock state={beat.app} lit={active("app") || target("app")} cursorAt={cursorAt} />
-        <Terminal name="Kane CLI" role="the verifier" lines={beat.kane} lit={active("kane")} target={target("kane")} stepKey={shown} />
-      </div>
-
-      {/* The requirement's acceptance criteria, proven one run at a time. */}
-      <div className="mt-3 border border-dashed border-hairline bg-ink/40 p-4">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <p className="font-pixel text-[10px] uppercase tracking-[0.2em] text-lightgray">{loop.requirement}</p>
-          <p className="font-plex text-xs text-lightgray">
-            <span className={proven === loop.criteria.length ? "text-lime" : "text-bright"}>{proven}</span>/{loop.criteria.length} proven
-          </p>
-        </div>
-        <ul className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-          {loop.criteria.map((c, i) => (
-            <Criterion key={c} n={i + 1} label={c} state={beat.ac[i]} />
+      {/* Window chrome, so the fold reads as a running demo. */}
+      <div className="flex items-center gap-3 border-b border-hairline px-4 py-2.5">
+        <span aria-hidden className="flex gap-1.5">
+          {["bg-[#3a3a3a]", "bg-[#3a3a3a]", "bg-lime"].map((c, i) => (
+            <span key={i} className={`h-2 w-2 rounded-full ${c}`} />
           ))}
-        </ul>
+        </span>
+        <span className="truncate font-plex text-xs whitespace-nowrap text-bright">assurance-loop.demo</span>
+        <span className="hidden font-plex text-xs text-lightgray sm:inline">— codex × kane-cli</span>
+        <span className="ml-auto font-pixel text-[10px] whitespace-nowrap uppercase tracking-[0.2em] text-lime">Loop {beat.round}</span>
+        <span className="hidden font-pixel text-[10px] uppercase tracking-[0.2em] text-lightgray sm:inline">
+          {reduced ? "Still" : paused ? "Paused" : "Auto"}
+        </span>
+        {!reduced && (
+          <button
+            type="button"
+            onClick={() => go(0)}
+            className="border border-hairline px-2 py-0.5 font-pixel text-[10px] uppercase tracking-[0.2em] text-lightgray transition-colors hover:border-lime hover:text-lime"
+          >
+            Replay
+          </button>
+        )}
       </div>
 
-      {/* Step readout. */}
-      <div className="mt-3 grid grid-cols-[auto_minmax(0,1fr)] items-start gap-5 border border-dashed border-hairline p-4" aria-live="polite">
-        <p className="font-dots text-4xl leading-none font-black text-lime">{String(shown + 1).padStart(2, "0")}</p>
-        <div>
-          <div className="flex items-baseline justify-between gap-3">
-            <p className="font-pixel text-xs uppercase tracking-[0.2em] text-bright">{beat.title}</p>
-            <p className="font-pixel text-[10px] uppercase tracking-[0.2em] text-lightgray">
-              {reduced ? "Still" : paused ? "Paused" : "Auto"}
-            </p>
+      <div className="grid gap-6 p-4 sm:p-6 lg:grid-cols-[minmax(0,4fr)_minmax(0,7fr)]">
+        {/* The loop itself: who's talking, and the ring closing as criteria are proven. */}
+        <div className="flex flex-col">
+          <LoopDial hop={beat.hop} ac={beat.ac} animate={!reduced} ship={shown === LAST} />
+          <div className="mt-4 border border-dashed border-hairline p-4" aria-live="polite">
+            <div className="flex items-baseline gap-3">
+              <span className="font-dots text-3xl leading-none font-black text-lime">{String(shown + 1).padStart(2, "0")}</span>
+              <span className="font-pixel text-xs uppercase tracking-[0.2em] text-bright">{beat.title}</span>
+            </div>
+            <p className="mt-3 font-plex text-sm leading-relaxed text-lightgray">{beat.caption}</p>
           </div>
-          <p className="mt-2 font-plex text-sm leading-relaxed text-lightgray">{beat.caption}</p>
+        </div>
+
+        {/* The actors at work. */}
+        <div className="flex min-w-0 flex-col gap-3">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Terminal name="Codex" role="your agent" lines={beat.codex} lit={active("codex")} target={target("codex")} stepKey={shown} />
+            <Terminal name="Kane CLI" role="the verifier" lines={beat.kane} lit={active("kane")} target={target("kane")} stepKey={shown} />
+          </div>
+          <AppMock state={beat.app} lit={active("app") || target("app")} cursorAt={cursorAt} />
+          <div className="border border-dashed border-hairline p-3">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <p className="font-pixel text-[10px] uppercase tracking-[0.2em] text-lightgray">{loop.requirement}</p>
+              <p className="font-plex text-xs text-lightgray">
+                <span className={proven === loop.criteria.length ? "text-lime" : "text-bright"}>{proven}</span>/{loop.criteria.length} proven
+              </p>
+            </div>
+            <ul className="mt-3 grid gap-2 sm:grid-cols-2">
+              {loop.criteria.map((c, i) => (
+                <Criterion key={c} n={i + 1} label={c} state={beat.ac[i]} />
+              ))}
+            </ul>
+          </div>
         </div>
       </div>
 
       {!reduced && (
-        <ol className="mt-3 grid grid-cols-7 gap-1">
+        <ol className="grid grid-cols-7 gap-1 border-t border-hairline px-4 py-3">
           {story.map((s, i) => (
             <li key={s.title}>
               <button
@@ -156,7 +178,7 @@ export default function AssuranceLoop({ className = "" }: { className?: string }
                 onClick={() => go(i)}
                 aria-label={`Step ${i + 1}: ${s.title}`}
                 aria-current={i === shown ? "step" : undefined}
-                className={`group block w-full text-left`}
+                className="group block w-full text-left"
               >
                 <span className={`block h-1 transition-colors ${i === shown ? "bg-lime" : i < shown ? "bg-[#5a6b1f]" : "bg-hairline group-hover:bg-lightgray"}`} />
                 <span className={`mt-2 hidden font-pixel text-[9px] uppercase tracking-[0.15em] lg:block ${i === shown ? "text-bright" : "text-lightgray"}`}>
@@ -167,37 +189,151 @@ export default function AssuranceLoop({ className = "" }: { className?: string }
           ))}
         </ol>
       )}
-      <p className="mt-4 text-center font-pixel text-[10px] uppercase tracking-[0.25em] text-lightgray">
-        Nothing ships on the agent’s word alone.
-      </p>
     </div>
   );
 }
 
-const ACTOR_NAME = { codex: "Codex", kane: "Kane CLI", app: "Your app" } as const;
+// The loop dial: Codex, Kane CLI and the app as a triangle inside a ring of
+// dots. The active hop's edge carries a lime packet from sender to receiver;
+// the ring is split into one arc per acceptance criterion and closes, arc by
+// arc, as criteria are proven — an ouroboros that completes when all pass.
+const DIAL = 320;
+const C = DIAL / 2;
+const RING_R = 146;
+const NODE_R = 84;
+const DOTS = 72;
+// Rounded so server and browser render identical SVG (no hydration mismatch).
+const r2 = (v: number) => Math.round(v * 100) / 100;
+const polar = (deg: number, r: number) => [r2(C + r * Math.cos((deg * Math.PI) / 180)), r2(C + r * Math.sin((deg * Math.PI) / 180))] as const;
 
-// Panel order on screen, so the arrow points the way the message travels.
-const ORDER = { codex: 0, app: 1, kane: 2 } as const;
+const NODES = {
+  codex: { label: "Codex", at: polar(-90, NODE_R) },
+  kane: { label: "Kane CLI", at: polar(30, NODE_R) },
+  app: { label: "Your app", at: polar(150, NODE_R) },
+} as const;
+type NodeId = keyof typeof NODES;
 
-function Hop({ from, to, label, animate }: { from: keyof typeof ACTOR_NAME; to: keyof typeof ACTOR_NAME; label: string; animate: boolean }) {
-  const leftward = ORDER[from] > ORDER[to];
-  const [left, right] = leftward ? [to, from] : [from, to];
+const ARC_STYLE: Record<AcState, string> = {
+  proven: "#daff52",
+  failing: "#f2f2f2",
+  blocked: "#2c2d2f",
+  untested: "#2c2d2f",
+};
+
+function LoopDial({
+  hop,
+  ac,
+  animate,
+  ship,
+}: {
+  hop: { from: NodeId; to: NodeId; label: string };
+  ac: AcState[];
+  animate: boolean;
+  ship: boolean;
+}) {
+  const per = DOTS / ac.length;
+  const proven = ac.filter((a) => a === "proven").length;
+  const [fx, fy] = NODES[hop.from].at;
+  const [tx, ty] = NODES[hop.to].at;
+  const edges: [NodeId, NodeId][] = [
+    ["codex", "kane"],
+    ["kane", "app"],
+    ["app", "codex"],
+  ];
+  const isActive = (a: NodeId, b: NodeId) => (hop.from === a && hop.to === b) || (hop.from === b && hop.to === a);
   return (
-    <div className="flex items-center justify-center gap-3 font-pixel text-[10px] uppercase tracking-[0.2em] sm:text-xs">
-      <span className={left === from ? "text-lime" : "text-bright"}>{ACTOR_NAME[left]}</span>
-      <span className="relative flex min-w-24 flex-1 items-center sm:max-w-72">
-        {leftward && <span aria-hidden className="text-lime">◀</span>}
-        {/* Dashes flowing from sender to receiver. */}
-        <span
-          aria-hidden
-          className="h-px w-full bg-[length:10px_1px] bg-repeat-x [background-image:linear-gradient(90deg,var(--lime)_50%,transparent_50%)]"
-          style={animate ? { animation: `hop-flow 600ms linear infinite${leftward ? " reverse" : ""}` } : undefined}
-        />
-        {!leftward && <span aria-hidden className="text-lime">▶</span>}
-        <span className="absolute inset-x-0 -top-5 text-center text-lime">{label}</span>
-      </span>
-      <span className={right === from ? "text-lime" : "text-bright"}>{ACTOR_NAME[right]}</span>
-    </div>
+    <figure className="mx-auto w-full max-w-sm">
+      <svg viewBox={`0 0 ${DIAL} ${DIAL}`} role="img" aria-label={`${NODES[hop.from].label} to ${NODES[hop.to].label}: ${hop.label}. ${proven} of ${ac.length} criteria proven.`} className="block w-full">
+        {/* Ring of dots, one arc per criterion, starting at the top. */}
+        {Array.from({ length: DOTS }, (_, i) => {
+          const arc = Math.floor(i / per);
+          const inArc = i % per;
+          if (inArc === per - 1) return null; // gap between arcs
+          const state = ac[arc];
+          // A failing criterion draws as a broken arc.
+          if (state === "failing" && inArc % 2 === 1) return null;
+          const [x, y] = polar(-90 + (i / DOTS) * 360 + 360 / DOTS / 2, RING_R);
+          return (
+            <circle
+              key={i}
+              cx={x}
+              cy={y}
+              r={state === "proven" ? 3.4 : 2.6}
+              fill={ARC_STYLE[state]}
+              style={{ transition: "fill 300ms, r 300ms", transitionDelay: state === "proven" ? `${inArc * 25}ms` : "0ms" }}
+            />
+          );
+        })}
+        {/* Criterion labels on the ring. */}
+        {ac.map((state, k) => {
+          const [lx, ly] = polar(-90 + ((k + 0.5) * 360) / ac.length, RING_R - 18);
+          return (
+            <text key={k} x={lx} y={r2(ly + 3)} textAnchor="middle" className="font-pixel" fontSize={8} letterSpacing={1} fill={state === "proven" ? "#daff52" : "#7e7e7e"}>
+              AC-{k + 1}
+            </text>
+          );
+        })}
+
+        {/* Triangle edges between the three actors. */}
+        {edges.map(([a, b]) => {
+          const [ax, ay] = NODES[a].at;
+          const [bx, by] = NODES[b].at;
+          const lit = isActive(a, b);
+          return (
+            <line
+              key={`${a}-${b}`}
+              x1={ax}
+              y1={ay}
+              x2={bx}
+              y2={by}
+              stroke={lit ? "#daff52" : "#37383a"}
+              strokeWidth={lit ? 1.5 : 1}
+              strokeDasharray={lit ? "4 4" : undefined}
+              style={{ transition: "stroke 300ms" }}
+            />
+          );
+        })}
+
+        {/* The packet travelling from sender to receiver. */}
+        <circle r={5} fill="#daff52" cx={animate ? undefined : r2((fx + tx) / 2)} cy={animate ? undefined : r2((fy + ty) / 2)}>
+          {animate && <animateMotion key={`${hop.from}-${hop.to}`} dur="1.1s" repeatCount="indefinite" path={`M${fx},${fy} L${tx},${ty}`} />}
+        </circle>
+
+        {/* Actor nodes. */}
+        {(Object.keys(NODES) as NodeId[]).map((id) => {
+          const [x, y] = NODES[id].at;
+          const from = hop.from === id;
+          const to = hop.to === id;
+          return (
+            <g key={id}>
+              <rect
+                x={r2(x - 36)}
+                y={r2(y - 13)}
+                width={72}
+                height={26}
+                fill={from ? "#daff52" : "#0b0b0b"}
+                stroke={from ? "#daff52" : to ? "#f2f2f2" : "#37383a"}
+                style={{ transition: "fill 300ms, stroke 300ms" }}
+              />
+              <text x={x} y={r2(y + 3)} textAnchor="middle" className="font-pixel" fontSize={8} letterSpacing={1.2} fill={from ? "#000" : "#f2f2f2"}>
+                {NODES[id].label.toUpperCase()}
+              </text>
+            </g>
+          );
+        })}
+
+        {/* Centre: how much of the requirement is proven. */}
+        <text x={C} y={C + 14} textAnchor="middle" className="font-dots" fontSize={30} fontWeight={900} fill={ship ? "#daff52" : "#f2f2f2"}>
+          {proven}/{ac.length}
+        </text>
+        <text x={C} y={C + 28} textAnchor="middle" className="font-pixel" fontSize={7} letterSpacing={1.4} fill="#7e7e7e">
+          PROVEN
+        </text>
+      </svg>
+      <figcaption className="mt-3 text-center font-pixel text-[10px] uppercase tracking-[0.2em] text-lime">
+        {NODES[hop.from].label} → {NODES[hop.to].label} · {hop.label}
+      </figcaption>
+    </figure>
   );
 }
 
