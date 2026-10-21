@@ -62,10 +62,10 @@ export const artworks: Artwork[] = [
   },
   {
     n: 8,
-    title: "iPad Air 13-inch (M2)",
-    detail: "With Magic Keyboard.",
-    credit: "Photo: Kyu3a",
+    title: "iPad Air 11-inch (M2)",
+    detail: "Back side.",
+    credit: "Photo: 茅野ふたば",
     license: "CC BY-SA 4.0",
-    href: "https://commons.wikimedia.org/wiki/File:M2_iPad_Air_13inti.jpg",
+    href: "https://commons.wikimedia.org/wiki/File:IPad_Air_11-inch_(M2)_back_side_(20250525_154602).jpg",
   },
 ];

@@ -24,7 +24,7 @@ const ASPECT: Record<StatueName, number> = {
   victory: 878 / 924,
   visionpro: 1400 / 987,
   macmini: 1400 / 878,
-  ipad: 1129 / 1400,
+  ipad: 1015 / 1400,
 };
 
 type Images = { source: HTMLImageElement; photo: HTMLImageElement };

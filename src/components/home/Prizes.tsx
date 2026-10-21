@@ -4,6 +4,10 @@ import Reveal from "@/components/ui/Reveal";
 import Statue from "@/components/art/Statue";
 import Caption from "@/components/art/Caption";
 
+// "$3,000 OpenAI credits" → "$3,000" and "OpenAI credits".
+const creditAmount = (c: string) => c.split(" ")[0];
+const creditLabel = (c: string) => c.split(" ").slice(1).join(" ");
+
 // Widths that give each prize image roughly the same visual height.
 const PRIZE_WIDTH = { visionpro: "w-52", macmini: "w-56", ipad: "w-28" } as const;
 
@@ -33,13 +37,12 @@ export default function Prizes() {
               <Statue name={p.art} ink="#141414" paper="#f2f2f2" alt={`${p.prize}, printed as a halftone`} className={PRIZE_WIDTH[p.art]} />
             </div>
             <p className="font-dots text-7xl leading-none font-black text-bright sm:text-8xl">{p.place}</p>
-            <p className="mt-6 font-display text-2xl text-bright">
-              {p.prize}{" "}
-              <a href={`#mention-${p.credit}`} className="align-top font-plex text-xs text-lightgray hover:text-bright">
-                [{p.credit}]
-              </a>
+            <p className="mt-6 font-display text-2xl text-bright">{p.prize}</p>
+            {/* The OpenAI credits get equal billing with the hardware. */}
+            <p className="mt-4 inline-flex items-baseline gap-2 bg-lime px-3 py-2 text-[#0a0a0a]">
+              <span className="font-dots text-3xl leading-none font-black sm:text-4xl">+{creditAmount(p.credits)}</span>
+              <span className="font-plex text-sm">{creditLabel(p.credits)}</span>
             </p>
-            <p className="mt-1 font-plex text-sm text-lightgray">+ {p.credits}</p>
           </Reveal>
         ))}
       </div>
