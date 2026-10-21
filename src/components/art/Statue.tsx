@@ -59,12 +59,15 @@ export default function Statue({
   name,
   alt,
   ink = "#f2f2f2",
+  paper = "#000",
   className = "",
 }: {
   name: StatueName;
   alt: string;
   /** Dot colour; pass a dark ink when placing the statue on a light fold. */
   ink?: string;
+  /** Background behind the statue, so the hover lens blends into the fold. */
+  paper?: string;
   className?: string;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -127,7 +130,7 @@ export default function Statue({
       (x, y, open) => {
         ctx.clearRect(0, 0, cw, ch);
         ctx.drawImage(dots, 0, 0, cw, ch);
-        drawLens(ctx, x, y, open, mono, () => ctx.drawImage(photo, 0, 0, cw, ch));
+        drawLens(ctx, x, y, open, mono, () => ctx.drawImage(photo, 0, 0, cw, ch), paper);
       },
     );
 
@@ -158,7 +161,7 @@ export default function Statue({
       lensMedia.removeEventListener("change", layout);
       lens.dispose();
     };
-  }, [name, ink]);
+  }, [name, ink, paper]);
 
   return (
     <div role="img" aria-label={alt} className={`relative ${className}`} style={{ aspectRatio: ASPECT[name] }}>

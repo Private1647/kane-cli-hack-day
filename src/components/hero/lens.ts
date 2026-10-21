@@ -57,6 +57,8 @@ export function drawLens(
   open: number,
   mono: string,
   content: () => void,
+  /** Colour the lens clears to before `content`; match the page behind it. */
+  paper = "#000",
 ) {
   if (open <= 0.001) return;
   const r = LENS * open;
@@ -64,7 +66,7 @@ export function drawLens(
   ctx.beginPath();
   ctx.rect(x - r, y - r, 2 * r, 2 * r);
   ctx.clip();
-  ctx.fillStyle = "#000";
+  ctx.fillStyle = paper;
   ctx.fill();
   content();
   ctx.restore();

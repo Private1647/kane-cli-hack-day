@@ -13,7 +13,7 @@ export default function Prizes() {
         <SectionHeading eyebrow="Prizes" dim="Three on the podium," bright="Something for all." intro={prizes.podiumNote} />
         {/* The Discobolus: an Olympic athlete mid-throw, on the light fold in dark ink. */}
         <figure className="mx-auto w-56">
-          <Statue name="discobolus" ink="#141414" alt="The Discobolus, an athlete throwing a discus, printed as a halftone" className="mx-auto w-32 lg:w-36" />
+          <Statue name="discobolus" ink="#141414" paper="#f2f2f2" alt="The Discobolus, an athlete throwing a discus, printed as a halftone" className="mx-auto w-32 lg:w-36" />
           <Caption n={4}>Myron’s discus thrower: winners were crowned with olive, yours get hardware.</Caption>
         </figure>
       </div>
