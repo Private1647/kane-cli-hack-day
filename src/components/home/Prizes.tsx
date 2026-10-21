@@ -4,6 +4,9 @@ import Reveal from "@/components/ui/Reveal";
 import Statue from "@/components/art/Statue";
 import Caption from "@/components/art/Caption";
 
+// Widths that give each prize image roughly the same visual height.
+const PRIZE_WIDTH = { visionpro: "w-52", macmini: "w-56", ipad: "w-28" } as const;
+
 // Light fold for contrast (as gradium.ai's "Infrastructure" band): the podium
 // as three columns, then the shipped prize and the everyone prize as cards.
 export default function Prizes() {
@@ -25,8 +28,17 @@ export default function Prizes() {
             delay={i * 90}
             className="border-b border-dashed border-hairline py-8 sm:border-b-0 sm:border-l sm:px-6 sm:first:border-l-0 sm:first:pl-0"
           >
+            {/* The prize as a halftone print, with the same lime lens on hover. */}
+            <div className="mb-6 flex h-40 items-end">
+              <Statue name={p.art} ink="#141414" paper="#f2f2f2" alt={`${p.prize}, printed as a halftone`} className={PRIZE_WIDTH[p.art]} />
+            </div>
             <p className="font-dots text-7xl leading-none font-black text-bright sm:text-8xl">{p.place}</p>
-            <p className="mt-6 font-display text-2xl text-bright">{p.prize}</p>
+            <p className="mt-6 font-display text-2xl text-bright">
+              {p.prize}{" "}
+              <a href={`#mention-${p.credit}`} className="align-top font-plex text-xs text-lightgray hover:text-bright">
+                [{p.credit}]
+              </a>
+            </p>
             <p className="mt-1 font-plex text-sm text-lightgray">+ {p.credits}</p>
           </Reveal>
         ))}

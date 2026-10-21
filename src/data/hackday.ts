@@ -202,11 +202,12 @@ export const loop = {
 // ── Prizes ───────────────────────────────────────────────────────────────────
 
 export const prizes = {
+  // `art` is the halftone image in /public/halftone/<art>/, `credit` its number in src/data/art.ts.
   podium: [
-    { place: "1st", prize: "Apple Vision Pro", credits: "$3,000 OpenAI credits" },
-    { place: "2nd", prize: "Mac mini", credits: "$2,000 OpenAI credits" },
-    { place: "3rd", prize: "iPad Air", credits: "$1,000 OpenAI credits" },
-  ],
+    { place: "1st", prize: "Apple Vision Pro", credits: "$3,000 OpenAI credits", art: "visionpro", credit: 6 },
+    { place: "2nd", prize: "Mac mini", credits: "$2,000 OpenAI credits", art: "macmini", credit: 7 },
+    { place: "3rd", prize: "iPad Air", credits: "$1,000 OpenAI credits", art: "ipad", credit: 8 },
+  ] as const,
   podiumNote: "Top 3 from the stage round.",
   shipped: { title: "Shipped prize", rule: "First 25 complete bundles by 6:00", prize: "[prize]" },
   everyone: { title: "Every builder", prize: "3 months KaneAI Pro + $250 OpenAI credits" },

@@ -14,7 +14,7 @@ const DOT_PX = 1.8; // on-screen size of one halftone cell, in CSS px
 // The statue sources are already contrast-stretched, so map tone almost linearly.
 const STATUE_TONE = { blackPoint: 0.15, whitePoint: 1, brightness: 0, contrast: 0, gamma: 1 };
 
-export type StatueName = "hermes" | "hercules" | "discobolus" | "victory";
+export type StatueName = "hermes" | "hercules" | "discobolus" | "victory" | "visionpro" | "macmini" | "ipad";
 
 // Intrinsic aspect ratios of the cut-outs, so the box never shifts on load.
 const ASPECT: Record<StatueName, number> = {
@@ -22,6 +22,9 @@ const ASPECT: Record<StatueName, number> = {
   hercules: 656 / 1400,
   discobolus: 757 / 1400,
   victory: 878 / 924,
+  visionpro: 1400 / 987,
+  macmini: 1400 / 878,
+  ipad: 1129 / 1400,
 };
 
 type Images = { source: HTMLImageElement; photo: HTMLImageElement };

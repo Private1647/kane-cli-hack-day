@@ -12,7 +12,6 @@ const BLOCK = 240; // px width of each reveal block
 const COVER_MS = 420; // time for the log to fill in
 const MIN_SHOW_MS = 900; // shortest time the log stays up
 const MAX_WAIT_MS = 2500; // reveal even if `load` never fires
-const SEEN_KEY = "hackday:booted"; // play the intro once per browser session
 
 const HEADER: [string, string][] = [
   ["$", " kane-cli hackday --init"],
@@ -137,10 +136,6 @@ export default function BootScreen() {
     if (!boot || !layer) return;
     const hideBoot = () => (boot.style.display = "none");
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return void hideBoot();
-    try {
-      if (sessionStorage.getItem(SEEN_KEY)) return void hideBoot();
-      sessionStorage.setItem(SEEN_KEY, "1");
-    } catch {}
 
     const log = build(layer, navBottom());
     hideBoot();
@@ -200,12 +195,6 @@ export default function BootScreen() {
     <div aria-hidden>
       {/* Server-rendered cover so the page never flashes before the log is built. */}
       <div ref={bootRef} data-boot-cover className="fixed inset-x-0 bottom-0 top-[69px] z-[2147483647] bg-black" />
-      {/* Drop the cover before first paint when the intro already played this session. */}
-      <script
-        dangerouslySetInnerHTML={{
-          __html: `try{if(sessionStorage.getItem("${SEEN_KEY}"))document.currentScript.previousElementSibling.style.display="none"}catch(e){}`,
-        }}
-      />
       <noscript>
         <style>{"[data-boot-cover]{display:none}"}</style>
       </noscript>

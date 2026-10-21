@@ -44,4 +44,28 @@ export const artworks: Artwork[] = [
     license: "CC0",
     href: "https://commons.wikimedia.org/wiki/File:Victoire_de_Samothrace_-_Musee_du_Louvre_-_20190812.jpg",
   },
+  {
+    n: 6,
+    title: "Apple Vision Pro",
+    detail: "Facing left.",
+    credit: "Photo: Hay Kranen",
+    license: "CC BY 4.0",
+    href: "https://commons.wikimedia.org/wiki/File:Vision_Pro_-_Facing_left.jpg",
+  },
+  {
+    n: 7,
+    title: "Mac mini (2024)",
+    detail: "Front view.",
+    credit: "Photo: Seasider53",
+    license: "CC BY 4.0",
+    href: "https://commons.wikimedia.org/wiki/File:Mac_mini_2024_(cropped).jpg",
+  },
+  {
+    n: 8,
+    title: "iPad Air 13-inch (M2)",
+    detail: "With Magic Keyboard.",
+    credit: "Photo: Kyu3a",
+    license: "CC BY-SA 4.0",
+    href: "https://commons.wikimedia.org/wiki/File:M2_iPad_Air_13inti.jpg",
+  },
 ];
