@@ -186,7 +186,7 @@ async function Body({ searchParams }: Pick<PageProps<"/passport">, "searchParams
               <PasswordForm />
               <LoginCodeButton />
               <div>
-                <p className="font-pixel text-[10px] uppercase tracking-[0.2em] text-lightgray">Paired CLI / MCP clients</p>
+                <p className="font-pixel text-[10px] uppercase tracking-[0.2em] text-lightgray">Paired devices (kanehack, Codex)</p>
                 <p className="mt-2 font-plex text-sm text-lightgray">
                   Your terminal showed a pairing code?{" "}
                   <Link href="/pair" className="text-bright underline underline-offset-4 hover:text-lime">

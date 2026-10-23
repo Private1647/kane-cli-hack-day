@@ -640,7 +640,7 @@ export const READINESS_CHECKS: ReadinessCheckDef[] = [
   { id: "node", label: "Node.js 20 or newer", command: "node --version", tier: "core", fix: "Install Node 20 LTS from nodejs.org (or `nvm install 20`), then open a new terminal." },
   { id: "git", label: "Git", command: "git --version", tier: "core", fix: "macOS: `xcode-select --install`. Windows: install Git for Windows. Linux: your package manager." },
   { id: "chrome", label: "Google Chrome", tier: "core", fix: "Install Chrome. Kane drives a real Chrome window on your machine." },
-  { id: "codex", label: "Coding agent (Codex or Claude Code)", command: "codex --version", tier: "agent", fix: "Install the Codex CLI with `npm i -g @openai/codex`, or use Claude Code. Any agent that runs shell commands works." },
+  { id: "codex", label: "Codex", command: "codex --version", tier: "agent", fix: "Install the Codex CLI with `npm i -g @openai/codex`, or use Codex in the ChatGPT desktop app." },
   { id: "kane_version", label: "Kane CLI installed", command: "kane-cli --version", tier: "kane", fix: "`npm install -g @testmuai/kane-cli`, then open a new terminal and re-run `kane-cli --version`." },
   { id: "kane_whoami", label: "Kane CLI signed in", command: "kane-cli whoami", tier: "kane", fix: "Run `kane-cli login --oauth` and finish the sign-in in the browser, then re-run `kane-cli whoami`." },
   { id: "kane_skill", label: "Official Kane skill installed", command: "kane-cli install codex", tier: "agent", fix: "Run `kane-cli install codex` (or `kane-cli install claude`) so your agent knows how to call Kane." },

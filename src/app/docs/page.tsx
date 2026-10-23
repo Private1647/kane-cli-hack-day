@@ -37,7 +37,7 @@ const KANE: Doc[] = [
 ];
 
 const EVENT: Doc[] = [
-  { label: "Set up your agent", href: "/setup", use: "Install kanehack, pair, connect Codex or Claude Code, use the hack-day skills" },
+  { label: "Set up your agent", href: "/setup", use: "Install kanehack, pair, connect Codex, use the hack-day skills" },
   { label: "Resources", href: "/resources", use: "Starter material, content skills, recording tips" },
   { label: "Readiness check", href: "/readiness", use: "Is your machine ready for the day" },
   { label: "Help", href: "/help", use: "Ask a mentor; works without the AI" },

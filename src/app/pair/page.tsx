@@ -22,7 +22,7 @@ const inputCls =
 export default function PairPage({ searchParams }: PageProps<"/pair">) {
   return (
     <main>
-      <PageHeader eyebrow="Pair" dim="Connect your agent," bright="Pair a device." intro="Your terminal showed a code. Approve it here and your CLI or MCP client gets its own revocable token." />
+      <PageHeader eyebrow="Pair" dim="Connect your agent," bright="Pair a device." intro="Your terminal showed a code. Approve it here and kanehack and Codex get their own revocable token." />
       <section className="py-12 sm:py-16">
         <div className="container-page max-w-xl">
           <Suspense fallback={<p className="font-plex text-sm text-lightgray">Checking…</p>}>

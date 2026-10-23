@@ -11,7 +11,7 @@ import { getPassport } from "@/server/passport";
 
 export const metadata: Metadata = {
   title: "Set up your agent",
-  description: "Install the kanehack helper, pair your machine, connect Codex or Claude Code, and use the hack day skills.",
+  description: "Install the kanehack helper, pair your machine, connect Codex, and use the hack day skills.",
 };
 
 // The agent path through the day (T-PLG-01..04): install → pair → connect →
@@ -27,7 +27,7 @@ export default function SetupPage() {
         eyebrow="Setup"
         dim="Your agent,"
         bright="on the team."
-        intro="Install one small helper, pair it with your passport, and connect Codex or Claude Code. Then your agent can do the day with you: team, idea, Kane runs, help and submission."
+        intro="Install one small helper, pair it with your passport, and connect Codex. Then Codex can do the day with you: team, idea, Kane runs, help and submission."
         jumps={[
           { href: "#install", label: "1 · Install" },
           { href: "#pair", label: "2 · Pair" },
@@ -50,7 +50,7 @@ export default function SetupPage() {
       <Step id="connect" n="03" title="Connect your agent" body="Points your agent at the event server, so the skills can read your status, record runs and open help tickets as you.">
         <Cmds cmds={CONNECT} />
       </Step>
-      <Step id="skills" n="04" title="Use the skills" body="Ask in your own words; your agent picks the right skill. In Codex you can also type $hack-name, in Claude Code /hack-name.">
+      <Step id="skills" n="04" title="Use the skills" body="Ask Codex in your own words and it picks the right skill, or type $hack-name. /skills lists them.">
         <div className="grid gap-10 lg:grid-cols-2">
           {SKILL_GROUPS.map((g) => (
             <div key={g.phase}>

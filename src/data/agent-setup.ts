@@ -1,12 +1,12 @@
 // The participant path through Hack OS with an AI agent: install the helper,
-// pair this machine, connect the agent to the event MCP server, then work
+// pair this machine, connect Codex to the event MCP server, then work
 // through the day with the hack-* skills. /setup, the team hub's Setup tab,
 // /readiness and the passport all read from here, so a command changes in one
 // place. Commands must match public/install.*, packages/kanehack and
 // plugin/README.md.
 
 export const SITE = "https://kaneclihack.sh";
-/** The MCP endpoint uses the www host directly: MCP clients don't all follow the apex redirect. */
+/** The MCP endpoint uses the www host directly, so Codex never has to follow the apex redirect. */
 export const MCP_URL = "https://www.kaneclihack.sh/mcp";
 
 export type Cmd = { label: string; value: string; note?: string };
@@ -21,7 +21,7 @@ export const INSTALL: Cmd[] = [
   {
     label: "From an AI agent (no terminal)",
     value: `curl -fsSL ${SITE}/install.sh | sh -s -- --yes`,
-    note: "Claude Code /remote-control, Codex and other agents can't answer prompts; --yes answers them.",
+    note: "When Codex runs the installer it can't answer prompts; --yes answers them.",
   },
 ];
 
@@ -39,16 +39,6 @@ export const CONNECT: Cmd[] = [
     label: "Codex",
     value: `export KANEHACK_TOKEN="$(kanehack token)"\ncodex mcp add kane-hack-event --url ${MCP_URL} --bearer-token-env-var KANEHACK_TOKEN`,
     note: "Skills load from ~/.agents/skills (the installer puts them there). Start a new Codex session, then type $hack-onboard.",
-  },
-  {
-    label: "Claude Code",
-    value: `claude mcp add --transport http kane-hack-event ${MCP_URL} --header "Authorization: Bearer $(kanehack token)"`,
-    note: "Skills load from ~/.claude/skills. Start a new session and ask for what you need, or type /hack-onboard.",
-  },
-  {
-    label: "Any other MCP client",
-    value: `URL:    ${MCP_URL}\nHeader: Authorization: Bearer <kanehack token>`,
-    note: "Streamable HTTP. Revoke the token any time from your passport.",
   },
 ];
 

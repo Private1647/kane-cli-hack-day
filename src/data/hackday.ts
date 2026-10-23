@@ -35,7 +35,7 @@ export const setup: { id: string; title: string; body: string; value?: string; l
   {
     id: "install",
     title: "Set up your agent",
-    body: "Install the kanehack helper and the hack-day skills, pair it with your passport, then connect Codex or Claude Code.",
+    body: "Install the kanehack helper and the hack-day skills, pair it with your passport, then connect Codex.",
     value: "curl -fsSL https://kaneclihack.sh/install.sh | sh\nkanehack pair",
     link: { label: "All steps, incl. Windows", href: "/setup" },
   },
