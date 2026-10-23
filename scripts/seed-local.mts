@@ -73,6 +73,24 @@ const emailHash = (e: string) => sha(e.trim().toLowerCase());
     await query("delete from settings where key = 'fixture:submission_locks_at'");
   }
 }
+// The suite also edits the event itself (Admin deadline and privacy rule, the TV
+// phase override, public status). The first seed records the event as it is;
+// every later seed puts it back, so each wave starts from the same schedule.
+{
+  const cols = "starts_at, team_lock_at, idea_lock_at, submission_locks_at, demos_start_at, ends_at, phase_override, public_status, settings";
+  const [base] = await query<{ value: string }>("select value from settings where key = 'fixture:event_baseline'");
+  if (!base) {
+    await query(`insert into settings (key, value) select 'fixture:event_baseline', to_jsonb(e)::text from (select ${cols} from hack_events where id = current_event_id()) e`);
+  } else {
+    await query(
+      `update hack_events h set starts_at = r.starts_at, team_lock_at = r.team_lock_at, idea_lock_at = r.idea_lock_at, submission_locks_at = r.submission_locks_at,
+              demos_start_at = r.demos_start_at, ends_at = r.ends_at, phase_override = r.phase_override, public_status = r.public_status, settings = r.settings, updated_at = now()
+         from jsonb_populate_record(null::hack_events, $1::jsonb) r
+        where h.id = current_event_id()`,
+      [base.value],
+    );
+  }
+}
 
 // ── Teams ───────────────────────────────────────────────────────────────────
 type Seat = { name: string; email: string };
