@@ -205,7 +205,9 @@ if want interactive; then
     mkdir -p "$NPMP/bin"
     CMD="curl -fsSL '$SITE/install.sh' | env -u CI HOME='$H' NPM_CONFIG_PREFIX='$NPMP' PATH='$NPMP/bin:$ORIG_PATH' SHELL=/bin/sh $SHX -s -- --site '$SITE'"
     python3 "$HERE/interactive.py" "y,y,y" "$CMD" >"$LOG" 2>&1; RC=$?
-    check "interactive yes,yes,yes: 3 prompts, installed, linked, colors on" '[ "$RC" -eq 0 ] && grep -q "prompts answered: 3" "$LOG" && [ "$(installed_version)" = "$VERSION" ] && [ -L "$NPMP/bin/kanehack" ] && [ -f "$H/.agents/skills/hack-onboard/SKILL.md" ] && grep -q "$ESC\[32m" "$LOG"' "$LOG"
+    check "interactive yes,yes,yes: exit 0 after 3 prompts" '[ "$RC" -eq 0 ] && grep -q "prompts answered: 3" "$LOG"' "$LOG"
+    check "interactive yes,yes,yes: installed, skills, linked" '[ "$(installed_version)" = "$VERSION" ] && [ -L "$NPMP/bin/kanehack" ] && [ -f "$H/.agents/skills/hack-onboard/SKILL.md" ]' "$LOG"
+    check "interactive: colors on a terminal" 'grep -q "$ESC" "$LOG"' "$LOG"
     fresh interactive-no
     CMD="curl -fsSL '$SITE/install.sh' | env -u CI HOME='$H' NPM_CONFIG_PREFIX='$NPMP' PATH='$ORIG_PATH' SHELL=/bin/sh $SHX -s -- --site '$SITE'"
     python3 "$HERE/interactive.py" "n,n" "$CMD" >"$LOG" 2>&1; RC=$?

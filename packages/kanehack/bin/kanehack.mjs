@@ -203,6 +203,13 @@ function winQuote(s) {
   if (/^[A-Za-z0-9_\-+=.,:/\\@]+$/.test(s)) return s;
   return `"${s.replace(/(\\*)"/g, '$1$1\\"').replace(/(\\+)$/, "$1$1")}"`;
 }
+/** Windows: does `cmd` resolve through PATH + PATHEXT? (cmd.exe reports "not recognized" with exit 1, not a spawn error.) */
+function winFound(cmd) {
+  if (/[\\/]/.test(cmd)) return existsSync(cmd) || (process.env.PATHEXT || ".EXE;.CMD;.BAT").split(";").some((e) => existsSync(cmd + e));
+  const exts = ["", ...(process.env.PATHEXT || ".COM;.EXE;.BAT;.CMD").split(";").filter(Boolean)];
+  const dirs = (process.env.PATH || process.env.Path || "").split(";").filter(Boolean);
+  return dirs.some((d) => exts.some((e) => existsSync(join(d, cmd + e))));
+}
 /** [cmd, args, opts] for spawn/spawnSync: plain argv on POSIX; one quoted command line through cmd.exe on Windows. */
 function cmdline(cmd, argv, opts = {}) {
   if (!WIN) return [cmd, argv, opts];
@@ -436,6 +443,7 @@ async function report(a) {
   if (!cmd?.length) fail('Usage: kanehack report [--evidence pack.zip] [--objective "…"] [--json] -- kane-cli run "…" --agent', EXIT.ACTION, "USAGE");
   const cfg = loadConfig();
 
+  if (WIN && !winFound(cmd[0])) fail(`Couldn't start ${cmd[0]}: not found on PATH`, 127, "COMMAND_NOT_FOUND");
   // Run Kane exactly as given; stdout is passed through untouched and captured.
   const [file, rest, opts] = cmdline(cmd[0], cmd.slice(1), { stdio: ["inherit", "pipe", "inherit"] });
   const child = spawn(file, rest, opts);
