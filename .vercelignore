@@ -1,0 +1,8 @@
+# Local tooling and data that never belongs in a deployment.
+.claude
+.agents
+photo-pipeline
+.env*.local
+.env.production.local
+/*.png
+skills-lock.json
