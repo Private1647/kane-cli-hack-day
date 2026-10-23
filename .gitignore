@@ -42,3 +42,8 @@ next-env.d.ts
 
 # agent-to-agent channel, local only
 .claude/channel/
+
+# kane-cli variable values: local demo credentials and single-use codes, never committed
+.testmuai/variables/
+# placeholder photos written by scripts/seed-fixtures.mts for the local gallery
+/public/photos/event/fixtures/

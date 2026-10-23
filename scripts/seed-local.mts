@@ -42,8 +42,14 @@ const emailHash = (e: string) => sha(e.trim().toLowerCase());
     // ...and the rest goes through the normal cascades.
     await c.query("set local session_replication_role = origin");
     await c.query(`delete from help_tickets where member_id in ${demoMembers}`);
+    // Fixture paper tickets and receipts the suite enters (seed-fixtures.mts, issue-test-codes.mts).
+    await c.query("delete from help_tickets where code like 'H-OFF%' or code like 'H-T%'");
     await c.query("delete from kane_runs where upstream_execution_id like 'demo-run-%'");
-    await c.query("delete from roster_guests where staff_reference = 'demo-seed'");
+    await c.query(`delete from kane_runs where project_id in ${demoProjects}`);
+    await c.query("delete from roster_guests where staff_reference = 'demo-seed' or luma_guest_id like 'gst-%' or email_hash = encode(sha256(convert_to('wendy.walkin@demo.test', 'UTF8')), 'hex')");
+    await c.query("delete from roster_guests where member_id in " + demoMembers);
+    await c.query("delete from roster_imports where source_version like 'demo-%'");
+    await c.query("delete from notifications where title like 'Event desk %' or title like 'Staff desk %'");
     await c.query("delete from staff_accounts where email like '%@demo.test'");
     await c.query(`delete from projects where id in ${demoProjects}`);
     await c.query("delete from teams where slug like 'demo-%'");
@@ -54,6 +60,15 @@ const emailHash = (e: string) => sha(e.trim().toLowerCase());
     throw e;
   } finally {
     c.release();
+  }
+}
+
+// A deadline wave (issue-test-codes.mts) may have moved the submission lock into the past: put it back.
+{
+  const [saved] = await query<{ value: string }>("select value from settings where key = 'fixture:submission_locks_at'");
+  if (saved) {
+    await query("update hack_events set submission_locks_at = $1::timestamptz", [saved.value]);
+    await query("delete from settings where key = 'fixture:submission_locks_at'");
   }
 }
 
@@ -181,6 +196,9 @@ const ticket = await help.createHelpTicket(
 
 await query("insert into notifications (team_id, kind, title, body, visibility) values (null, 'announcement', 'Lunch is served', 'Working lunch in the atrium until 14:00.', 'public')").catch(() => {});
 
+// Fixtures for the kane-cli suite (.testmuai/tests): see docs/hack-os/TEST_FIXTURES.md.
+const { fixtureSummary } = await import("./seed-fixtures.mts");
+
 const pcodes = await query<{ email: string; public_code: string | null }>("select email, public_code from members where email like '%@demo.test' order by id");
 console.log(JSON.stringify({
   personal_password: PERSONAL_PASSWORD,
@@ -190,5 +208,7 @@ console.log(JSON.stringify({
   orbit_receipt: fin.data.receipt_code,
   atlas_ticket: ticket.ticket.code,
   p_codes: Object.fromEntries(pcodes.map((p) => [p.email, p.public_code])),
+  fixtures: fixtureSummary,
 }, null, 2));
+if (fixtureSummary.warnings.length) console.error(`seed-local: ${fixtureSummary.warnings.length} fixture warning(s), see "fixtures.warnings" above.`);
 await pool.end();

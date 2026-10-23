@@ -1,0 +1,13 @@
+event_id,luma_guest_id,approval_status,display_name,checked_in_at,source_version,staff_reference,email
+kane-hack-sf-2026,gst-pat,approved,Pat Quill,,demo-luma-export-2026-10-22.v3,demo-seed,pat@demo.test
+kane-hack-sf-2026,gst-olu,approved,Olu Bankole,,demo-luma-export-2026-10-22.v3,demo-seed,olu@demo.test
+kane-hack-sf-2026,gst-quinn,approved,Quinn Archer,,demo-luma-export-2026-10-22.v3,demo-seed,quinn@demo.test
+kane-hack-sf-2026,gst-ana,approved,Ana Rivera,,demo-luma-export-2026-10-22.v3,demo-seed,ana@demo.test
+kane-hack-sf-2026,gst-ben,approved,Ben Ito,,demo-luma-export-2026-10-22.v3,demo-seed,ben@demo.test
+kane-hack-sf-2026,gst-cara,approved,Cara Diaz,,demo-luma-export-2026-10-22.v3,demo-seed,cara@demo.test
+kane-hack-sf-2026,gst-dev,approved,Dev Shah,,demo-luma-export-2026-10-22.v3,demo-seed,dev@demo.test
+kane-hack-sf-2026,gst-eve,approved,Eve Moss,,demo-luma-export-2026-10-22.v3,demo-seed,eve@demo.test
+kane-hack-sf-2026,gst-finn,approved,Finn Lake,,demo-luma-export-2026-10-22.v3,demo-seed,finn@demo.test
+kane-hack-sf-2026,gst-gia,approved,Gia Park,,demo-luma-export-2026-10-22.v3,demo-seed,gia@demo.test
+kane-hack-sf-2026,gst-hal,declined,Hal Declined,,demo-luma-export-2026-10-22.v3,demo-seed,hal@demo.test
+kane-hack-sf-2026,gst-ivy,waitlist,Ivy Waitlist,,demo-luma-export-2026-10-22.v3,demo-seed,ivy@demo.test

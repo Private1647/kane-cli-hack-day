@@ -1,0 +1,7 @@
+{
+  "file": "offline-checkin-ledger.csv",
+  "sha256": "022600ff435cfa66bb7f67a269380d96eaa0b499819245ed30e09e8d0d5e1709",
+  "hmac_sha256": "3d2626b0a1b15717ae6cfe07f48b5e82da441dc940d7764b44e70ee285a9f71b",
+  "key": "RECEIPT_SIGNING_KEY from the local .env.local",
+  "signed_by": "scripts/seed-fixtures.mts"
+}
