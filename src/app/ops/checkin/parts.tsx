@@ -295,11 +295,15 @@ export function WalkInForm() {
         return (
           <div className="space-y-2 border-l-2 border-verified pl-3 font-plex text-sm">
             <p className="text-bright">{s.message}</p>
+            <p className="text-xs text-lightgray">Admission: staff walk-in exception · source walk_in. Attendance: checked in now, recorded separately.</p>
             {d?.publicCode && (
               <p>
                 <span className="font-dots text-4xl font-black text-bright">{d.publicCode}</span>
                 <Link href={`/ops/checkin/badge/${encodeURIComponent(d.publicCode)}`} className="ml-4 inline-flex min-h-11 items-center underline underline-offset-4 hover:text-lime">
                   Print or show badge →
+                </Link>
+                <Link href={`/ops/checkin?q=${encodeURIComponent(d.publicCode)}`} className="ml-4 inline-flex min-h-11 items-center underline underline-offset-4 hover:text-lime">
+                  Open their roster row →
                 </Link>
               </p>
             )}
