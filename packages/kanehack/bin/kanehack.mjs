@@ -2,6 +2,7 @@
 // kanehack: the Kane CLI Hack Day helper. No dependencies, Node >= 18.17.
 //
 //   kanehack pair [--token khk_…]          pair this machine with your account (token in ~/.kanehack/config.json, mode 600)
+//   kanehack pair --start | --wait         the same, in two steps, for agents and scripts (no terminal needed)
 //   kanehack doctor [--json] [--report]    check Node, Git, Chrome, Kane CLI, auth, skills, API; optionally send the result
 //   kanehack report [opts] -- <kane-cli …> run a Kane command, keep its exit code + NDJSON, send a redacted summary
 //   kanehack status                        your team's latest runs
@@ -10,23 +11,31 @@
 //   kanehack consent yes|no                allow / stop sending run summaries
 //   kanehack hook status|enable|disable    the optional lifecycle hook (off; see plugin/hooks/README.md)
 //
+// Every command takes --json (one JSON document on stdout) and works without a
+// terminal. Exit codes: see usage() and README.md.
+//
 // The server decides what a run proves. This tool never marks anything as
 // passed: it forwards the real exit code and the real stream.
 
 import { spawn, spawnSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync, chmodSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync, chmodSync, rmSync } from "node:fs";
 import { homedir, platform, arch, hostname } from "node:os";
 import { basename, extname, join } from "node:path";
 import { createInterface } from "node:readline/promises";
 import { redactText, typedOnly } from "../lib/redact.mjs";
 import { scan } from "../lib/stream.mjs";
 
-const VERSION = "0.1.1";
+const VERSION = "0.1.2";
 const DIR = join(homedir(), ".kanehack");
 const CONFIG = join(DIR, "config.json");
+const PENDING = join(DIR, "pending-pair.json");
 const MAX_NDJSON = 1_900_000;
 const MAX_DIRECT_EVIDENCE = 4 * 1024 * 1024;
+const WIN = platform() === "win32";
+
+// Exit codes (documented in README.md).
+const EXIT = { OK: 0, FAIL: 1, ACTION: 2, UNREACHABLE: 3, PENDING: 4 };
 
 // ── config ───────────────────────────────────────────────────────────────────
 
@@ -43,30 +52,54 @@ function loadConfig() {
   };
 }
 
-function saveConfig(patch) {
-  const cur = loadConfig().raw;
+function writePrivate(file, obj) {
   mkdirSync(DIR, { recursive: true, mode: 0o700 });
-  writeFileSync(CONFIG, JSON.stringify({ ...cur, ...patch }, null, 2), { mode: 0o600 });
+  writeFileSync(file, JSON.stringify(obj, null, 2), { mode: 0o600 });
   try {
-    chmodSync(CONFIG, 0o600);
+    chmodSync(file, 0o600);
   } catch {}
+}
+
+function saveConfig(patch) {
+  writePrivate(CONFIG, { ...loadConfig().raw, ...patch });
 }
 
 // ── output ───────────────────────────────────────────────────────────────────
 
-const tty = process.stderr.isTTY;
-const c = (code, s) => (tty ? `\x1b[${code}m${s}\x1b[0m` : s);
+let JSON_MODE = false;
+const color = process.stderr.isTTY && !process.env.NO_COLOR && process.env.TERM !== "dumb";
+const c = (code, s) => (color ? `\x1b[${code}m${s}\x1b[0m` : s);
 const ok = (s) => c("32", s);
 const warn = (s) => c("33", s);
 const bad = (s) => c("31", s);
 const dim = (s) => c("2", s);
-// Human output goes to stderr so stdout can stay the Kane NDJSON stream.
+// Human output goes to stderr so stdout can stay the Kane NDJSON stream (or the --json document).
 const say = (...a) => console.error(...a);
+const interactive = () => Boolean(process.stdin.isTTY && process.stderr.isTTY) && !process.env.CI;
 
-function fail(msg, code = 1) {
-  say(bad(`kanehack: ${msg}`));
-  process.exit(code);
+/** Leave with an exit code, letting stdout drain first (process.exit can cut a piped stdout short). */
+class Exit extends Error {
+  constructor(code) {
+    super(`exit ${code}`);
+    this.code = code;
+  }
 }
+const exit = (code) => {
+  throw new Exit(code);
+};
+
+function emit(obj) {
+  if (JSON_MODE) process.stdout.write(JSON.stringify(obj, null, 2) + "\n");
+}
+
+function fail(msg, code = EXIT.FAIL, errCode = "ERROR", extra = {}) {
+  say(bad(`kanehack: ${msg}`));
+  emit({ ok: false, exit_code: code, error: { code: errCode, message: msg }, ...extra });
+  exit(code);
+}
+
+// Flags that never take a value, so `--json yes` keeps "yes" as an argument.
+const BOOLEAN_FLAGS = new Set(["json", "start", "wait", "report", "preflight", "no-upload", "help", "version"]);
 
 function args(argv) {
   const out = { _: [], flags: {} };
@@ -76,10 +109,12 @@ function args(argv) {
       out.rest = argv.slice(i + 1);
       break;
     }
-    if (a.startsWith("--")) {
-      const [k, v] = a.slice(2).split("=", 2);
-      if (v !== undefined) out.flags[k] = v;
-      else if (argv[i + 1] && !argv[i + 1].startsWith("-")) out.flags[k] = argv[++i];
+    if (a === "-h") out.flags.help = true;
+    else if (a.startsWith("--")) {
+      const eq = a.indexOf("=");
+      const k = eq > 0 ? a.slice(2, eq) : a.slice(2);
+      if (eq > 0) out.flags[k] = a.slice(eq + 1);
+      else if (!BOOLEAN_FLAGS.has(k) && argv[i + 1] !== undefined && !argv[i + 1].startsWith("-")) out.flags[k] = argv[++i];
       else out.flags[k] = true;
     } else out._.push(a);
   }
@@ -88,28 +123,41 @@ function args(argv) {
 
 // ── HTTP ─────────────────────────────────────────────────────────────────────
 
+const LOOPBACK = (h) => h === "localhost" || h.endsWith(".localhost") || h === "127.0.0.1" || h === "[::1]";
+const site = (h) => h.replace(/^www\./, "");
+
 async function api(cfg, path, init = {}) {
   const headers = { "user-agent": `kanehack/${VERSION} (${platform()} ${arch()})`, ...(init.headers || {}) };
   if (cfg.token) headers.authorization = `Bearer ${cfg.token}`;
   let res;
+  let url = `${cfg.api}${path}`;
   try {
     // Follow redirects ourselves: fetch drops Authorization when one changes host, and
-    // kaneclihack.sh ⇄ www.kaneclihack.sh is a host change. Only within the same site.
-    let url = `${cfg.api}${path}`;
+    // kaneclihack.sh ⇄ www.kaneclihack.sh is a host change. Only within the same site,
+    // and only to https (plain http is allowed for loopback hosts, for local testing).
     for (let hops = 0; ; hops++) {
       res = await fetch(url, { ...init, headers, redirect: "manual", signal: AbortSignal.timeout(init.timeout ?? 30_000) });
       const next = res.status >= 300 && res.status < 400 && res.headers.get("location");
-      if (!next || hops >= 3) break;
+      if (!next) break;
       const to = new URL(next, url);
-      if (to.protocol !== "https:" && to.hostname !== "localhost") break;
-      if (to.hostname.replace(/^www\./, "") !== new URL(url).hostname.replace(/^www\./, "")) break;
+      const offSite = (to.protocol !== "https:" && !LOOPBACK(to.hostname)) || site(to.hostname) !== site(new URL(url).hostname);
+      if (offSite || hops >= 3) return { ok: false, status: res.status, env: null, redirect: to.toString(), error: `${cfg.api} redirected to ${to.origin}, a different site.` };
       url = to.toString();
     }
   } catch (e) {
-    return { ok: false, status: 0, env: null, error: `Can't reach ${cfg.api} (${e.name}).` };
+    return { ok: false, status: 0, env: null, error: `Can't reach ${cfg.api} (${e.cause?.code ?? e.name}).` };
   }
   const env = await res.json().catch(() => null);
-  return { ok: res.ok, status: res.status, env };
+  return { ok: res.ok, status: res.status, env, error: env ? null : `${cfg.api} answered HTTP ${res.status} without a kanehack envelope.` };
+}
+
+/** Turn transport-level problems into the documented exit codes. Returns r when there's an envelope to read. */
+function ensure(r, what = "That request") {
+  if (r.status === 0) fail(`${r.error} Check your network, or the server address (KANEHACK_API).`, EXIT.UNREACHABLE, "UNREACHABLE");
+  if (r.redirect) fail(`${r.error} If that's the right server, run: kanehack pair --api ${new URL(r.redirect).origin}`, EXIT.UNREACHABLE, "REDIRECT");
+  if (r.status === 401) fail("Not paired (or the token was revoked or expired). Run: kanehack pair", EXIT.ACTION, "UNAUTHENTICATED");
+  if (!r.env) fail(`${what} failed: ${r.error}`, EXIT.FAIL, "BAD_RESPONSE");
+  return r;
 }
 
 const json = (body, key) => ({
@@ -125,10 +173,14 @@ async function tool(cfg, name, argsObj) {
     headers: { "content-type": "application/json", accept: "application/json, text/event-stream" },
     body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: argsObj } }),
   });
-  if (r.status === 401) fail("Not paired (or the token was revoked). Run: kanehack pair", 2);
+  if (r.status === 0 || r.redirect || r.status === 401) ensure(r);
   const text = r.env?.result?.content?.[0]?.text;
-  if (!text) fail(r.error || r.env?.error?.message || `MCP call failed (HTTP ${r.status}).`);
-  return JSON.parse(text);
+  if (!text) fail(r.env?.error?.message || r.env?.message || r.error || `MCP call ${name} failed (HTTP ${r.status}).`, EXIT.FAIL, "MCP_FAILED");
+  try {
+    return JSON.parse(text);
+  } catch {
+    fail(`${name} failed: ${text.slice(0, 300)}`, EXIT.FAIL, "MCP_FAILED");
+  }
 }
 
 function printEnvelope(env) {
@@ -138,59 +190,161 @@ function printEnvelope(env) {
   for (const l of env.links || []) say(dim(`→ ${l.label}: ${l.url}`));
 }
 
+/** The parts of a server envelope worth handing to a script. */
+const envJson = (env) => ({ status: env.status, message: env.message, text: env.fallback?.text ?? env.message, data: env.data ?? null, links: env.links ?? [], warnings: env.warnings ?? [], error: env.error ?? null, request_id: env.request_id });
+
 function needToken(cfg) {
-  if (!cfg.token) fail("This machine isn't paired yet. Run: kanehack pair", 2);
+  if (!cfg.token) fail("This machine isn't paired yet. Run: kanehack pair", EXIT.ACTION, "NOT_PAIRED");
 }
 
-// ── commands ─────────────────────────────────────────────────────────────────
+// ── child processes (Windows needs a shell for .cmd shims, so quote for it) ──
+
+function winQuote(s) {
+  if (/^[A-Za-z0-9_\-+=.,:/\\@]+$/.test(s)) return s;
+  return `"${s.replace(/(\\*)"/g, '$1$1\\"').replace(/(\\+)$/, "$1$1")}"`;
+}
+/** [cmd, args, opts] for spawn/spawnSync: plain argv on POSIX; one quoted command line through cmd.exe on Windows. */
+function cmdline(cmd, argv, opts = {}) {
+  if (!WIN) return [cmd, argv, opts];
+  return [[cmd, ...argv].map(winQuote).join(" "), [], { ...opts, shell: true }];
+}
+
+// ── pair ─────────────────────────────────────────────────────────────────────
+
+function loadPending() {
+  try {
+    return JSON.parse(readFileSync(PENDING, "utf8"));
+  } catch {
+    return null;
+  }
+}
+const clearPending = () => rmSync(PENDING, { force: true });
 
 async function pair(a) {
   const cfg = loadConfig();
   if (a.flags.api) cfg.api = String(a.flags.api).replace(/\/$/, "");
-  if (a.flags.token) {
-    const token = String(a.flags.token).trim();
-    if (!/^khk_[A-Za-z0-9_-]{20,}$/.test(token)) fail("That doesn't look like a kanehack token (khk_…).");
-    const r = await api({ ...cfg, token }, "/api/v1/kane/runs?limit=1");
-    if (r.status === 401) fail("The server rejected that token. Create a new one from your passport.");
-    if (r.status === 0) fail(r.error);
-    saveConfig({ token, api: cfg.api });
-    say(ok("Paired."), dim(`Token saved in ${CONFIG} (mode 600).`));
-    if (r.status === 403) say(warn("You're not on a team yet: join or create one before reporting runs."));
+  if (a.flags.token) return pairWithToken(cfg, String(a.flags.token).trim());
+  if (a.flags.wait) {
+    const p = loadPending();
+    if (!p?.device_code) fail("No pairing in progress on this machine. Start one: kanehack pair --start", EXIT.ACTION, "NO_PENDING_PAIRING");
+    return pairWait(p, timeoutFrom(a, 90), { pollFirst: true });
+  }
+  const p = await pairStart(cfg);
+  say(`Open ${c("1", p.verification_url)} and approve code ${c("1", p.user_code)}`);
+  say(dim(`(sign in first if asked; the code expires ${p.expires_at})`));
+  if (a.flags.start) {
+    say(dim("Then run: kanehack pair --wait"));
+    emit({ ok: true, exit_code: 0, status: "pending", user_code: p.user_code, verification_url: p.verification_url, expires_at: p.expires_at, interval: p.interval, next: "kanehack pair --wait" });
     return;
   }
-  // Device flow: the browser (signed in) approves a short code; we poll for the token.
-  const label = `kanehack on ${hostname().slice(0, 40)} (${platform()})`;
-  const start = await api(cfg, "/api/v1/pair/start", json({ label, client: "kanehack", client_version: VERSION }, randomUUID()));
-  if (start.status === 404 || start.status === 0) {
-    say(warn("Device pairing isn't available right now."));
-    say(`Create a token in your passport: ${cfg.api}/passport  then run: kanehack pair --token khk_…`);
-    process.exit(2);
-  }
-  const d = start.env?.data;
-  if (!start.ok || !d?.pair_code || !d?.poll_token) fail(start.env?.message || `Pairing failed (HTTP ${start.status}).`);
-  say(`Open ${c("1", d.approve_url || `${cfg.api}/pair`)} and enter code ${c("1", d.pair_code)}`);
-  say(dim(`Waiting for approval (expires ${d.expires_at ?? "in 10 minutes"})…`));
-  const interval = Math.max(2, Number(d.interval) || 3) * 1000;
-  const until = d.expires_at ? Date.parse(d.expires_at) : Date.now() + 10 * 60_000;
-  while (Date.now() < until) {
-    await new Promise((r) => setTimeout(r, interval));
-    const r = await api(cfg, "/api/v1/pair/confirm", json({ poll_token: d.poll_token }));
-    const token = r.env?.data?.token;
-    if (r.ok && token) {
-      saveConfig({ token, api: cfg.api });
-      say(ok("Paired."), dim(`Token saved in ${CONFIG} (mode 600).`));
-      say(dim(`For your agent: export KANEHACK_TOKEN=${token}`));
-      return;
-    }
-    if (r.status === 410 || r.env?.error?.code === "PAIR_EXPIRED") fail("The code expired. Run kanehack pair again.");
-    if (r.status >= 400 && r.status !== 425 && r.status !== 428 && r.env?.status === "error" && r.env?.error?.code !== "NOT_APPROVED") fail(r.env.message);
-  }
-  fail("Timed out waiting for approval. Run kanehack pair again.");
+  // In a terminal: wait until the code expires. Without one (agents, CI): wait a bounded time,
+  // so a tool-call timeout can't kill us mid-poll; `kanehack pair --wait` picks it up again.
+  return pairWait(p, timeoutFrom(a, interactive() ? Infinity : 90), { pollFirst: false });
 }
 
+function timeoutFrom(a, dflt) {
+  if (a.flags.timeout === undefined) return dflt;
+  const t = Number(a.flags.timeout);
+  if (!Number.isFinite(t) || t < 0) fail("--timeout takes a number of seconds.", EXIT.ACTION, "USAGE");
+  return t;
+}
+
+async function pairWithToken(cfg, token) {
+  if (!/^khk_[A-Za-z0-9_-]{20,}$/.test(token)) fail("That doesn't look like a kanehack token (khk_…).", EXIT.ACTION, "USAGE");
+  const r = await api({ ...cfg, token }, "/api/v1/kane/runs?limit=1");
+  if (r.status === 401) fail("The server rejected that token. Run kanehack pair to get a new one.", EXIT.ACTION, "UNAUTHENTICATED");
+  if (r.status === 0 || r.redirect) ensure(r);
+  saveConfig({ token, api: cfg.api });
+  say(ok("Paired."), dim(`Token saved in ${CONFIG} (mode 600).`));
+  const noTeam = r.status === 403;
+  if (noTeam) say(warn("You're not on a team yet: join or create one before reporting runs."));
+  emit({ ok: true, exit_code: 0, status: "paired", api: cfg.api, config: CONFIG, on_team: !noTeam });
+}
+
+async function pairStart(cfg) {
+  const label = `kanehack on ${hostname().slice(0, 40)} (${platform()})`;
+  const start = await api(cfg, "/api/v1/pair/start", json({ label, client: "kanehack", client_version: VERSION }, randomUUID()));
+  if (start.status === 404) {
+    say(warn("Device pairing isn't available on this server."));
+    fail(`Ask at the help desk, or pair with a token: kanehack pair --token khk_…  (server: ${cfg.api})`, EXIT.ACTION, "PAIRING_UNAVAILABLE");
+  }
+  ensure(start, "Pairing");
+  const d = start.env.data ?? {};
+  // Field names from POST /api/v1/pair/start (src/server/pairing.ts). The old names are accepted too.
+  const p = {
+    api: cfg.api,
+    user_code: d.user_code ?? d.pair_code,
+    device_code: d.device_code ?? d.poll_token,
+    verification_url: d.verification_url ?? d.approve_url ?? `${cfg.api}/pair`,
+    expires_at: d.expires_at ?? new Date(Date.now() + 10 * 60_000).toISOString(),
+    interval: Math.max(2, Number(d.interval) || 5),
+  };
+  if (!start.ok || !p.user_code || !p.device_code) fail(start.env.fallback?.text || start.env.message || `Pairing failed (HTTP ${start.status}).`, EXIT.FAIL, start.env.error?.code ?? "PAIR_FAILED");
+  writePrivate(PENDING, p);
+  return p;
+}
+
+async function pairWait(p, timeoutSec, { pollFirst }) {
+  const cfg = { api: p.api, token: null };
+  const expires = Date.parse(p.expires_at) || Date.now() + 10 * 60_000;
+  const until = Math.min(expires, Date.now() + timeoutSec * 1000);
+  const interval = Math.max(2, Number(p.interval) || 5) * 1000;
+  let first = pollFirst;
+  let lastErr = null;
+  say(dim(`Waiting for approval of ${p.user_code}…`));
+  while (Date.now() < until || first) {
+    if (!first) await new Promise((r) => setTimeout(r, Math.min(interval, Math.max(0, until - Date.now()))));
+    first = false;
+    const r = await api(cfg, "/api/v1/pair/confirm", json({ device_code: p.device_code }));
+    if (r.status === 0) {
+      lastErr = r.error;
+      if (Date.now() >= until) break;
+      continue;
+    }
+    lastErr = null;
+    const token = r.env?.data?.token;
+    if (r.ok && token) {
+      saveConfig({ token, api: p.api });
+      clearPending();
+      const m = r.env.data.member ?? {};
+      say(ok(`Paired${m.name ? ` as ${m.name}` : ""}.`), dim(`Token saved in ${CONFIG} (mode 600).`));
+      // Only show the token to a person at a terminal, never into an agent's transcript.
+      if (interactive()) say(dim(`For your agent's MCP connection: export KANEHACK_TOKEN="$(kanehack token)"`));
+      emit({ ok: true, exit_code: 0, status: "paired", member: { name: m.name ?? null, public_code: m.public_code ?? null }, token_expires_at: r.env.data.expires_at ?? null, api: p.api, config: CONFIG });
+      return;
+    }
+    if (r.status === 410 || r.env?.error?.code === "PAIR_EXPIRED") {
+      clearPending();
+      fail("That code expired, was denied or was already used. Start again: kanehack pair", EXIT.FAIL, "PAIR_EXPIRED");
+    }
+    if (r.redirect) ensure(r);
+    if (r.env?.status === "error" || (!r.ok && r.status !== 425 && r.status !== 428)) fail(r.env?.message || r.error || `Pairing failed (HTTP ${r.status}).`, EXIT.FAIL, r.env?.error?.code ?? "PAIR_FAILED");
+    if (Date.now() >= expires) break;
+  }
+  if (lastErr) fail(`${lastErr} Your code is kept: kanehack pair --wait`, EXIT.UNREACHABLE, "UNREACHABLE");
+  if (Date.now() >= expires) {
+    clearPending();
+    fail("Timed out: the code expired before it was approved. Start again: kanehack pair", EXIT.FAIL, "PAIR_EXPIRED");
+  }
+  say(warn(`Not approved yet. Approve ${p.user_code} at ${p.verification_url}, then run: kanehack pair --wait`));
+  emit({ ok: false, exit_code: EXIT.PENDING, status: "pending", user_code: p.user_code, verification_url: p.verification_url, expires_at: p.expires_at, next: "kanehack pair --wait" });
+  exit(EXIT.PENDING);
+}
+
+function token() {
+  const cfg = loadConfig();
+  needToken(cfg);
+  // For `export KANEHACK_TOKEN="$(kanehack token)"`: stdout only, so it can be captured without being shown.
+  process.stdout.write(cfg.token + "\n");
+}
+
+// ── doctor ───────────────────────────────────────────────────────────────────
+
 function probe(cmd, argv, opts = {}) {
-  const r = spawnSync(cmd, argv, { encoding: "utf8", timeout: opts.timeout ?? 15_000, shell: platform() === "win32" });
-  if (r.error) return { found: false, code: null, out: "" };
+  const [file, rest, o] = cmdline(cmd, argv, { encoding: "utf8", timeout: opts.timeout ?? 15_000 });
+  const r = spawnSync(file, rest, o);
+  // On Windows the shell itself starts, so "not found" is cmd's exit code 9009.
+  if (r.error || (WIN && r.status === 9009)) return { found: false, code: null, out: "" };
   return { found: true, code: r.status, out: `${r.stdout || ""}${r.stderr || ""}`.trim() };
 }
 
@@ -203,6 +357,7 @@ function chromePresent() {
         ? [join(process.env["PROGRAMFILES"] || "C:\\Program Files", "Google\\Chrome\\Application\\chrome.exe"), join(process.env["PROGRAMFILES(X86)"] || "C:\\Program Files (x86)", "Google\\Chrome\\Application\\chrome.exe"), join(process.env.LOCALAPPDATA || "", "Google\\Chrome\\Application\\chrome.exe")]
         : [];
   if (paths.some((x) => x && existsSync(x))) return true;
+  if (p === "win32") return false;
   return ["google-chrome", "google-chrome-stable", "chromium", "chromium-browser"].some((b) => probe(b, ["--version"]).code === 0);
 }
 
@@ -226,33 +381,37 @@ async function doctor(a) {
   const skillDirs = [".claude/skills/kane-cli", ".agents/skills/kane-cli", ".codex/skills/kane-cli", ".gemini/skills/kane-cli"].map((d) => join(homedir(), d));
   add("kane_skill", skillDirs.some((d) => existsSync(join(d, "SKILL.md"))) ? "pass" : "warn", null, null, "npx @testmuai/kane-cli-skill");
   const pluginDirs = [join(process.cwd(), ".agents/skills/hack-onboard"), join(homedir(), ".agents/skills/hack-onboard"), join(homedir(), ".claude/skills/hack-onboard"), join(homedir(), ".codex/skills/hack-onboard")];
-  add("plugin", pluginDirs.some((d) => existsSync(join(d, "SKILL.md"))) ? "pass" : "warn", null, null, "Re-run the installer to add the hack-* skills: curl -fsSL https://kaneclihack.sh/install.sh | sh");
-  if (!cfg.token) add("api", "warn", null, "not paired", "kanehack pair");
-  else {
-    const r = await api(cfg, "/api/v1/kane/runs?limit=1", { timeout: 10_000 });
-    add("api", r.status === 200 || r.status === 403 ? "pass" : "fail", null, r.status === 0 ? "unreachable" : `HTTP ${r.status}`, r.status === 401 ? "kanehack pair (token rejected)" : "Check your network, then try again");
-  }
+  const reinstall = WIN ? "irm https://www.kaneclihack.sh/install.ps1 | iex" : "curl -fsSL https://kaneclihack.sh/install.sh | sh";
+  add("plugin", pluginDirs.some((d) => existsSync(join(d, "SKILL.md"))) ? "pass" : "warn", null, null, `Re-run the installer to add the hack-* skills: ${reinstall}`);
+  const r = await api(cfg, "/api/v1/kane/runs?limit=1", { timeout: 10_000 });
+  if (!cfg.token) add("api", r.status === 401 ? "warn" : "fail", null, r.status === 401 ? "reachable, not paired" : r.status === 0 ? "unreachable" : `HTTP ${r.status}`, r.status === 401 ? "kanehack pair" : `Check your network; the server is ${cfg.api}`);
+  else add("api", r.status === 200 || r.status === 403 ? "pass" : "fail", null, r.status === 0 ? "unreachable" : r.status === 403 ? "paired, not on a team yet" : `HTTP ${r.status}`, r.status === 401 ? "kanehack pair (token rejected)" : `Check your network; the server is ${cfg.api}`);
 
-  if (a.flags.json) process.stdout.write(JSON.stringify({ version: VERSION, checks }, null, 2) + "\n");
-  else
+  if (!JSON_MODE)
     for (const ch of checks) {
       const mark = ch.status === "pass" ? ok("✓") : ch.status === "fail" ? bad("✗") : warn("!");
       say(`${mark} ${ch.id.padEnd(11)} ${ch.version ?? ""}${ch.detail ? dim(` (${ch.detail})`) : ""}${ch.status === "pass" ? "" : dim(`  → ${ch.fix}`)}`);
     }
+  const failed = checks.some((x) => x.status === "fail");
+  let readiness = null;
   if (a.flags.report) {
     needToken(cfg);
     const env = await tool(cfg, "readiness_report", { checks: checks.map(({ fix, ...rest }) => (void fix, rest)) });
-    printEnvelope(env);
+    if (!JSON_MODE) printEnvelope(env);
+    readiness = envJson(env);
   }
-  process.exitCode = checks.some((x) => x.status === "fail") ? 1 : 0;
+  emit({ ok: !failed, exit_code: failed ? 1 : 0, version: VERSION, api: cfg.api, paired: Boolean(cfg.token), checks, ...(readiness ? { readiness } : {}) });
+  process.exitCode = failed ? EXIT.FAIL : EXIT.OK;
 }
+
+// ── report ───────────────────────────────────────────────────────────────────
 
 const KIND_BY_EXT = { zip: "zip", png: "screenshot", jpg: "screenshot", jpeg: "screenshot", webp: "screenshot", mp4: "video", webm: "video", ndjson: "ndjson", jsonl: "ndjson", json: "report", pdf: "report", html: "report", md: "testmd", log: "log", txt: "log" };
 
 async function askConsent(cfg) {
   if (cfg.consent === true) return true;
   if (cfg.consent === false) return false;
-  if (!process.stdin.isTTY) {
+  if (!interactive()) {
     say(warn("Not sending: run summaries need your OK once. Run `kanehack consent yes` (or `no`)."));
     return false;
   }
@@ -274,37 +433,44 @@ function gitHead() {
 
 async function report(a) {
   const cmd = a.rest;
-  if (!cmd?.length) fail('Usage: kanehack report [--evidence pack.zip] [--objective "…"] -- kane-cli run "…" --agent');
+  if (!cmd?.length) fail('Usage: kanehack report [--evidence pack.zip] [--objective "…"] [--json] -- kane-cli run "…" --agent', EXIT.ACTION, "USAGE");
   const cfg = loadConfig();
 
   // Run Kane exactly as given; stdout is passed through untouched and captured.
-  const child = spawn(cmd[0], cmd.slice(1), { stdio: ["inherit", "pipe", "inherit"], shell: platform() === "win32" });
+  const [file, rest, opts] = cmdline(cmd[0], cmd.slice(1), { stdio: ["inherit", "pipe", "inherit"] });
+  const child = spawn(file, rest, opts);
   const chunks = [];
   child.stdout.on("data", (b) => {
     chunks.push(b);
     process.stdout.write(b);
   });
-  const exit = await new Promise((resolve) => {
+  const ran = await new Promise((resolve) => {
     child.on("error", (e) => resolve({ code: null, error: e }));
     child.on("close", (code, signal) => resolve({ code, signal }));
   });
-  if (exit.error) fail(`Couldn't start ${cmd[0]}: ${exit.error.code ?? exit.error.message}`, 127);
+  if (ran.error || (WIN && ran.code === 9009)) fail(`Couldn't start ${cmd[0]}: ${ran.error?.code ?? ran.error?.message ?? "not found"}`, 127, "COMMAND_NOT_FOUND");
   // Killed by a signal: Kane didn't exit on its own → treat as cancelled (3).
-  const exitCode = exit.code ?? 3;
+  const exitCode = ran.code ?? 3;
   const raw = Buffer.concat(chunks).toString("utf8");
   const s = scan(raw);
+  const summary = { type: "kanehack_report", version: VERSION, exit_code: exitCode, completion_event: s.terminal, kane_status: s.status, reported: false };
+  // --json: one more NDJSON line after Kane's own, so the stream stays line-delimited JSON.
+  const done = (extra = {}) => {
+    if (JSON_MODE) process.stdout.write(`${raw && !raw.endsWith("\n") ? "\n" : ""}${JSON.stringify({ ...summary, ...extra })}\n`);
+    exit(exitCode);
+  };
 
   say("");
   say(`${exitCode === 0 && s.terminal ? ok("●") : exitCode === 1 ? warn("●") : bad("●")} exit ${exitCode}${s.terminal ? ` · ${s.terminal}` : bad(" · no completion event (not a pass)")}${s.oneLiner ? ` · ${s.oneLiner}` : ""}`);
   if (s.totals) say(dim(`  ${s.totals.tests ?? "?"} tests · ${s.totals.passed ?? "?"} passed · ${s.totals.failed ?? "?"} failed`));
   for (const f of s.failures.slice(0, 5)) say(warn(`  ✗ ${f.path}: ${f.message ?? f.status} (a detection, not yet a confirmed bug)`));
 
-  if (a.flags["no-upload"]) return process.exit(exitCode);
+  if (a.flags["no-upload"]) return done({ reason: "no_upload" });
   if (!cfg.token) {
     say(warn("Not reported: this machine isn't paired. Run `kanehack pair`, or log the run by hand on your Proof tab."));
-    return process.exit(exitCode);
+    return done({ reason: "not_paired" });
   }
-  if (!(await askConsent(cfg))) return process.exit(exitCode);
+  if (!(await askConsent(cfg))) return done({ reason: cfg.consent === false ? "consent_no" : "consent_needed" });
 
   let ndjson = redactText(raw);
   if (ndjson.length > MAX_NDJSON) ndjson = typedOnly(ndjson).slice(-MAX_NDJSON);
@@ -316,7 +482,10 @@ async function report(a) {
   let evidencePath = null;
   if (a.flags.evidence) {
     evidencePath = String(a.flags.evidence);
-    if (!existsSync(evidencePath)) fail(`No such evidence file: ${evidencePath}`);
+    if (!existsSync(evidencePath)) {
+      say(bad(`No such evidence file: ${evidencePath}. The run was not reported.`));
+      return done({ reason: "evidence_missing" });
+    }
     evidenceSha = createHash("sha256").update(readFileSync(evidencePath)).digest("hex");
   }
 
@@ -335,11 +504,14 @@ async function report(a) {
   const r = await api(cfg, "/api/v1/kane/runs", { ...json(payload, `kanehack:${execId}:${exitCode}`), timeout: 60_000 });
   if (!r.env) {
     say(bad(`Report failed (${r.error ?? `HTTP ${r.status}`}). Your run still happened; keep the evidence and log it on the Proof tab.`));
-    return process.exit(exitCode);
+    return done({ reason: r.status === 0 ? "unreachable" : "upload_failed", http_status: r.status });
   }
   printEnvelope(r.env);
+  if (r.status === 401) say(warn("The token was rejected: run `kanehack pair` again."));
+  const d = r.env.data ?? {};
+  const runId = d.run_id ?? d.id ?? null;
+  const result = { reported: r.env.status !== "error" && runId != null, run_id: runId, status: d.status ?? null, source_verified: d.source_verified ?? null, url: d.url ?? null, server: envJson(r.env) };
 
-  const runId = r.env.data?.run_id;
   if (evidencePath && runId) {
     const size = statSync(evidencePath).size;
     if (size > MAX_DIRECT_EVIDENCE) say(warn(`! ${basename(evidencePath)} is over 4 MB: upload it on the Proof tab (it'll be matched by sha256).`));
@@ -353,9 +525,10 @@ async function report(a) {
       const e = await api(cfg, "/api/v1/kane/evidence", { method: "POST", body: form, timeout: 120_000 });
       if (e.env) printEnvelope(e.env);
       else say(bad(`Evidence upload failed (${e.error ?? `HTTP ${e.status}`}). Upload it on the Proof tab.`));
+      result.evidence = e.env ? envJson(e.env) : { status: "error", message: e.error };
     }
   }
-  process.exit(exitCode);
+  return done(result);
 }
 
 function objectiveFrom(cmd, family) {
@@ -366,25 +539,46 @@ function objectiveFrom(cmd, family) {
   return null;
 }
 
+// ── status, help, submit, consent, hook ──────────────────────────────────────
+
 async function status() {
   const cfg = loadConfig();
   needToken(cfg);
-  const r = await api(cfg, "/api/v1/kane/runs?limit=10");
-  if (!r.env) fail(r.error ?? `HTTP ${r.status}`);
-  if (r.env.status === "error") return printEnvelope(r.env);
-  for (const run of r.env.data?.runs ?? []) {
+  const r = ensure(await api(cfg, "/api/v1/kane/runs?limit=10"), "Status");
+  if (r.env.status === "error") {
+    const code = r.status === 403 ? EXIT.ACTION : EXIT.FAIL;
+    printEnvelope(r.env);
+    emit({ ok: false, exit_code: code, ...envJson(r.env) });
+    exit(code);
+  }
+  const runs = r.env.data?.runs ?? [];
+  if (!runs.length) say(r.env.fallback?.text || "No Kane runs reported yet.");
+  for (const run of runs) {
     const v = run.source_verified ? ok("VERIFIED") : run.verification_state === "manual_unverified" ? dim("manual") : warn("unverified");
     say(`KR-${run.id}  ${String(run.status).padEnd(9)} exit ${run.exit_code ?? "—"}  ${v}  ${dim(run.commit_sha?.slice(0, 7) ?? "")}  ${run.objective ?? ""}`);
   }
   for (const l of r.env.links ?? []) say(dim(`→ ${l.url}`));
+  emit({ ok: true, exit_code: 0, team_slug: r.env.data?.team_slug ?? null, project_id: r.env.data?.project_id ?? null, runs, links: r.env.links ?? [] });
+}
+
+function finishEnvelope(env, okCode = EXIT.OK) {
+  printEnvelope(env);
+  const failed = env.status === "error";
+  emit({ ok: !failed, exit_code: failed ? EXIT.FAIL : okCode, ...envJson(env) });
+  process.exitCode = failed ? EXIT.FAIL : okCode;
 }
 
 async function help(a) {
   const cfg = loadConfig();
-  needToken(cfg);
-  if (a.flags.status) return printEnvelope(await tool(cfg, "help_get_status", { ticket_id: String(a.flags.status) }));
+  if (a.flags.status) {
+    const id = String(a.flags.status).trim();
+    if (!/^[A-Za-z]{1,4}-?\d{1,6}$/.test(id)) fail("Usage: kanehack help --status H-0042 (the ticket code you were given).", EXIT.ACTION, "USAGE");
+    needToken(cfg);
+    return finishEnvelope(await tool(cfg, "help_get_status", { ticket_id: id }));
+  }
   const summary = a._.slice(1).join(" ").trim();
-  if (summary.length < 5) fail('Usage: kanehack help "what is wrong, in a sentence" [--category kane_cli] [--priority high]');
+  if (summary.length < 5) fail('Usage: kanehack help "what is wrong, in a sentence" [--category kane_cli] [--priority high]', EXIT.ACTION, "USAGE");
+  needToken(cfg);
   const env = await tool(cfg, "help_create", {
     category: String(a.flags.category || "kane_cli"),
     safe_summary: redactText(summary).slice(0, 300),
@@ -393,66 +587,98 @@ async function help(a) {
     priority: String(a.flags.priority || "normal"),
     idempotency_key: `kanehack-help-${createHash("sha256").update(summary).digest("hex").slice(0, 24)}`,
   });
-  printEnvelope(env);
+  finishEnvelope(env);
 }
 
 async function submit(a) {
   const cfg = loadConfig();
-  needToken(cfg);
   if (!a.flags.preflight) {
     say("Finalizing needs your explicit confirmation, so it happens on the Submit tab or through your agent (submission_finalize).");
-    say("Run `kanehack submit --preflight` to see what's missing.");
-    process.exit(2);
+    fail("Run `kanehack submit --preflight` to see what's missing.", EXIT.ACTION, "USAGE");
   }
+  needToken(cfg);
   const env = await tool(cfg, "submission_preflight", {});
-  printEnvelope(env);
-  process.exitCode = env.data?.ready ? 0 : 1;
+  finishEnvelope(env, env.data?.ready ? EXIT.OK : EXIT.FAIL);
 }
 
 function consent(a) {
   const v = a._[1];
-  if (v !== "yes" && v !== "no") fail("Usage: kanehack consent yes|no");
+  if (v === undefined || v === "status") {
+    const cur = loadConfig().consent;
+    say(cur === true ? "Run summaries: allowed." : cur === false ? "Run summaries: off." : "Run summaries: not decided yet (nothing is sent until you run `kanehack consent yes`).");
+    return emit({ ok: true, exit_code: 0, consent: cur });
+  }
+  if (v !== "yes" && v !== "no") fail("Usage: kanehack consent yes|no|status", EXIT.ACTION, "USAGE");
   saveConfig({ consent: v === "yes" });
   say(v === "yes" ? ok("Run summaries will be sent when you use kanehack report.") : "kanehack report will no longer send anything.");
+  emit({ ok: true, exit_code: 0, consent: v === "yes" });
 }
 
 function hook(a) {
   const sub = a._[1] || "status";
-  if (sub === "status") return say("Lifecycle hook: off. (It's optional and not available yet; see plugin/hooks/README.md.)");
-  if (sub === "disable") return say("Lifecycle hook: off.");
-  if (sub === "enable") fail("The lifecycle hook isn't available yet: its endpoint must ship with the same redaction and consent checks first. Nothing was enabled.", 2);
+  const off = (msg) => {
+    say(msg);
+    emit({ ok: true, exit_code: 0, hook: "off" });
+  };
+  if (sub === "status") return off("Lifecycle hook: off. (It's optional and not available yet; see plugin/hooks/README.md.)");
+  if (sub === "disable") return off("Lifecycle hook: off.");
+  if (sub === "enable") fail("The lifecycle hook isn't available yet: its endpoint must ship with the same redaction and consent checks first. Nothing was enabled.", EXIT.ACTION, "NOT_AVAILABLE", { hook: "off" });
   if (sub === "emit") return; // no-op until the endpoint exists
-  fail("Usage: kanehack hook status|enable|disable");
+  fail("Usage: kanehack hook status|enable|disable", EXIT.ACTION, "USAGE");
 }
 
 function usage() {
   console.log(`kanehack ${VERSION}: Kane CLI Hack Day helper
 
-  kanehack pair [--token khk_…]          pair this machine (device code, or paste a token from your passport)
-  kanehack doctor [--json] [--report]    check your setup; --report sends statuses + versions (no paths, no env)
+  kanehack pair [--token khk_…] [--api URL]   pair this machine (device code, or a token)
+  kanehack pair --start                       agents/scripts: print the approve URL + code and exit
+  kanehack pair --wait [--timeout SECONDS]    agents/scripts: wait for that code's approval (default 90 s)
+  kanehack token                              print the saved token (for: export KANEHACK_TOKEN="$(kanehack token)")
+  kanehack doctor [--report]                  check your setup; --report sends statuses + versions (no paths, no env)
   kanehack report [--evidence FILE] [--objective TEXT] [--commit SHA] [--no-upload] -- <kane-cli command>
-                                         run Kane, keep its exit code + NDJSON, send a redacted summary
-  kanehack status                        your team's latest runs
+                                              run Kane, keep its exit code + NDJSON, send a redacted summary
+  kanehack status                             your team's latest runs
   kanehack help "<what's wrong>" [--category kane_cli|auth|…] [--priority low|normal|high]
   kanehack help --status H-0042
-  kanehack submit --preflight            what's missing before you can submit
-  kanehack consent yes|no                allow / stop sending run summaries
-  kanehack hook status|enable|disable    optional lifecycle hook (off)
+  kanehack submit --preflight                 what's missing before you can submit
+  kanehack consent yes|no|status              allow / stop / show sending run summaries
+  kanehack hook status|enable|disable         optional lifecycle hook (off)
+  kanehack version
+
+  Every command takes --json: one JSON document on stdout (report: one extra NDJSON line).
+  Exit codes: 0 ok · 1 failed / not ready · 2 needs you (not paired, usage, consent) ·
+              3 server unreachable · 4 pairing still pending · report: Kane's own exit code
 
 Server: ${loadConfig().api}   Config: ${CONFIG}
 Kane CLI syntax: the official skill, npx @testmuai/kane-cli-skill`);
 }
 
 const a = args(process.argv.slice(2));
+JSON_MODE = Boolean(a.flags.json);
 const cmd = a._[0];
-const run = { pair, doctor, report, status, help, submit, consent, hook }[cmd];
-if (!cmd || a.flags.help || a.flags.h || cmd === "--help") usage();
-else if (a.flags.version || cmd === "version") console.log(VERSION);
-else if (!run) {
-  usage();
-  process.exit(2);
-} else
-  Promise.resolve(run(a)).catch((e) => {
+const commands = { pair, token, doctor, report, status, help, submit, consent, hook };
+const run = Object.hasOwn(commands, cmd) ? commands[cmd] : null;
+
+Promise.resolve()
+  .then(() => {
+    if (cmd === "version" || (!cmd && a.flags.version)) {
+      if (JSON_MODE) emit({ ok: true, version: VERSION });
+      else console.log(VERSION);
+      return;
+    }
+    if (!cmd || a.flags.help) return usage();
+    if (!run) {
+      if (!JSON_MODE) usage();
+      fail(`Unknown command: ${cmd}`, EXIT.ACTION, "USAGE");
+    }
+    return run(a);
+  })
+  .catch((e) => {
+    if (e instanceof Exit) {
+      process.exitCode = e.code;
+      return;
+    }
     say(bad(`kanehack: ${e?.message ?? e}`));
-    process.exit(1);
+    emit({ ok: false, exit_code: 1, error: { code: "INTERNAL", message: String(e?.message ?? e) } });
+    process.exitCode = 1;
   });
