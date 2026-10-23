@@ -34,9 +34,10 @@ export const setup: { id: string; title: string; body: string; value?: string; l
   { id: "coupon", title: "Redeem your OpenAI coupon", body: "[steps]" },
   {
     id: "install",
-    title: "Install Kane CLI",
-    body: "Install, then run it once to check everything works.",
-    value: "[install command]\n[first-run command]",
+    title: "Set up your agent",
+    body: "Install the kanehack helper and the hack-day skills, pair it with your passport, then connect Codex or Claude Code.",
+    value: "curl -fsSL https://kaneclihack.sh/install.sh | sh\nkanehack pair",
+    link: { label: "All steps, incl. Windows", href: "/setup" },
   },
   {
     id: "team",

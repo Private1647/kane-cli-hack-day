@@ -193,6 +193,12 @@ async function Body({ searchParams }: Pick<PageProps<"/passport">, "searchParams
                     Enter it to pair a device →
                   </Link>
                 </p>
+                <p className="mt-1 font-plex text-sm text-lightgray">
+                  New to this?{" "}
+                  <Link href="/setup" className="text-bright underline underline-offset-4 hover:text-lime">
+                    Set up your agent: install, pair, connect →
+                  </Link>
+                </p>
                 {tokens.length ? (
                   <ul className="mt-2 divide-y divide-dashed divide-hairline border-y border-dashed border-hairline">
                     {tokens.map((t) => (

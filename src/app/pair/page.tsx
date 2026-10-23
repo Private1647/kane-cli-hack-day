@@ -55,11 +55,17 @@ async function Body({ searchParams }: Pick<PageProps<"/pair">, "searchParams">) 
     return (
       <div className="space-y-4 font-plex text-sm">
         <p className="flex flex-wrap items-center gap-3 text-bright">
-          <StatusPill tone="neutral">Approved</StatusPill> Go back to your terminal; it will finish by itself.
+          <StatusPill tone="neutral">Approved</StatusPill> Go back to your terminal; it will finish by itself. (Agent with no terminal: run{" "}
+          <code>kanehack pair --wait</code>.)
         </p>
-        <Link href="/passport#devices" className="inline-flex min-h-11 items-center text-bright underline underline-offset-4 hover:text-lime">
-          See paired devices →
-        </Link>
+        <div className="flex flex-wrap gap-4">
+          <Link href="/setup#connect" className="inline-flex min-h-11 items-center bg-bright px-5 text-ink transition-colors hover:bg-lime">
+            Next: connect your agent →
+          </Link>
+          <Link href="/passport#devices" className="inline-flex min-h-11 items-center text-bright underline underline-offset-4 hover:text-lime">
+            See paired devices →
+          </Link>
+        </div>
       </div>
     );
   }

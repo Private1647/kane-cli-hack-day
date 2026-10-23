@@ -21,6 +21,7 @@ const columns = [
       { href: "/register", label: "Register" },
       { href: "/login", label: "Log in" },
       { href: "/me", label: "Team hub" },
+      { href: "/setup", label: "Set up your agent" },
     ],
   },
   {

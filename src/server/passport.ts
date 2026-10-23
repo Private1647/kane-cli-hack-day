@@ -431,7 +431,7 @@ export function missionFor(state: ParticipantState, p: Pick<PrivatePassport, "te
         tone: "accent",
         eyebrow: "Mission 02 · Team",
         title: "Find your crew, or go solo",
-        body: "Teams of up to five. Join one with an invite, start your own, or browse builders looking for a team.",
+        body: "Teams of up to four. Join one with an invite, start your own, or browse builders looking for a team.",
         action: { id: "find_teammates", label: "Find teammates", href: "/match" },
         secondary: [
           { id: "create_team", label: "Create team", href: "/team/new" },
@@ -455,7 +455,10 @@ export function missionFor(state: ParticipantState, p: Pick<PrivatePassport, "te
         title: "Get your first Kane run on record",
         body: "Point Kane CLI at what you’re building. A failing run is a detection, not a verdict, and it still counts as proof of work.",
         action: { id: "open_project", label: "Open project proof", href: hub("proof") },
-        secondary: [{ id: "readiness", label: "Check Kane readiness", href: "/readiness" }],
+        secondary: [
+          { id: "setup_agent", label: "Set up your agent", href: "/setup" },
+          { id: "readiness", label: "Check Kane readiness", href: "/readiness" },
+        ],
       };
     case "submission_due":
       return {

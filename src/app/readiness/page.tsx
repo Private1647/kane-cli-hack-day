@@ -7,7 +7,6 @@ import PageHeader from "@/components/ui/PageHeader";
 import StatusPill from "@/components/ui/StatusPill";
 import { getEvent } from "@/lib/event";
 import { getMember } from "@/server/auth";
-import { siteUrl } from "@/server/core";
 import { getReadiness, type ReadinessCheckResult } from "@/server/passport";
 import ReadinessDoctor from "./ReadinessDoctor";
 
@@ -80,9 +79,15 @@ async function Body() {
             <Link href="/pair" className="text-bright underline underline-offset-4 hover:text-lime">
               /pair
             </Link>
-            ), then ask your agent to run <span className="text-bright">hack-doctor</span>. It posts the results here.
+            ), then ask your agent to run <span className="text-bright">hack-doctor</span>, or run it yourself. Results post here.
           </p>
-          <CopyField className="mt-4" value={`curl -X POST ${siteUrl("/api/v1/readiness")} \\\n  -H "Authorization: Bearer $KANEHACK_TOKEN" \\\n  -H "content-type: application/json" \\\n  -d '{"checks":[{"id":"kane_version","status":"pass","version":"x.y.z"}]}'`} />
+          <CopyField className="mt-4" value="kanehack doctor --report" />
+          <p className="mt-3 font-plex text-xs text-lightgray">
+            Not installed yet?{" "}
+            <Link href="/setup" className="text-bright underline underline-offset-4 hover:text-lime">
+              Set up your agent →
+            </Link>
+          </p>
         </div>
         <div className="border border-hairline p-5 sm:p-6">
           <h2 className="font-display text-xl font-semibold text-bright">Check by hand</h2>
