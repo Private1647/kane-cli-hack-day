@@ -165,6 +165,13 @@ export async function updateProfile(member: MemberRow, actor: Actor, patch: Prof
     return { result: { id: member.id, fields, consents_changed: c.changed }, resourceId: member.id, payload: { fields, consents_changed: c.changed } };
   });
   await deleteBlobs(toDelete);
+  // A "no" to photo publication or face matching holds this person's photos
+  // and drops unconfirmed matches right away (judge-photo's hook).
+  const cc = out.consents_changed as ConsentChanges;
+  if (cc.photo_publication === false || cc.face_matching === false || cc.selfie_storage === false) {
+    const { onConsentChanged } = await import("./photos");
+    await onConsentChanged(member.id).catch(() => 0);
+  }
   return out;
 }
 

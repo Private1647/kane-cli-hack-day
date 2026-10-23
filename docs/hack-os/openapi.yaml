@@ -304,13 +304,13 @@ components:
         missing: { type: array, items: { type: string } }
         locked: { type: boolean }
         locks_at: { type: string, format: date-time }
-        preflight_version: { type: string, description: "Pins the snapshot finalize will freeze" }
-        snapshot: { type: object, additionalProperties: true }
-    Finalize: { type: object, required: [preflight_version, explicit_confirmation], properties: { project_id: { type: integer }, preflight_version: { type: string }, explicit_confirmation: { const: true } } }
+        warnings: { type: array, items: { type: string } }
+        verified_run_ids: { type: array, items: { type: integer } }
+    Finalize: { type: object, required: [confirm_phrase, explicit_confirmation], properties: { confirm_phrase: { type: string, description: "The team name, typed by the person" }, publish_showcase: { type: boolean, default: true }, idempotency_key: { type: string }, explicit_confirmation: { const: true } } }
     SubmissionReceipt: { type: object, properties: { receipt_code: { type: string, pattern: "^S-[2-9A-Z]{4}$" }, server_time: { type: string, format: date-time }, snapshot_sha256: { type: string }, signed: { type: boolean }, url: { type: string }, showcase_url: { type: string } } }
-    DeckUpdate: { type: object, required: [expected_version, scenes], properties: { expected_version: { type: integer }, scenes: { type: array, maxItems: 12, items: { type: object, properties: { id: { type: string }, title: { type: string }, body: { type: string }, evidence_ids: { type: array, items: { type: integer } } } } }, theme: { type: object, additionalProperties: { type: string } } } }
-    RenderRequest: { type: object, required: [story_version, outputs], properties: { story_version: { type: integer }, outputs: { type: array, items: { type: string, enum: [html_deck, pdf_deck, mp4_video, og_card, social_card] } } } }
-    ShowcasePublish: { type: object, required: [approved_story_version, consent_receipt, explicit_confirmation], properties: { approved_story_version: { type: integer }, consent_receipt: { type: object }, explicit_confirmation: { const: true } } }
+    DeckUpdate: { type: object, required: [expected_version, deck], properties: { expected_version: { type: integer }, deck: { type: object, description: "The Studio deck model (kane-ship-5), as deck_get returns it" }, idempotency_key: { type: string } } }
+    RenderRequest: { type: object, properties: { format: { type: string, enum: [pdf, pptx, mp4], default: pdf }, version: { type: integer } } }
+    ShowcasePublish: { type: object, required: [story_version, confirm_phrase, explicit_confirmation], properties: { story_version: { type: integer }, confirm_phrase: { type: string, description: "The project slug, typed by the person" }, idempotency_key: { type: string }, explicit_confirmation: { const: true } } }
     SocialDraft: { type: object, required: [project_id], properties: { project_id: { type: integer }, photo_id: { type: integer }, tone: { type: string, enum: [proof, story, hype, plain] } } }
     RenderCallback: { type: object, required: [job_id, status], properties: { job_id: { type: integer }, status: { type: string, enum: [running, succeeded, failed, cancelled] }, object_key: { type: string }, error_code: { type: string } } }
     LiveMetrics: { type: object, properties: { metrics: { type: array, items: { type: object, properties: { name: { type: string }, value: { type: [number, "null"] }, denominator: { type: [number, "null"] }, as_of: { type: string, format: date-time }, freshness: { type: string, enum: [fresh, delayed, stale] }, source: { type: string }, definition_version: { type: string } } } } } }

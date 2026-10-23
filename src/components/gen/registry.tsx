@@ -303,8 +303,8 @@ const RENDER: Record<UiType, { title: string; body: (d: Data, env: Env) => React
               {str(d.receipt_code)} <span className="font-plex text-xs text-lightgray">at {str(d.server_time)}</span>
             </p>
           )}
-          {reqs.length > 0 && <Checklist items={reqs.map((r) => ({ label: str(r.label) ?? "?", state: r.ok ? "ok" : "fail", note: str(r.detail) }))} />}
-          <Rows rows={[["Locks at", str(d.locks_at)], ["Preflight", str(d.preflight_version)]]} />
+          {reqs.length > 0 && <Checklist items={reqs.map((r) => ({ label: str(r.label) ?? "?", state: r.state === "uncertain" ? "warn" : r.ok ? "ok" : "fail", note: str(r.detail) }))} />}
+          <Rows rows={[["Locks at", str(d.locks_at)], ["Server time", str(d.server_time)]]} />
         </div>
       );
     },
@@ -316,7 +316,7 @@ const RENDER: Record<UiType, { title: string; body: (d: Data, env: Env) => React
         rows={[
           ["Version", num(obj(d.deck).version) ?? num(d.version)],
           ["Status", str(obj(d.deck).status) ?? str(d.status)],
-          ["Renders", arr(d.renders).length ? arr(d.renders).map(obj).map((r) => `${str(r.kind)} ${str(r.status)}`).join(", ") : arr(d.jobs).map(obj).map((j) => `${str(j.kind)} queued`).join(", ") || null],
+          ["Renders", arr(d.renders).length ? arr(d.renders).map(obj).map((r) => `${str(r.kind)} ${str(r.status)}`).join(", ") : (obj(d.job).kind ? `${str(obj(d.job).kind)} ${str(obj(d.job).status)}` : null)],
         ]}
       />
     ),
@@ -326,13 +326,13 @@ const RENDER: Record<UiType, { title: string; body: (d: Data, env: Env) => React
     body: (d) => (
       <div className="space-y-3">
         <Rows rows={[["State", str(d.showcase_state) ?? str(d.id)], ["Story version", num(d.story_version)]]} />
-        {arr(d.missing_proof_claims).length > 0 && (
+        {arr(d.missing_proof).length > 0 && (
           <ul className="space-y-1 font-plex text-xs">
-            {arr(d.missing_proof_claims)
+            {arr(d.missing_proof)
               .map(obj)
-              .map((c) => (
-                <li key={str(c.id) ?? ""}>
-                  <StatusPill tone="unverified">Unverified</StatusPill> <span className="text-bright">{str(c.title)}</span>
+              .map((c, i) => (
+                <li key={`${i}-${str(c.claim) ?? ""}`}>
+                  <StatusPill tone="unverified">Unverified</StatusPill> <span className="text-bright">{str(c.claim)}</span>
                 </li>
               ))}
           </ul>

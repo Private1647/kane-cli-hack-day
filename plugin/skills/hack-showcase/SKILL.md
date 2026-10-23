@@ -18,7 +18,7 @@ Event skill for Kane CLI Hack Day (KANE HACK OS). It drives the event MCP tools 
 1. `showcase_preview`: show the preview link, claims that will appear as UNVERIFIED, and consent warnings (people who haven't agreed to be credited are left off).
 2. Publishing needs a finalized submission. If there isn't one, go to `$hack-submit` first.
 3. Read the page with the team. Fix wording in the Studio; never upgrade an unverified claim to verified in text.
-4. Call `showcase_publish` with the approved story version and the consent receipt the preview gave. It answers `needs_action`; publish only after the team says yes, with `explicit_confirmation: true`.
+4. Finalizing the submission already publishes the showcase. To publish a newer story version from the Studio, call `showcase_publish` with `story_version` and the project slug typed by the person as `confirm_phrase`. It answers `needs_action` first; publish only after the team says yes, with `explicit_confirmation: true`. Anyone who hasn't consented to credit is left off; the server checks this.
 
 ## Done when
 

@@ -5,6 +5,7 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { query } from "@/lib/db";
 import { getEvent } from "@/lib/event";
 import { getFlags } from "@/lib/flags";
+import { challenge } from "@/data/hackday";
 import { AppError, parse, serverNow, siteUrl, toAppError, toEnvelope, z, zx, type EnvelopeAction, type Evidence } from "./core";
 import { tokenActor, type BearerAuth } from "./auth";
 import { KANE_CAPABILITIES, proposeMilestone, recordRun, type KaneCaller } from "./kane";
@@ -222,60 +223,62 @@ export function buildMcpServer(auth: BearerAuth) {
 
   tool(
     "submission_preflight",
-    { title: "Submission preflight", description: "What finalize would snapshot, what's missing, and the server lock time. Returns the preflight_version finalize needs.", input: { project_id: zx.id.optional() }, readOnly: true },
+    { title: "Submission preflight", description: "The same preflight as the Submit tab: what's missing or uncertain, and the server lock time. Finalize needs the team name typed as confirm_phrase.", input: { project_id: zx.id.optional() }, readOnly: true },
     async (args) => {
       const p = await A.submissionPreflight(member, args.project_id);
+      const done = p.submission && ["finalized", "locked", "organizer_exception"].includes(p.submission.status);
       return {
-        status: p.submission?.status === "finalized" ? "ok" : p.ready ? "needs_action" : "partial",
-        message: p.submission?.receipt_code
-          ? `Already finalized: receipt ${p.submission.receipt_code}.`
+        status: done ? "ok" : p.ready ? "needs_action" : "partial",
+        message: done
+          ? `Already finalized: receipt ${p.submission!.receipt_code}.`
           : p.locked
             ? "Submissions are locked."
             : p.ready
-              ? `Ready to finalize (preflight ${p.preflight_version}). Locks at ${p.locks_at}.`
+              ? `Ready to finalize. Locks at ${p.locks_at} (server clock).`
               : `Missing: ${p.missing.join(", ")}.`,
         data: p,
-        evidence: p.snapshot.verified_run_ids.map((id): Evidence => ({ kind: "kane_run", id: `KR-${id}`, confidence: "verified" })),
+        evidence: p.verified_run_ids.map((id): Evidence => ({ kind: "kane_run", id: `KR-${id}`, confidence: "verified" })),
         actions: p.ready ? [{ id: "confirm_submission", label: "Finalize submission", requires_human_confirmation: true, tool: "submission_finalize" }] : [],
         links: [{ label: "Submit tab", url: `/t/${p.team_slug}/submit` }],
         warnings: p.warnings,
         uiType: "submission_receipt",
-        fallbackText: [...p.requirements.map((r) => `${r.ok ? "✓" : "✗"} ${r.label}`), `Locks at ${p.locks_at}`, `preflight_version ${p.preflight_version}`].join("\n"),
+        fallbackText: [...p.requirements.map((r) => `${r.state === "ok" ? "✓" : r.state === "uncertain" ? "?" : "✗"} ${r.label}`), `Locks at ${p.locks_at}`].join("\n"),
       };
     },
   );
 
   tool(
     "deck_get",
-    { title: "Get deck", description: "The latest (or a given) deck version, theme and render status.", input: { project_id: zx.id.optional(), version: z.number().int().positive().optional() }, readOnly: true },
-    async (args) => {
-      const d = await A.deckGet(member, args.project_id, args.version);
+    { title: "Get deck", description: "The latest (or a given) deck version, publish state and render status.", input: { project_id: zx.id.optional(), version: z.number().int().positive().optional() }, readOnly: true },
+    async (args, ctx) => {
+      const d = await A.deckGet(member, ctx.actor, args.project_id, args.version);
       return {
-        message: d.deck ? `Deck v${d.deck.version} (${d.deck.status}).` : "No deck yet. Open the Studio to start one.",
+        message: d.version ? `Deck v${d.version} (${d.status}).` : "No deck yet. Open the Studio to start one.",
         data: d,
         links: [
           { label: "HTML deck", url: d.html_url },
           { label: "Studio", url: d.studio_url },
         ],
         uiType: "deck_preview",
-        fallbackText: `${d.deck ? `Deck v${d.deck.version}` : "No deck"} · HTML ${siteUrl(d.html_url)} · renders: ${d.renders.map((r) => `${r.kind} ${r.status}`).join(", ") || "none"}`,
+        fallbackText: `${d.version ? `Deck v${d.version}` : "No deck"} · HTML ${siteUrl(d.html_url)} · renders: ${d.renders.map((r) => `${r.kind} ${r.status}`).join(", ") || "none"}`,
       };
     },
   );
 
-  tool("showcase_preview", { title: "Showcase preview", description: "Your public ship page preview, missing proof and consent warnings.", input: { project_id: zx.id.optional() }, readOnly: true }, async (args) => {
-    const s = await A.showcasePreview(member, args.project_id);
+  tool("showcase_preview", { title: "Showcase preview", description: "Your ship page preview, publish blockers, unverified proof and consent warnings.", input: { project_id: zx.id.optional() }, readOnly: true }, async (args, ctx) => {
+    const s = await A.showcasePreview(member, ctx.actor, args.project_id);
+    const warnings = [...s.publish_blockers, ...s.consent_missing, ...s.warnings];
     return {
-      status: s.missing_proof_claims.length || s.consent_warnings.length ? "needs_action" : "ok",
-      message: `Ship page is ${s.showcase_state}. ${s.missing_proof_claims.length} claim(s) will show as UNVERIFIED.`,
+      status: s.publish_blockers.length || s.consent_missing.length ? "needs_action" : "ok",
+      message: `Ship page is ${s.showcase_state}. ${s.missing_proof.length} claim(s) will show as UNVERIFIED.`,
       data: s,
       links: [
         { label: "Preview", url: s.preview_url },
         { label: "Editor", url: s.editor_url },
       ],
-      warnings: s.consent_warnings,
+      warnings,
       uiType: "ship_preview",
-      fallbackText: `Ship page ${s.showcase_state} · ${siteUrl(s.preview_url)} · unverified claims: ${s.missing_proof_claims.map((c) => c.title).join(", ") || "none"}`,
+      fallbackText: `Ship page ${s.showcase_state} · ${s.preview_url} · unverified claims: ${s.missing_proof.map((c) => c.claim).join(", ") || "none"}`,
     };
   });
 
@@ -297,16 +300,16 @@ export function buildMcpServer(auth: BearerAuth) {
 
   tool(
     "help_diagnose",
-    { title: "Diagnose a problem", description: "First-line troubleshooting steps from the event docs before asking a mentor. Read-only.", input: { category: z.enum(["kane_cli", "test_manager", "auth", "ci_cloud", "mobile", "idea", "github", "other"]), symptom: z.string().trim().min(3).max(800) }, readOnly: true },
+    { title: "Diagnose a problem", description: "First-line troubleshooting steps from the event docs before asking a mentor. Read-only.", input: { category: z.enum(A.HELP_CATEGORY_IDS), symptom: z.string().trim().min(3).max(800) }, readOnly: true },
     async (args) => {
-      const d = await A.diagnoseHelp(args.category, args.symptom);
+      const d = await A.diagnoseHelp(member, args.category, args.symptom);
       return {
         message: "Try these steps first.",
         data: d,
         actions: [{ id: "help_create", label: "Ask a mentor", requires_human_confirmation: false, tool: "help_create" }],
         links: [{ label: "Help desk", url: "/help" }],
         uiType: "mentor_ticket",
-        fallbackText: `${d.steps}\n${d.generator === "llm" ? "(Advisory draft)" : "(Rule-based)"} If it's still broken: help_create.`,
+        fallbackText: `${d.steps}\n${d.generator === "llm" ? "(Advisory draft)" : "(Rule-based draft)"} If it's still broken: help_create.`,
       };
     },
   );
@@ -370,10 +373,15 @@ export function buildMcpServer(auth: BearerAuth) {
 
   tool(
     "team_create",
-    { title: "Create a team", description: "Create a team with you as captain. Needs explicit confirmation. One active team per person.", input: { name: z.string(), recruiting: z.boolean().optional(), max_size: z.number().int().optional(), explicit_confirmation: confirmField } },
+    {
+      title: "Create a team",
+      description: `Create a team with you as captain. Needs explicit confirmation. One active team per person. Tracks: ${challenge.tracks.join(" | ")} (default: the first).`,
+      input: { name: z.string(), track: z.string().optional(), recruiting: z.boolean().optional(), solo: z.boolean().optional(), explicit_confirmation: confirmField },
+    },
     async (args, ctx) => {
-      const input = parse(A.teamCreateSchema, { name: args.name, recruiting: args.recruiting, max_size: args.max_size });
-      if (args.explicit_confirmation !== true) return confirmFirst("team_create", `Create team “${input.name}”`, `Create team “${input.name}” (max ${input.max_size}, ${input.recruiting ? "recruiting" : "not recruiting"}).`, "team_match", input);
+      const input = parse(A.teamCreateSchema, { name: args.name, track: args.track, recruiting: args.recruiting, solo: args.solo });
+      const track = input.track ?? challenge.tracks[0];
+      if (args.explicit_confirmation !== true) return confirmFirst("team_create", `Create team “${input.name}”`, `Create team “${input.name}” on the “${track}” track (${input.solo ? "solo" : input.recruiting ? "recruiting" : "not recruiting"}).`, "team_match", { ...input, track });
       const r = await A.createTeam(ctx, input);
       return { message: `Team ${input.name} created.`, data: r, links: [{ label: "Team hub", url: r.hub_url }], uiType: "team_match", fallbackText: `Created ${input.name}: ${siteUrl(r.hub_url)}` };
     },
@@ -514,22 +522,27 @@ export function buildMcpServer(auth: BearerAuth) {
     "submission_finalize",
     {
       title: "Finalize submission",
-      description: "Finalize the official submission: immutable snapshot + signed receipt. Needs the preflight_version from submission_preflight and explicit confirmation. The server clock decides the lock.",
-      input: { project_id: zx.id.optional(), preflight_version: z.string().trim().min(8).max(64), explicit_confirmation: confirmField },
+      description:
+        "Finalize the official submission (the same as the Submit tab): immutable snapshot + signed receipt, and the public /ship page unless publish_showcase is false. The person must type their team name as confirm_phrase, and confirm. The server clock decides the lock.",
+      input: { confirm_phrase: z.string().trim().min(1).max(120), publish_showcase: z.boolean().optional(), idempotency_key: z.string().min(8).max(200).optional(), explicit_confirmation: confirmField },
     },
     async (args, ctx) => {
+      const publish = args.publish_showcase ?? true;
       if (args.explicit_confirmation !== true) {
-        return confirmFirst("submission_finalize", "Finalize submission", `Finalize preflight ${args.preflight_version}. After this the submission can't be edited.`, "submission_receipt");
+        return confirmFirst(
+          "submission_finalize",
+          "Finalize submission",
+          `Finalize your team's submission${publish ? " and publish its showcase page" : ""}. After this it can't be edited.`,
+          "submission_receipt",
+          { confirm_phrase: args.confirm_phrase, publish_showcase: publish },
+        );
       }
-      const r = await A.finalizeSubmission(ctx, { project_id: args.project_id, preflight_version: args.preflight_version });
+      const r = await A.finalizeSubmission(ctx, { confirm_phrase: args.confirm_phrase, publish_showcase: publish, idempotency_key: args.idempotency_key });
       return {
         message: `${r.replayed ? "Already finalized" : "Finalized"}. Receipt ${r.receipt_code} at ${r.server_time} (server time).`,
         data: r,
-        evidence: [{ kind: "submission_receipt", id: r.receipt_code, confidence: "verified" }],
-        links: [
-          { label: `Receipt ${r.receipt_code}`, url: r.url },
-          ...("showcase_url" in r && r.showcase_url ? [{ label: "Public showcase", url: r.showcase_url }] : []),
-        ],
+        evidence: [{ kind: "submission_receipt", id: r.receipt_code, confidence: r.signed ? "verified" : "unverified" }],
+        links: [{ label: `Receipt ${r.receipt_code}`, url: r.url }, ...(r.showcase_url ? [{ label: "Public showcase", url: r.showcase_url }] : [])],
         uiType: "submission_receipt",
         fallbackText: `RECEIPT ${r.receipt_code} · ${r.server_time} · ${siteUrl(r.url)}`,
       };
@@ -539,19 +552,19 @@ export function buildMcpServer(auth: BearerAuth) {
   tool(
     "demo_generate",
     {
-      title: "Generate demo kit",
-      description: "Queue deck / video / card renders from a story version. Always answers queued; check deck_get for status. The HTML deck works without renders.",
-      input: { project_id: zx.id.optional(), story_version: z.number().int().positive(), outputs: z.array(z.enum(["html_deck", "pdf_deck", "mp4_video", "og_card", "social_card"])).min(1).max(5) },
+      title: "Export the deck",
+      description: "Request a deck export. PDF is browser print from the presenter; PPTX and MP4 are reported as unavailable. Never claims a render finished. The HTML deck works without any export.",
+      input: { project_id: zx.id.optional(), format: z.enum(["pdf", "pptx", "mp4"]).optional(), version: z.number().int().positive().optional() },
     },
     async (args, ctx) => {
-      const r = await A.demoGenerate(ctx, args);
+      const r = await A.demoGenerate(ctx, { project_id: args.project_id, format: args.format ?? "pdf", version: args.version });
       return {
         status: "partial",
-        message: `Queued ${r.jobs.length} render job(s). Not finished yet.`,
+        message: `${r.job.kind}: ${r.job.status}${r.job.errorCode ? ` (${r.job.errorCode})` : ""}.`,
         data: r,
         links: [{ label: "Studio", url: r.studio_url }],
         uiType: "deck_preview",
-        fallbackText: `Queued: ${r.jobs.map((j) => `${j.kind} (#${j.id})`).join(", ")}. Check with deck_get.`,
+        fallbackText: `${r.job.kind} #${r.job.id}: ${r.job.status}. Check with deck_get.`,
       };
     },
   );
@@ -560,13 +573,8 @@ export function buildMcpServer(auth: BearerAuth) {
     "deck_update",
     {
       title: "Update deck",
-      description: "Write a new deck version. Optimistic: pass the version you read as expected_version.",
-      input: {
-        project_id: zx.id.optional(),
-        expected_version: z.number().int().min(0),
-        scenes: z.array(z.object({ id: z.string(), title: z.string(), body: z.string(), evidence_ids: z.array(z.number().int()).optional() })),
-        theme: z.record(z.string(), z.string()).optional(),
-      },
+      description: "Write a new deck version (the Studio deck model). Optimistic: pass the version you read from deck_get as expected_version.",
+      input: { project_id: zx.id.optional(), expected_version: z.number().int().min(0), deck: z.record(z.string(), z.unknown()), idempotency_key: z.string().min(8).max(200).optional() },
     },
     async (args, ctx) => {
       const input = parse(A.deckUpdateSchema, args);
@@ -579,11 +587,12 @@ export function buildMcpServer(auth: BearerAuth) {
     "showcase_publish",
     {
       title: "Publish showcase",
-      description: "Publish the public ship page from an approved story version. Needs a finalized submission, a consent receipt and explicit confirmation.",
-      input: { project_id: zx.id.optional(), approved_story_version: z.number().int().positive(), consent_receipt: z.record(z.string(), z.unknown()), explicit_confirmation: confirmField },
+      description:
+        "Publish a reviewed story version as the public ship page. The person types the project slug as confirm_phrase; everyone credited must have consented themselves. Needs explicit confirmation.",
+      input: { project_id: zx.id.optional(), story_version: z.number().int().positive(), confirm_phrase: z.string().trim().min(1).max(120), idempotency_key: z.string().min(8).max(200).optional(), explicit_confirmation: confirmField },
     },
     async (args, ctx) => {
-      if (args.explicit_confirmation !== true) return confirmFirst("showcase_publish", "Publish ship page", `Publish story v${args.approved_story_version} as your public ship page.`, "ship_preview");
+      if (args.explicit_confirmation !== true) return confirmFirst("showcase_publish", "Publish ship page", `Publish story v${args.story_version} as your public ship page.`, "ship_preview");
       const r = await A.showcasePublish(ctx, args);
       return { message: `Published ${r.id}.`, data: r, links: [{ label: "Ship page", url: r.url }], uiType: "ship_preview", fallbackText: `Live: ${siteUrl(r.url)}` };
     },

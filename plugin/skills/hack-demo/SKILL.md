@@ -17,8 +17,8 @@ Event skill for Kane CLI Hack Day (KANE HACK OS). It drives the event MCP tools 
 
 1. `deck_get` for the current version and render status. The HTML deck at `/ship/{slug}/deck` always works, even if renders fail.
 2. Draft scene text with the team from their story and **verified** claims only. Unverified claims stay labelled UNVERIFIED.
-3. Save with `deck_update`, passing the version you read as `expected_version`. On `CONFLICT`, re-read and re-apply.
-4. Queue renders with `demo_generate` (`story_version`, `outputs`). It answers **queued**, never finished; check `deck_get` later. Don't tell anyone a PDF or video exists until its render job says `succeeded`.
+3. Save with `deck_update`: send the whole `deck` object you read from `deck_get` with your edits, and the version you read as `expected_version`. On `CONFLICT`, re-read and re-apply.
+4. Ask for an export with `demo_generate` (`format`: pdf, pptx or mp4). PDF is browser print from the presenter; PPTX and MP4 come back as unavailable. Don't tell anyone a file exists unless the job says `succeeded`. The HTML deck at `/ship/{team}/deck` needs no export.
 
 ## Done when
 

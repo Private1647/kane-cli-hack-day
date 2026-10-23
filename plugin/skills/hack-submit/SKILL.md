@@ -16,9 +16,9 @@ Event skill for Kane CLI Hack Day (KANE HACK OS). It drives the event MCP tools 
 ## Procedure
 
 1. `event_get_brief` for the lock time (server clock). If it's close, say how long is left in plain words.
-2. `submission_preflight`: walk through each requirement (name, summary, public GitHub repo, commit SHA, live URL or run command, at least one Kane run). Fix gaps in the Submit tab or the repo; re-run preflight.
-3. Show what will be frozen: repo + commit SHA, runs, evidence ids, and the `preflight_version`. Warn that runs which aren't source-verified show as UNVERIFIED to judges.
-4. Ask the person to confirm. Then call `submission_finalize` with the `preflight_version` and `explicit_confirmation: true`. If it says the project changed, preflight again and re-confirm.
+2. `submission_preflight`: walk through each item (✓ ok, ? uncertain, ✗ missing), the same list the Submit tab shows. The draft itself is saved on the Submit tab (`/t/{team}/submit`); fix gaps there or in the repo, then re-run preflight.
+3. Show what will be frozen: repo + commit SHA, linked Kane runs and evidence. Warn that runs which aren't source-verified show as UNVERIFIED to judges. Finalizing also publishes the public showcase at `/ship/{team}` unless the team says not to (`publish_showcase: false`).
+4. Ask the person to confirm **and to type their team name exactly**. Call `submission_finalize` with that text as `confirm_phrase`, a fresh `idempotency_key`, and `explicit_confirmation: true`. Retrying with the same key returns the same receipt.
 5. Show the receipt code (S-…) and server time. That receipt is the proof; nothing else is.
 
 ## Done when
