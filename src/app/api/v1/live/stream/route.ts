@@ -1,6 +1,7 @@
 import { AppError, envelopeResponse, serverNow, sha256, toAppError } from "@/server/core";
 import { isEnabled } from "@/lib/flags";
 import { getLiveSnapshot, readFeed, requireOpsViewer, type LiveSnapshot } from "@/server/metrics";
+import { recordIntegration } from "@/server/ops";
 
 // GET /api/v1/live/stream: Server-Sent Events for /live (T-LIVE-06).
 //
@@ -30,6 +31,19 @@ const sleep = (ms: number, signal: AbortSignal) =>
 
 /** Hash of what the TV renders, ignoring the clock, so we only send real changes. */
 const fingerprint = (s: LiveSnapshot) => sha256(JSON.stringify({ ...s, server_time: null }));
+
+// The stream reports its own health on /ops/integrations (nothing else can see it),
+// at most once a minute per instance so many open TVs don't write on every tick.
+// A paused system stays paused: recordIntegration keeps the organizer's pause.
+let lastHealthAt = 0;
+function reportHealth(ok: boolean) {
+  if (Date.now() - lastHealthAt < 60_000) return;
+  lastHealthAt = Date.now();
+  void (ok
+    ? recordIntegration("live_stream", { ok: true, detail: "Serving snapshots to /live" })
+    : recordIntegration("live_stream", { ok: false, code: "snapshot_failed", status: "degraded", detail: "Snapshot unreadable; TVs hold their last values" })
+  ).catch(() => {});
+}
 
 export async function GET(req: Request) {
   const url = new URL(req.url);
@@ -96,8 +110,10 @@ export async function GET(req: Request) {
             lastPrint = print;
             lastBeat = Date.now();
           }
+          reportHealth(true);
         } catch (err) {
           console.error("[live/stream] snapshot failed", err);
+          reportHealth(false);
           event("degraded", { state: "offline", detail: "Live data unreadable; holding last values." });
         }
         if (Date.now() - lastBeat >= HEARTBEAT_MS) {
