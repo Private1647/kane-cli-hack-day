@@ -6,7 +6,7 @@ import QR from "@/components/ui/QR";
 import { Eyebrow } from "@/components/ui/Section";
 import StatusPill from "@/components/ui/StatusPill";
 import { formatEventTime, getEvent } from "@/lib/event";
-import { getMember, memberActor } from "@/server/auth";
+import { getPersonalMember, memberActor } from "@/server/auth";
 import { siteUrl } from "@/server/core";
 import { githubEnabled, listBearerTokens } from "@/server/pairing";
 import { CONSENT_CATEGORIES, CONSENT_COPY, getBadgeToken, getPassport, toPublicPassport, type PrivatePassport } from "@/server/passport";
@@ -49,7 +49,7 @@ const GITHUB_FLASH: Record<string, { tone: "ok" | "warn"; text: string }> = {
 };
 
 async function Body({ searchParams }: Pick<PageProps<"/passport">, "searchParams">) {
-  const member = await getMember();
+  const member = await getPersonalMember();
   if (!member) return <SignedOut />;
   const sp = await searchParams;
   const [p, badge, tokens, ev] = await Promise.all([getPassport(member.id), getBadgeToken(member.id, memberActor(member)), listBearerTokens(member.id), getEvent()]);

@@ -63,7 +63,7 @@ export default function PublishPanel({
           )}
         </ConfirmByTyping>
       </form>
-      {state && (state.ok ? <ResultLine ok message={`Published as version ${state.data.version}. It's live at /ship/${slug}.`} receipt={state.receipt?.id} /> : <ResultLine ok={false} message={state.error.message} />)}
+      {state && (state.ok ? <ResultLine ok message={`Published as version ${state.data.version}. It's live (public) at /ship/${slug}.`} receipt={state.receipt?.id} /> : <ResultLine ok={false} message={state.error.message} />)}
     </div>
   );
 }

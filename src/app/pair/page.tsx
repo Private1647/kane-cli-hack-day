@@ -5,7 +5,7 @@ import DegradedServiceAlert from "@/components/ui/DegradedServiceAlert";
 import PageHeader from "@/components/ui/PageHeader";
 import StatusPill from "@/components/ui/StatusPill";
 import { formatEventTime, getEvent } from "@/lib/event";
-import { getMember } from "@/server/auth";
+import { getPersonalMember } from "@/server/auth";
 import { describePairing, shortName } from "@/server/pairing";
 import { decide, lookup } from "./actions";
 
@@ -38,7 +38,7 @@ async function Body({ searchParams }: Pick<PageProps<"/pair">, "searchParams">) 
   const sp = await searchParams;
   const code = typeof sp.code === "string" ? sp.code : "";
   const result = typeof sp.result === "string" ? sp.result : "";
-  const member = await getMember();
+  const member = await getPersonalMember();
   if (!member) {
     const next = `/pair${code ? `?code=${encodeURIComponent(code)}` : ""}`;
     return (

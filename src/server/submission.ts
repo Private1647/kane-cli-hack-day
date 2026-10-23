@@ -4,8 +4,8 @@ import type { PoolClient } from "pg";
 import { pool, query } from "@/lib/db";
 import { PROGRESS_ITEMS, shippedMinimum } from "@/lib/progress";
 import { logActivity } from "@/lib/teams";
-import { getMember, getStaff, hasRole, memberActor, randomCode, requireTeamMember, staffActor, type MemberRow, type Staff } from "./auth";
-import { AppError, idempotent, parse, sha256, stableStringify, transaction, writeAudit, z, zx, type Actor, type Receipt } from "./core";
+import { PERSONAL_SIGN_IN, getMember, getStaff, hasRole, memberActor, randomCode, requirePersonalMember, requireTeamMember, staffActor, type MemberRow, type Staff } from "./auth";
+import { AppError, idempotent, parse, sha256, siteUrl, stableStringify, transaction, writeAudit, z, zx, type Actor, type Receipt } from "./core";
 import {
   CREDIT_CONSENT,
   PROJECT_TYPES,
@@ -223,23 +223,32 @@ async function currentSubmission(db: Db, projectId: number, forUpdate = false) {
   return row ?? null;
 }
 
-async function teamRuns(db: Db, projectId: number) {
+/**
+ * The 50 most recent runs (the picker list) plus every run the draft links,
+ * however old: a linked run must never drop out of preflight, the signed
+ * snapshot or the published proof because newer runs arrived.
+ */
+async function teamRuns(db: Db, projectId: number, linked: number[] = []) {
   const rows = await rowsOf<KaneRunRef>(
     db,
     `select id, source, upstream_execution_id, status, exit_code, commit_sha, objective, source_verified, verification_state,
             evidence_artifact_id, report_url, coalesce(finished_at, started_at, received_at) as at
-       from kane_runs where project_id = $1 order by received_at desc limit 50`,
-    [projectId],
+       from kane_runs
+      where project_id = $1
+        and (id = any($2::bigint[]) or id in (select id from kane_runs where project_id = $1 order by received_at desc limit 50))
+      order by received_at desc`,
+    [projectId, linked],
   );
   return rows.map((r) => ({ ...r, id: Number(r.id), evidence_artifact_id: r.evidence_artifact_id ? Number(r.evidence_artifact_id) : null }));
 }
 
 async function teamCredits(db: Db, teamId: number): Promise<TeamMemberCredit[]> {
-  const rows = await rowsOf<{ id: number; name: string; display_name: string | null; github_handle: string | null; x_handle: string | null; granted: boolean | null; recorded_at: Date | null }>(
+  const rows = await rowsOf<{ id: number; name: string; display_name: string | null; github_handle: string | null; x_handle: string | null; granted: boolean | null; recorded_at: Date | null; mention: boolean | null }>(
     db,
-    `select m.id, m.name, m.display_name, m.github_handle, m.x_handle, c.granted, c.recorded_at
+    `select m.id, m.name, m.display_name, m.github_handle, m.x_handle, c.granted, c.recorded_at, sm.granted as mention
        from members m
        left join member_consent_current c on c.member_id = m.id and c.category = $2
+       left join member_consent_current sm on sm.member_id = m.id and sm.category = 'social_mention'
       where m.team_id = $1 and m.deleted_at is null
       order by m.id`,
     [teamId, CREDIT_CONSENT],
@@ -248,7 +257,8 @@ async function teamCredits(db: Db, teamId: number): Promise<TeamMemberCredit[]> 
     id: Number(r.id),
     name: r.name,
     display_name: r.display_name || r.name,
-    handle: r.github_handle ? `@${r.github_handle.replace(/^@/, "")}` : r.x_handle ? `@${r.x_handle.replace(/^@/, "")}` : null,
+    // An @handle is published only with that person's own social_mention consent (same rule as the studio).
+    handle: r.mention !== true ? null : r.github_handle ? `@${r.github_handle.replace(/^@/, "")}` : r.x_handle ? `@${r.x_handle.replace(/^@/, "")}` : null,
     consent: r.granted,
     consent_at: r.recorded_at,
   }));
@@ -316,14 +326,17 @@ export type SubmissionContext = {
 /** Everything the submit tab renders. Callers must already have checked team access. */
 export async function getSubmissionContext(teamId: number): Promise<SubmissionContext> {
   const project = await ensureProject(teamId);
-  const [submission, runs, members, progress, [clock]] = await Promise.all([
+  let runs: KaneRunRef[];
+  const [submission, recentRuns, members, progress, [clock]] = await Promise.all([
     currentSubmission(pool, project.id),
     teamRuns(pool, project.id),
     teamCredits(pool, teamId),
     progressDone(pool, teamId),
     query<{ now: Date; locks_at: Date }>("select now() as now, submission_locks_at as locks_at from hack_events where id = current_event_id()"),
   ]);
+  runs = recentRuns;
   const draft = submission ? normalizeDraft(submission.draft) : prefill(project, progress);
+  if (draft.kane_run_ids.some((id) => !runs.some((r) => r.id === id))) runs = await teamRuns(pool, project.id, draft.kane_run_ids);
   const credited = creditedOf(members);
   const done = progress.filter((r) => r.done).map((r) => r.item);
   const locksAt = clock?.locks_at ?? new Date(0);
@@ -347,11 +360,12 @@ export async function getSubmissionContext(teamId: number): Promise<SubmissionCo
 export async function loadDraftForShowcase(teamId: number) {
   const project = await getProjectByTeam(teamId);
   if (!project) return null;
-  const [submission, runs, members] = await Promise.all([currentSubmission(pool, project.id), teamRuns(pool, project.id), teamCredits(pool, teamId)]);
+  const [submission, members] = await Promise.all([currentSubmission(pool, project.id), teamCredits(pool, teamId)]);
   if (!submission) return null;
+  const draft = normalizeDraft(submission.draft);
   return {
-    draft: normalizeDraft(submission.draft),
-    runs,
+    draft,
+    runs: await teamRuns(pool, project.id, draft.kane_run_ids),
     credited: creditedOf(members),
     finalizedAt: submission.status !== "withdrawn" ? submission.finalized_at : null,
   };
@@ -470,10 +484,17 @@ const lockedError = (c: { now: Date; locks_at: Date }) =>
  */
 export type ActingAs = { member: MemberRow; actor?: Actor; source?: "web" | "mcp" };
 
-async function teamMember(slug: string, as?: ActingAs) {
+async function teamMember(slug: string, as?: ActingAs, opts: { personal?: boolean } = {}) {
   if (!as) {
     const { team, member } = await requireTeamMember(slug);
     if (!member) throw new AppError("FORBIDDEN");
+    if (opts.personal) {
+      // Acting as this person (consent, finalize attribution): a team-password
+      // session can pick any teammate's name, so it isn't proof of who this is.
+      const me = await requirePersonalMember();
+      if (me.id !== member.id || me.team_id !== team.id) throw new AppError("UNAUTHENTICATED", { userMessage: PERSONAL_SIGN_IN });
+      return { team, member: me, actor: memberActor(me), source: "web" as const };
+    }
     return { team, member, actor: memberActor(member), source: "web" as const };
   }
   const [team] = await query<{ id: number; slug: string; name: string }>("select id, slug, name from teams where slug = $1", [slug]);
@@ -537,7 +558,7 @@ export async function runPreflight(slug: string, opts: { checkGithub?: boolean }
   if (isFrozen(sub.status)) return sub.preflight ?? preflight(normalizeDraft(sub.draft), [], { creditedCount: 0, github: null });
   const draft = normalizeDraft(sub.draft);
   const [runs, members, github] = await Promise.all([
-    teamRuns(pool, project.id),
+    teamRuns(pool, project.id, draft.kane_run_ids),
     teamCredits(pool, team.id),
     opts.checkGithub ? checkGithubCommit(draft.repo_url, draft.commit_sha) : Promise.resolve(sub.preflight?.github ?? null),
   ]);
@@ -557,7 +578,7 @@ export async function runPreflight(slug: string, opts: { checkGithub?: boolean }
 
 /** Each person answers for themselves: may this site name me on our public showcase and deck? */
 export async function setCreditConsent(slug: string, granted: boolean) {
-  const { member } = await teamMember(slug);
+  const { member } = await teamMember(slug, undefined, { personal: true });
   return transaction(async (tx) => {
     const { rows } = await tx.query<{ id: number; recorded_at: Date }>(
       "insert into member_consents (member_id, category, granted, source) values ($1, $2, $3, 'web') returning id, recorded_at",
@@ -606,7 +627,19 @@ async function newReceiptCode(db: Db) {
  * showcase story from the same draft, unless the team opted out.
  */
 export async function finalizeSubmission(slug: string, input: unknown, as?: ActingAs): Promise<{ data: FinalizeResult; receipt: Receipt }> {
-  const { team, member, actor, source } = await teamMember(slug, as);
+  // The irreversible step happens in the browser, by the captain, signed in as
+  // themselves (SPEC §2). Agents (MCP / bearer) get a hand-off link instead,
+  // so a prompt-injected agent can't lock a team's submission early.
+  if (as && as.source !== "web") {
+    throw new AppError("FORBIDDEN", { userMessage: `Finalizing is done by your team captain in the browser: ${siteUrl(`/t/${slug}/submit#finalize`)}` });
+  }
+  const { team, member, actor, source } = await teamMember(slug, as, { personal: true });
+  const [cap] = await query<{ captain_id: number | null }>("select captain_id from teams where id = $1", [team.id]);
+  if (cap?.captain_id && Number(cap.captain_id) !== Number(member.id)) {
+    throw new AppError("FORBIDDEN", {
+      userMessage: "Only your team captain can finalize. Ask them to do it, or have them make you captain on the team page. If the captain isn't here, ask an organizer.",
+    });
+  }
   const body = parse(FinalizeInput, input);
   if (body.confirm_phrase.trim().toLowerCase() !== team.name.trim().toLowerCase()) {
     throw new AppError("VALIDATION_FAILED", { userMessage: "Type your team name exactly to confirm.", details: { issues: [{ path: "confirm_phrase", message: "Doesn't match the team name" }] } });
@@ -634,7 +667,7 @@ export async function finalizeSubmission(slug: string, input: unknown, as?: Acti
 
       const draft = normalizeDraft(current.draft);
       // One client, one query at a time (pg queues concurrent ones and warns).
-      const runs = await teamRuns(tx, project.id);
+      const runs = await teamRuns(tx, project.id, draft.kane_run_ids);
       const members = await teamCredits(tx, team.id);
       const progress = await progressDone(tx, team.id);
       const pins = await rowsOf<{ deck_id: number | null; deck_version: number | null }>(
@@ -858,7 +891,17 @@ export async function withdrawSubmission(staff: Staff, input: unknown) {
     const cur = await currentSubmission(tx, p.id, true);
     if (!cur || cur.status === "withdrawn") throw new AppError("NOT_FOUND", { userMessage: "Nothing to withdraw." });
     await tx.query("update submissions set status = 'withdrawn' where id = $1", [cur.id]);
-    await writeAudit(staffActor(staff), { action: "submission.withdraw", resourceType: "submission", resourceId: cur.id, reason, before: { status: cur.status } }, tx);
+    // A withdrawn (e.g. disqualified) entry leaves the public showcase and gallery too.
+    const { rows: ps } = await tx.query<{ showcase_state: ShowcaseState }>("select showcase_state from projects where id = $1 for update", [p.id]);
+    const showcaseBefore = ps[0]?.showcase_state ?? null;
+    if (showcaseBefore && showcaseBefore !== "hidden_by_moderation" && showcaseBefore !== "draft") {
+      await tx.query("update projects set showcase_state = 'draft', updated_at = now() where id = $1", [p.id]);
+    }
+    await writeAudit(
+      staffActor(staff),
+      { action: "submission.withdraw", resourceType: "submission", resourceId: cur.id, reason, before: { status: cur.status, showcase_state: showcaseBefore }, after: { status: "withdrawn", showcase_state: showcaseBefore === "hidden_by_moderation" ? showcaseBefore : "draft" } },
+      tx,
+    );
     return Number(cur.id);
   });
 }

@@ -44,6 +44,7 @@ async function Gated({ params, tab, render }: { params: Promise<{ slug: string }
     throw e;
   }
   const published = await getLatestPublished(ctx.project.id, "ship_page");
+  const SHOWCASE_LABEL = { public: "Public", unlisted: "Unlisted", draft: "Off (team only)", hidden_by_moderation: "Hidden by organizers" } as const;
   return (
     <>
       <header className="border-b border-dashed border-hairline pt-12 sm:pt-16">
@@ -64,9 +65,12 @@ async function Gated({ params, tab, render }: { params: Promise<{ slug: string }
             <div className="flex flex-col items-start gap-2 font-plex text-xs text-lightgray sm:items-end">
               {published ? (
                 <>
-                  <span className="border border-hairline px-2 py-1 font-pixel text-[10px] tracking-[0.2em] text-bright uppercase">Public · v{published.version}</span>
-                  <Link href={`/ship/${slug}`} className="inline-flex min-h-11 items-center underline-offset-4 hover:text-lime hover:underline">
-                    /ship/{slug} →
+                  {/* Visibility comes from projects.showcase_state, not from "an asset exists". */}
+                  <span className="border border-hairline px-2 py-1 font-pixel text-[10px] tracking-[0.2em] text-bright uppercase">
+                    {SHOWCASE_LABEL[ctx.project.showcase_state]} · v{published.version}
+                  </span>
+                  <Link href={`/ship/${ctx.project.slug}`} className="inline-flex min-h-11 items-center underline-offset-4 hover:text-lime hover:underline">
+                    /ship/{ctx.project.slug} →
                   </Link>
                 </>
               ) : (

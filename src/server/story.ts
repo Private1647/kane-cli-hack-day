@@ -16,6 +16,7 @@ import {
 } from "@/components/ship-templates/model";
 import { authenticateBearer, getMember, getStaff, memberActor, tokenActor, type MemberRow, type Staff } from "./auth";
 import { AppError, idempotent, parse, serverNow, siteUrl, withAudit, z, type Actor, type Receipt } from "./core";
+import { mediaPrefix, mediaSrc } from "./showcase";
 
 // Project stories: the one reviewed story that powers the Ship Page, deck,
 // video, README and social copy (SPEC §7, T-SHIP-01/02/05/09).
@@ -385,6 +386,11 @@ const publishInput = z.object({
 export async function publishShowcase(access: ProjectAccess, input: unknown): Promise<{ data: PublishedRef; receipt: Receipt }> {
   requireWrite(access);
   if (!(await isEnabled("ship_pages"))) throw new AppError("FEATURE_DISABLED", { userMessage: "Public Ship Pages are switched off right now. Your story is saved." });
+  // Publishing puts names and claims on a public page: a person does it in the
+  // browser. Agents (bearer / MCP) get the link instead.
+  if (access.actor.type === "token") {
+    throw new AppError("FORBIDDEN", { userMessage: `Publishing is done by a teammate in the browser: ${siteUrl(`/studio/${access.project.slug}#publish`)}` });
+  }
   const { story_version, confirm_phrase, idempotency_key } = parse(publishInput, input);
   const { project, member, actor } = access;
   if (confirm_phrase.toLowerCase() !== project.slug.toLowerCase()) {
@@ -405,7 +411,13 @@ export async function publishShowcase(access: ProjectAccess, input: unknown): Pr
 
   const { result } = await idempotent(idempotency_key, `showcase.publish:project:${project.id}`, () =>
     withAudit(actor, "showcase.publish", "published_asset", async (tx) => {
-      const { rows: now } = await tx.query<{ now: Date }>("select now() as now");
+      const { rows: now } = await tx.query<{ now: Date; locked: boolean }>(
+        "select now() as now, coalesce((select now() >= submission_locks_at from hack_events where id = current_event_id()), false) as locked",
+      );
+      // After the deadline the public page must keep matching the signed submission.
+      if (now[0].locked) throw new AppError("SUBMISSION_LOCKED", { userMessage: "Submissions are locked, so the public Ship Page can't change now. Ask an organizer if something is wrong." });
+      const { rows: cur } = await tx.query<{ showcase_state: ProjectRow["showcase_state"] }>("select showcase_state from projects where id = $1 for update", [project.id]);
+      if (cur[0]?.showcase_state === "hidden_by_moderation") throw new AppError("FORBIDDEN", { userMessage: "This Ship Page is hidden by an organizer. Ask at the help desk." });
       const { rows: sub } = await tx.query<{ id: number }>(
         "select id from submissions where project_id = $1 and status in ('finalized','locked','awaiting_confirmation','preflighted','draft') order by id desc limit 1",
         [project.id],
@@ -426,11 +438,16 @@ export async function publishShowcase(access: ProjectAccess, input: unknown): Pr
         [project.id, next[0].v, sv.id, JSON.stringify(receipt), member.id, sub[0]?.id ?? null],
       );
       await tx.query("update project_stories set reviewed_by = $2, reviewed_at = now() where id = $1", [sv.id, member.id]);
+      // /ship/{slug} is gated on projects.showcase_state, so publishing makes the page public.
+      if (cur[0]?.showcase_state !== "public") {
+        await tx.query("update projects set showcase_state = 'public', updated_at = now() where id = $1", [project.id]);
+      }
       const r = rows[0];
       return {
         result: { id: r.id, version: r.version, publishedAt: r.published_at.toISOString(), storyId: sv.id, state: "public", consent: receipt } satisfies PublishedRef,
         resourceId: r.id,
-        after: { story_version, credited: consent.credited.map((c) => c.member_id) },
+        before: { showcase_state: cur[0]?.showcase_state ?? null },
+        after: { story_version, credited: consent.credited.map((c) => c.member_id), showcase_state: "public" },
         payload: { project_id: project.id, story_version, version: r.version, submission_id: sub[0]?.id ?? null },
       };
     }),
@@ -492,8 +509,10 @@ export async function getPublishedStory(slugOrId: string | number): Promise<{ st
     getLatestPublished(project.id, "deck"),
     runFacts(project.id, sv.content.proof.map((p) => p.run_id ?? "").filter(Boolean)),
   ]);
+  // Finalize stores screenshots as private Blob paths; the public reads them through /ship/{slug}/media.
+  const visuals = sv.content.visuals.map((v) => (v.source.startsWith(mediaPrefix(project.id)) ? { ...v, source: mediaSrc(project.slug, v.source) } : v));
   const story = toPublicStory(
-    { ...sv.content, status: "published" },
+    { ...sv.content, visuals, status: "published" },
     {
       shipPage: siteUrl(`/ship/${project.slug}`),
       credited: await stillCredited(pub.consent?.credited ?? []),
@@ -501,7 +520,8 @@ export async function getPublishedStory(slugOrId: string | number): Promise<{ st
       badges,
       version: pub.version,
       publishedAt: pub.publishedAt,
-      hasDeck: !!deck && deck.state !== "hidden_by_moderation",
+      // No deck asset → /ship/{slug}/deck serves the default deck from this story (deck.ts).
+      hasDeck: !deck || (deck.state !== "hidden_by_moderation" && deck.state !== "draft"),
       preview: false,
     },
   );

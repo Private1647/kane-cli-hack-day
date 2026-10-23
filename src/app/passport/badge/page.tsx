@@ -3,7 +3,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import QR from "@/components/ui/QR";
 import { query } from "@/lib/db";
-import { getMember, getStaff, hasRole, memberActor, staffActor } from "@/server/auth";
+import { getPersonalMember, getStaff, hasRole, memberActor, staffActor } from "@/server/auth";
 import { siteUrl, type Actor } from "@/server/core";
 import { shortName } from "@/server/pairing";
 import { EDITION, getBadgeToken } from "@/server/passport";
@@ -33,7 +33,7 @@ export default function BadgePage({ searchParams }: PageProps<"/passport/badge">
 
 async function Badges({ searchParams }: Pick<PageProps<"/passport/badge">, "searchParams">) {
   const sp = await searchParams;
-  const [member, staff] = await Promise.all([getMember(), getStaff()]);
+  const [member, staff] = await Promise.all([getPersonalMember(), getStaff()]);
   const organizer = hasRole(staff, "organizer");
   const layout = sp.layout === "8up" ? "8up" : "1up";
 

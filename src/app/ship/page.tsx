@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Suspense, type ReactNode } from "react";
 import PageHeader from "@/components/ui/PageHeader";
 import StatusPill from "@/components/ui/StatusPill";
+import { isEnabled } from "@/lib/flags";
 import { PROJECT_TYPES, PROJECT_TYPE_LABEL, listGallery, type ProjectType } from "@/server/showcase";
 
 export const metadata: Metadata = {
@@ -39,6 +40,8 @@ const isType = (s: unknown): s is ProjectType => typeof s === "string" && (PROJE
 async function Projects({ searchParams }: { searchParams: PageProps<"/ship">["searchParams"] }) {
   const raw = (await searchParams).type;
   const type = isType(raw) ? raw : null;
+  // Organizer kill switch (T-005): the whole public showcase goes offline.
+  if (!(await isEnabled("ship_pages"))) return <ShowcaseOffline />;
   const [cards, all] = await Promise.all([listGallery(type), type ? listGallery(null) : null]);
   const counts = new Map<string, number>();
   for (const c of all ?? cards) counts.set(c.type, (counts.get(c.type) ?? 0) + 1);
@@ -110,5 +113,14 @@ function Chip({ href, on, children }: { href: string; on: boolean; children: Rea
     >
       {children}
     </Link>
+  );
+}
+
+function ShowcaseOffline() {
+  return (
+    <div className="flex flex-wrap items-center gap-3 border border-warning bg-warning-deep px-4 py-3 font-plex text-sm text-bright" role="status">
+      <StatusPill tone="pending">Offline</StatusPill>
+      <span>The showcase is temporarily offline. Submissions are safe and unaffected.</span>
+    </div>
   );
 }

@@ -3,7 +3,7 @@
 import { refresh } from "next/cache";
 import { redirect } from "next/navigation";
 import { clearTeamSession } from "@/lib/session";
-import { memberActor, memberLogout, requireMember } from "@/server/auth";
+import { memberActor, memberLogout, requirePersonalMember } from "@/server/auth";
 import { formObject, parse, runAction, z } from "@/server/core";
 import { issueMemberLoginCode, revokeBearerToken, setMemberPassword } from "@/server/pairing";
 import { CONSENT_CATEGORIES, profileSchema, rotateBadgeToken, updateProfile, type ConsentCategory } from "@/server/passport";
@@ -17,7 +17,7 @@ const msg = (e: { message: string; next_action: string }) => ({ error: `${e.mess
 
 export async function saveProfile(_prev: FormState, form: FormData): Promise<FormState> {
   const r = await runAction(async () => {
-    const member = await requireMember();
+    const member = await requirePersonalMember();
     const raw = formObject(form);
     const consents = Object.fromEntries(CONSENT_CATEGORIES.map((c) => [c, form.get(c) === "on"])) as Record<ConsentCategory, boolean>;
     const input = parse(profileSchema, {
@@ -38,14 +38,14 @@ export async function saveProfile(_prev: FormState, form: FormData): Promise<For
 export async function setPassword(_prev: FormState, form: FormData): Promise<FormState> {
   const r = await runAction(async () => {
     const input = parse(z.object({ password: z.string().min(8, "Use at least 8 characters").max(200) }), formObject(form));
-    return setMemberPassword(await requireMember(), input.password);
+    return setMemberPassword(await requirePersonalMember(), input.password);
   });
   return r.ok ? { ok: "Personal password set. You can sign in with your email and this password." } : msg(r.error);
 }
 
 export async function newLoginCode(): Promise<FormState> {
   const r = await runAction(async () => {
-    const member = await requireMember();
+    const member = await requirePersonalMember();
     return issueMemberLoginCode(member.id, memberActor(member));
   });
   return r.ok ? { code: r.data } : msg(r.error);
@@ -53,7 +53,7 @@ export async function newLoginCode(): Promise<FormState> {
 
 export async function rotateBadge(): Promise<FormState> {
   const r = await runAction(async () => {
-    const member = await requireMember();
+    const member = await requirePersonalMember();
     return rotateBadgeToken(member.id, memberActor(member));
   });
   if (!r.ok) return msg(r.error);
@@ -64,7 +64,7 @@ export async function rotateBadge(): Promise<FormState> {
 export async function revokeToken(form: FormData) {
   const id = z.coerce.number().int().positive().safeParse(form.get("id"));
   if (!id.success) return;
-  await runAction(async () => revokeBearerToken(await requireMember(), id.data));
+  await runAction(async () => revokeBearerToken(await requirePersonalMember(), id.data));
   refresh();
 }
 

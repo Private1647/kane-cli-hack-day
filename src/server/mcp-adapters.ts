@@ -336,26 +336,20 @@ export async function submissionPreflight(m: MemberRow, projectId?: number | nul
  * immutable snapshot, signed receipt, and the showcase story published from
  * the same draft (unless publish_showcase is false).
  */
-export async function finalizeSubmission(ctx: Ctx, input: { confirm_phrase: string; publish_showcase: boolean; idempotency_key?: string }) {
+export async function finalizeSubmission(ctx: Ctx, _input: { confirm_phrase: string; publish_showcase: boolean; idempotency_key?: string }) {
+  // Finalizing is irreversible, so agents never do it: the captain finishes it
+  // in the browser (submission.ts refuses non-web callers too). Hand off.
   const team = await myTeam(ctx.member);
-  const { data, receipt } = await submissionService.finalizeSubmission(
-    team.slug,
-    { confirm_phrase: input.confirm_phrase, confirm: true, publish_showcase: input.publish_showcase, idempotency_key: input.idempotency_key },
-    { member: ctx.member, actor: ctx.actor, source: "mcp" },
-  );
-  const projectSlug = (await getSubmissionContext(team.id)).project.slug;
+  const ctxNow = await getSubmissionContext(team.id);
+  const s = ctxNow.submission;
+  const frozen = !!s && (s.status === "finalized" || s.status === "locked");
   return {
-    id: data.receipt_code,
-    receipt_code: data.receipt_code,
-    submission_id: data.submission_id,
-    server_time: data.finalized_at,
-    snapshot_sha256: data.snapshot_sha256,
-    signed: data.signed,
-    showcase_state: data.showcase_state,
-    replayed: data.already,
-    receipt,
-    url: `/submit/receipt/${data.receipt_code}`,
-    showcase_url: data.showcase_state === "public" || data.showcase_state === "unlisted" ? `/ship/${projectSlug}` : null,
+    team_slug: team.slug,
+    already_finalized: frozen,
+    receipt_code: frozen ? s!.receipt_code : null,
+    preflight_ok: ctxNow.preflight.ok,
+    missing: ctxNow.preflight.missing,
+    url: frozen ? `/submit/receipt/${s!.receipt_code}` : `/t/${team.slug}/submit#finalize`,
   };
 }
 
@@ -408,10 +402,11 @@ export async function showcasePreview(m: MemberRow, actor: Actor, projectId?: nu
  * Publish a story version as the Ship Page (story.ts): slug typed to confirm,
  * no review blockers, and every credited person's own consent.
  */
-export async function showcasePublish(ctx: Ctx, input: { project_id?: number; story_version: number; confirm_phrase: string; idempotency_key?: string }) {
+/** Publishing is a person's action in the browser (story.ts refuses tokens); this returns the hand-off. */
+export async function showcasePublish(ctx: Ctx, input: { project_id?: number; story_version: number }) {
   const a = await access(ctx.member, ctx.actor, input.project_id);
-  const { data, receipt } = await story.publishShowcase(a, { story_version: input.story_version, confirm_phrase: input.confirm_phrase, idempotency_key: input.idempotency_key });
-  return { id: receipt.id, version: data.version, server_time: receipt.server_time, url: `/ship/${a.project.slug}`, consent: data.consent };
+  const preview = await story.showcasePreview(a);
+  return { story_version: input.story_version, url: `/studio/${a.project.slug}#publish`, public_url: preview.public_url, publish_blockers: preview.publish_blockers, consent_missing: preview.consent_missing };
 }
 
 // ── social (→ src/server/social.ts) ──────────────────────────────────────────

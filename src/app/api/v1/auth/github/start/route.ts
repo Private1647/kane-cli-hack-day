@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { getMember } from "@/server/auth";
+import { getPersonalMember } from "@/server/auth";
 import { githubAuthorizeUrl, githubEnabled } from "@/server/pairing";
 
 // Link a GitHub account to the signed-in passport (optional; public profile
@@ -7,7 +7,7 @@ import { githubAuthorizeUrl, githubEnabled } from "@/server/pairing";
 
 export async function GET(req: Request) {
   const next = new URL(req.url).searchParams.get("next") === "/activate" ? "/activate" : "/passport";
-  const member = await getMember();
+  const member = await getPersonalMember();
   if (!member) redirect("/passport/login?next=/passport");
   if (!githubEnabled()) redirect("/passport?github=disabled");
   redirect(await githubAuthorizeUrl(member, next));

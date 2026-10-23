@@ -27,7 +27,8 @@ const nextConfig: NextConfig = {
       "connect-src 'self' https: wss:",
       "media-src 'self' blob: https:",
       "worker-src 'self' blob:",
-      "frame-src 'self' https://vercel.live",
+      // Ship pages embed a team's demo video (YouTube nocookie or Loom).
+      "frame-src 'self' https://vercel.live https://www.youtube-nocookie.com https://www.loom.com",
       "frame-ancestors 'self'",
       "object-src 'none'",
       "base-uri 'self'",

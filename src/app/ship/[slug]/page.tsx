@@ -3,9 +3,11 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound, permanentRedirect } from "next/navigation";
 import { Suspense, type ReactNode } from "react";
+import { DEFAULT_TEMPLATE, ShipTemplate } from "@/components/ship-templates";
 import StatusPill from "@/components/ui/StatusPill";
 import { Eyebrow } from "@/components/ui/Section";
 import { event } from "@/data/hackday";
+import { isEnabled } from "@/lib/flags";
 import { siteUrl } from "@/server/core";
 import {
   PROJECT_TYPE_LABEL,
@@ -16,7 +18,10 @@ import {
   type EvidenceRun,
   type ProjectType,
   type ShowcaseView,
+  type SubmissionExtras,
 } from "@/server/showcase";
+import { getPublishedDeck } from "@/server/deck";
+import { getShipTemplate, getPublishedStory as getPublicStory } from "@/server/story";
 import { kaneComponentLabel, loadDraftForShowcase } from "@/server/submission";
 import Stage, { CopyUrl, type StageVideo } from "./Stage";
 
@@ -55,13 +60,82 @@ const dateFmt = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric
 
 async function Ship({ params }: { params: PageProps<"/ship/[slug]">["params"] }) {
   const { slug } = await params;
+  // Organizer kill switch (T-005 / T-SHIP-04): every public showcase goes offline.
+  if (!(await isEnabled("ship_pages"))) return <Offline />;
   const found = await resolveShipSlug(slug);
   if (!found) notFound();
   if ("redirectTo" in found) permanentRedirect(`/ship/${found.redirectTo}`);
   const view = await getShowcase(found.project, loadDraftForShowcase);
   if (!view) notFound();
-  return <ShipBody view={view} />;
+  // The deck link only shows when /ship/{slug}/deck will actually open: a
+  // published (public/unlisted) page always has at least the default deck.
+  const live = !view.preview && (view.mode === "public" || view.mode === "unlisted");
+  const [deck, template] = await Promise.all([live ? getPublishedDeck(found.project.slug).catch(() => null) : null, getShipTemplate(found.project.id)]);
+  // The team's chosen layout (T-SHIP-09) over the same public story DTO.
+  // Product × Proof keeps this page's own, richer layout.
+  if (live && template !== DEFAULT_TEMPLATE) {
+    const pub = await getPublicStory(found.project.id).catch(() => null);
+    if (pub) {
+      return (
+        <>
+          <ShipTemplate name={template} story={{ ...pub.story, hasDeck: !!deck }} />
+          <div className="container-page pb-16">
+            <SubmittedExtras extras={view.extras} />
+          </div>
+        </>
+      );
+    }
+  }
+  return <ShipBody view={view} hasDeck={!!deck} />;
 }
+
+function Offline() {
+  return (
+    <div className="container-page py-24">
+      <div role="status" className="flex flex-wrap items-center gap-3 border border-warning bg-warning-deep px-4 py-3 font-plex text-sm text-bright">
+        <StatusPill tone="pending">Offline</StatusPill>
+        <span>Ship pages are temporarily offline. Submissions are safe and unaffected.</span>
+      </div>
+    </div>
+  );
+}
+
+/** Copyable run command, Devpost and launch posts: the submission fields the story doesn't carry. */
+function SubmittedExtras({ extras }: { extras: SubmissionExtras | null }) {
+  if (!extras) return null;
+  return (
+    <div className="space-y-3 border-t border-dashed border-hairline pt-8">
+      <p className={eyebrow}>Also submitted</p>
+      {extras.run_command && (
+        <div>
+          <p className="font-plex text-xs text-lightgray">Run it</p>
+          <div className="mt-2 flex flex-wrap items-stretch gap-2">
+            <pre className="min-w-0 flex-1 overflow-x-auto border border-hairline bg-surface px-4 py-3 font-mono text-xs text-bright">
+              <code>{extras.run_command}</code>
+            </pre>
+            <CopyUrl url={extras.run_command} label="Copy command" />
+          </div>
+        </div>
+      )}
+      {extras.devpost_url && <ExtLink href={extras.devpost_url}>Devpost page</ExtLink>}
+      {extras.social_links.map((u) => (
+        <ExtLink key={u} href={u}>
+          {postLabel(u)}
+        </ExtLink>
+      ))}
+    </div>
+  );
+}
+
+const postLabel = (u: string) => {
+  const h = hostOf(u);
+  if (h === "x.com" || h === "twitter.com") return "Launch post on X";
+  if (h === "news.ycombinator.com") return "Hacker News post";
+  if (h === "linkedin.com") return "LinkedIn post";
+  return `Post · ${h}`;
+};
+
+const httpsOnly = (u: string | null | undefined) => (u && /^https:\/\/[^\s]+$/.test(u) ? u : undefined);
 
 /** YouTube / Loom → privacy-friendly embed; a direct video file → <video>; anything else → a link. */
 function videoOf(url: string | undefined, title: string): StageVideo | null {
@@ -86,7 +160,7 @@ function RunPill({ r }: { r: EvidenceRun }) {
   return <StatusPill tone="unverified">Participant reported · {r.status}</StatusPill>;
 }
 
-function ShipBody({ view }: { view: ShowcaseView }) {
+function ShipBody({ view, hasDeck }: { view: ShowcaseView; hasDeck: boolean }) {
   const { story: s, project, runs } = view;
   const slug = project.slug;
   const name = s.project_name;
@@ -163,9 +237,11 @@ function ShipBody({ view }: { view: ShowcaseView }) {
               <a href="#proof" className="inline-flex min-h-11 items-center bg-bright px-4 font-plex text-sm text-ink transition-colors hover:bg-lime">
                 See the proof →
               </a>
-              <Link href={`/ship/${slug}/deck`} className="inline-flex min-h-11 items-center border border-hairline px-4 font-plex text-sm text-bright transition-colors hover:border-lime hover:text-lime">
-                HTML deck →
-              </Link>
+              {hasDeck && (
+                <Link href={`/ship/${slug}/deck`} className="inline-flex min-h-11 items-center border border-hairline px-4 font-plex text-sm text-bright transition-colors hover:border-lime hover:text-lime">
+                  HTML deck →
+                </Link>
+              )}
               {s.links.demo && (
                 <a href={s.links.demo} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center border border-hairline px-4 font-plex text-sm text-bright transition-colors hover:border-lime hover:text-lime">
                   Live demo ↗
@@ -193,7 +269,7 @@ function ShipBody({ view }: { view: ShowcaseView }) {
             v={runs.length ? `${runs.length} ${runs.length === 1 ? "run" : "runs"}` : linkProof.length ? `${linkProof.length} ${linkProof.length === 1 ? "link" : "links"}` : "—"}
             sub={runs.length ? `${verifiedRuns.length} verified · ${detections.length} detected` : "Participant reported"}
           />
-          <Stat k="Repo" v={commit ? commit.slice(0, 7) : "—"} sub={s.links.github ? s.links.github.replace(/^https:\/\/(www\.)?/, "") : "Not public"} href={s.links.repo_commit ?? s.links.github} mono />
+          <Stat k="Repo" v={commit ? commit.slice(0, 7) : "—"} sub={s.links.github ? s.links.github.replace(/^https:\/\/(www\.)?/, "") : "Not public"} href={httpsOnly(s.links.repo_commit) ?? httpsOnly(s.links.github)} mono />
         </div>
       </section>
 
@@ -289,9 +365,14 @@ function ShipBody({ view }: { view: ShowcaseView }) {
                 <li key={p.source} className="relative pb-8 pl-6 last:pb-0">
                   <span aria-hidden className="absolute top-1.5 -left-[5px] h-[9px] w-[9px] border border-lightgray bg-ink" />
                   <StatusPill tone="unverified">Participant reported</StatusPill>
-                  <a href={p.source} target="_blank" rel="noopener noreferrer" className="mt-2 block font-mono text-xs break-all text-bright underline decoration-hairline underline-offset-4 hover:text-lime">
-                    {p.source}
-                  </a>
+                  {/* Studio proof.source is free text: only an https URL becomes a link. */}
+                  {httpsOnly(p.source) ? (
+                    <a href={p.source} target="_blank" rel="noopener noreferrer" className="mt-2 block font-mono text-xs break-all text-bright underline decoration-hairline underline-offset-4 hover:text-lime">
+                      {p.source}
+                    </a>
+                  ) : (
+                    <p className="mt-2 font-mono text-xs break-all text-lightgray">{p.source}</p>
+                  )}
                 </li>
               ))}
             </ol>
@@ -374,12 +455,15 @@ function ShipBody({ view }: { view: ShowcaseView }) {
             )}
           </div>
           <div className="space-y-3">
-            <Link href={`/ship/${slug}/deck`} className="flex min-h-11 items-center justify-between border border-hairline px-4 py-3 font-plex text-sm text-bright transition-colors hover:border-lime hover:text-lime">
-              Present the HTML deck <span aria-hidden>→</span>
-            </Link>
-            {s.links.github && <ExtLink href={s.links.github}>Repository</ExtLink>}
-            {s.links.repo_commit && <ExtLink href={s.links.repo_commit}>Submitted commit</ExtLink>}
-            {s.links.demo && <ExtLink href={s.links.demo}>Live demo</ExtLink>}
+            {hasDeck && (
+              <Link href={`/ship/${slug}/deck`} className="flex min-h-11 items-center justify-between border border-hairline px-4 py-3 font-plex text-sm text-bright transition-colors hover:border-lime hover:text-lime">
+                Present the HTML deck <span aria-hidden>→</span>
+              </Link>
+            )}
+            {httpsOnly(s.links.github) && <ExtLink href={s.links.github!}>Repository</ExtLink>}
+            {httpsOnly(s.links.repo_commit) && <ExtLink href={s.links.repo_commit!}>Submitted commit</ExtLink>}
+            {httpsOnly(s.links.demo) && <ExtLink href={s.links.demo!}>Live demo</ExtLink>}
+            <SubmittedExtras extras={view.extras} />
           </div>
         </div>
       </section>

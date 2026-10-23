@@ -1,5 +1,5 @@
 import { confirmPhoneSelfie, confirmSelfie } from "@/server/activation";
-import { getMember } from "@/server/auth";
+import { getPersonalMember } from "@/server/auth";
 import { AppError, envelopeResponse } from "@/server/core";
 
 // The selfie upload (multipart: file, trusted, idempotency_key, [handoff]).
@@ -21,7 +21,7 @@ export async function POST(req: Request) {
       typeof handoff === "string" && handoff
         ? await confirmPhoneSelfie(handoff, file, { trusted, idempotencyKey: key })
         : await (async () => {
-            const member = await getMember();
+            const member = await getPersonalMember();
             if (!member) throw new AppError("UNAUTHENTICATED");
             return confirmSelfie(member, file, { trusted, via: "desktop", idempotencyKey: key });
           })();

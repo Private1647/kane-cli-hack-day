@@ -1,6 +1,6 @@
 import { get } from "@vercel/blob";
 import { query } from "@/lib/db";
-import { getMember, getStaff, hasRole } from "@/server/auth";
+import { getPersonalMember, getStaff, hasRole } from "@/server/auth";
 import { getConsents } from "@/server/passport";
 
 // Serves a member's current selfie from the private store (?m=<member id>).
@@ -12,7 +12,7 @@ export async function GET(req: Request) {
   const id = Number(new URL(req.url).searchParams.get("m"));
   if (!Number.isSafeInteger(id) || id <= 0) return new Response("Not found", { status: 404 });
 
-  const [member, staff, consents] = await Promise.all([getMember(), getStaff(), getConsents(id)]);
+  const [member, staff, consents] = await Promise.all([getPersonalMember(), getStaff(), getConsents(id)]);
   const own = member?.id === id;
   const isPublic = consents.selfie_storage === true && consents.photo_publication === true;
   if (!own && !hasRole(staff, "organizer") && !isPublic) return new Response("Not found", { status: 404 });

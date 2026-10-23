@@ -13,8 +13,13 @@ const STAFF_COOKIE = "hd_staff";
 const MAX_AGE = 60 * 60 * 24 * 3; // the event plus a margin
 
 export type TeamSession = { teamId: number; memberId: number | null };
-/** A person, independent of any team. */
-export type MemberSession = { memberId: number };
+/**
+ * A person, independent of any team. `personal` is true only after a personal
+ * proof (one-time code, personal password, desk activation code, a fresh
+ * account). Email + the shared team password gives a team-level session:
+ * enough for the team hub, not for acting as that person.
+ */
+export type MemberSession = { memberId: number; personal?: boolean };
 /** Staff signed in with email + one-time code. Role is re-checked against the DB on use. */
 export type StaffSession = { staffId: number; role: string; exp: number };
 

@@ -7,8 +7,9 @@ import type { ReactNode } from "react";
 //   suspected  grey outline ?  : a detection (e.g. a failing Kane run), not a confirmed bug
 //   unverified grey outline ○  : a claim with no evidence attached
 //   accent     lime →          : act here / you are here. Never means "passed".
+//   neutral    hairline ■      : a completed step with no evidence claim (done, admitted, active)
 
-export type PillTone = "verified" | "pending" | "danger" | "suspected" | "unverified" | "accent";
+export type PillTone = "verified" | "pending" | "danger" | "suspected" | "unverified" | "accent" | "neutral";
 
 const TONES: Record<PillTone, { cls: string; glyph: string; label: string }> = {
   verified: { cls: "border-verified bg-verified-deep text-verified", glyph: "✓", label: "Verified" },
@@ -17,6 +18,7 @@ const TONES: Record<PillTone, { cls: string; glyph: string; label: string }> = {
   suspected: { cls: "border-lightgray border-dashed text-lightgray", glyph: "?", label: "Suspected" },
   unverified: { cls: "border-lightgray text-lightgray", glyph: "○", label: "Unverified" },
   accent: { cls: "border-lime bg-lime-deep text-lime", glyph: "→", label: "Next" },
+  neutral: { cls: "border-hairline text-bright", glyph: "■", label: "Done" },
 };
 
 export default function StatusPill({

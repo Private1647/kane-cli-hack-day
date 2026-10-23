@@ -10,6 +10,7 @@ import {
   getTeamSession,
   hasAdminCookie,
   setAdminSession,
+  setMemberSession,
   setStaffSession,
 } from "@/lib/session";
 import { AppError, sha256, transaction, writeAudit, type Actor, type StaffRole } from "./core";
@@ -67,7 +68,13 @@ async function getTeamRef(id: number | null) {
   return t ?? null;
 }
 
-/** The signed-in member, from the member cookie or the team cookie's picked member. */
+/**
+ * The signed-in member, from the member cookie or the team cookie's picked
+ * member. This is a *team-level* identity: anyone with the team password can
+ * pick any teammate's name. Use it for team-hub reads and team edits only;
+ * personal actions (consent, pairing, selfie, GitHub link, finalize) go
+ * through requirePersonalMember().
+ */
 export async function getMember(): Promise<MemberRow | null> {
   const [ms, ts] = await Promise.all([getMemberSession(), getTeamSession()]);
   const id = ms?.memberId ?? ts?.memberId ?? null;
@@ -99,6 +106,33 @@ export async function requireMember(): Promise<MemberRow> {
   const m = await getMember();
   if (!m) throw new AppError("UNAUTHENTICATED");
   return m;
+}
+
+/** The member proven to be *this person* (personal session), or null. */
+export async function getPersonalMember(): Promise<MemberRow | null> {
+  const ms = await getMemberSession();
+  if (!ms?.personal) return null;
+  return getMemberById(ms.memberId);
+}
+
+export const PERSONAL_SIGN_IN =
+  "This is a personal step, so sign in as yourself at /passport/login with a one-time code from the desk or your personal password. The team password only opens the team hub.";
+
+/**
+ * Personal actions (consents, pairing approval, selfie, GitHub link,
+ * finalize): the person must have proven who they are. A team-password
+ * session, where anyone can pick any teammate's name, is not enough.
+ */
+export async function requirePersonalMember(): Promise<MemberRow> {
+  const m = await getPersonalMember();
+  if (m) return m;
+  throw new AppError("UNAUTHENTICATED", { userMessage: PERSONAL_SIGN_IN });
+}
+
+/** Re-issue the member cookie for `memberId`, keeping it personal only if it already was for that person. */
+export async function rememberMember(memberId: number) {
+  const ms = await getMemberSession();
+  await setMemberSession({ memberId, personal: !!(ms?.personal && ms.memberId === memberId) });
 }
 
 /**

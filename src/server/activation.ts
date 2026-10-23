@@ -269,7 +269,8 @@ export async function redeemActivationCode(code: string, email: string | null) {
     return { kind: "ok" as const, memberId };
   });
   if (out.kind === "needs_email") return out;
-  await setMemberSession({ memberId: out.memberId });
+  // The activation code was issued to this person (desk or email): a personal proof.
+  await setMemberSession({ memberId: out.memberId, personal: true });
   return out;
 }
 

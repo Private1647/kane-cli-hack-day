@@ -1,6 +1,7 @@
 import { ImageResponse } from "next/og";
 import { connection } from "next/server";
 import { event } from "@/data/hackday";
+import { isEnabled } from "@/lib/flags";
 import { PROJECT_TYPE_LABEL, getPublishedStory, type ProjectType } from "@/server/showcase";
 
 // 1200×630 share card in the site's style: black ink, off-white type, hairline
@@ -36,7 +37,8 @@ async function googleFont(family: string, weight: number, text: string) {
 export default async function Image({ params }: { params: Promise<{ slug: string }> }) {
   await connection();
   const { slug } = await params;
-  const pub = await getPublishedStory(slug).catch(() => null);
+  // Kill switch (ship_pages off): a neutral card, like a draft.
+  const pub = (await isEnabled("ship_pages").catch(() => true)) ? await getPublishedStory(slug).catch(() => null) : null;
   const s = pub?.story;
   const name = s?.project_name ?? "Showcase";
   const pitch = s?.one_line_pitch ?? "Built with AI agents. Verified with Kane CLI.";

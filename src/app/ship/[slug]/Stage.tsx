@@ -141,7 +141,7 @@ export default function Stage({ shots, video, proof, projectName }: { shots: Sta
 }
 
 /** Copy this page's URL. */
-export function CopyUrl({ url }: { url: string }) {
+export function CopyUrl({ url, label = "Copy link" }: { url: string; label?: string }) {
   const [copied, setCopied] = useState(false);
   return (
     <button
@@ -152,12 +152,12 @@ export function CopyUrl({ url }: { url: string }) {
           setCopied(true);
           window.setTimeout(() => setCopied(false), 1400);
         } catch {
-          window.prompt("Copy this link", url);
+          window.prompt(label, url);
         }
       }}
       className="inline-flex min-h-11 items-center border border-hairline px-3 font-plex text-xs text-bright transition-colors hover:border-lime hover:text-lime"
     >
-      {copied ? "Copied ✓" : "Copy link"}
+      {copied ? "Copied" : label}
     </button>
   );
 }

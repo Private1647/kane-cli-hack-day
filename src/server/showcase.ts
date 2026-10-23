@@ -223,14 +223,19 @@ async function latestPublished(projectId: number) {
   return row ?? null;
 }
 
-/** Members whose latest credit consent is "yes". Consent is per person and can be withdrawn at any time. */
+/**
+ * Members whose latest credit consent is "yes", and those who currently allow
+ * an @mention. Consent is per person and can be withdrawn at any time. Studio
+ * publishes credit on activity_publication or social_mention (story.ts), so
+ * either counts here too.
+ */
 async function currentlyConsenting(memberIds: number[]) {
-  if (!memberIds.length) return new Set<number>();
-  const rows = await query<{ member_id: number }>(
-    "select member_id from member_consent_current where member_id = any($1::bigint[]) and category = $2 and granted",
+  if (!memberIds.length) return { credit: new Set<number>(), mention: new Set<number>() };
+  const rows = await query<{ member_id: number; category: string }>(
+    "select member_id, category from member_consent_current where member_id = any($1::bigint[]) and category in ($2, 'social_mention') and granted",
     [memberIds, CREDIT_CONSENT],
   );
-  return new Set(rows.map((r) => Number(r.member_id)));
+  return { credit: new Set(rows.map((r) => Number(r.member_id))), mention: new Set(rows.filter((r) => r.category === "social_mention").map((r) => Number(r.member_id))) };
 }
 
 export type PublishedStory = {
@@ -263,11 +268,15 @@ export async function getPublishedStory(slug: string, opts: { includeHidden?: bo
     return { ...raw, display_name: raw.display_name ?? raw.name ?? "", handle: raw.handle ?? null, consent_recorded_at: raw.consent_recorded_at ?? null };
   });
   const ok = await currentlyConsenting(receipt.map((c) => Number(c.member_id)));
-  const credited = receipt.filter((c) => ok.has(Number(c.member_id)));
-  const names = new Set(credited.map((c) => c.display_name));
+  const credited = receipt.filter((c) => ok.credit.has(Number(c.member_id))).map((c) => ({ ...c, handle: ok.mention.has(Number(c.member_id)) ? c.handle : null }));
+  const byName = new Map(credited.map((c) => [c.display_name, c]));
   return {
     project: { id: project.id, slug: project.slug, name: project.name, project_type: project.project_type, showcase_state: project.showcase_state, team_id: project.team_id },
-    story: { ...pub.content, team: pub.content.team.filter((t) => names.has(t.display_name)) },
+    // Team list filtered by *current* consent; a handle only while social_mention is still granted.
+    story: {
+      ...pub.content,
+      team: pub.content.team.filter((t) => byName.has(t.display_name) && t.publicly_credited !== false).map((t) => ({ ...t, handle: byName.get(t.display_name)!.handle ? t.handle : null })),
+    },
     storyId: Number(pub.story_id),
     storyVersion: pub.story_version,
     publishedAt: pub.published_at,
@@ -308,6 +317,20 @@ export type ShowcaseView = {
   runs: EvidenceRun[];
   finalizedAt: Date | null;
   viewer: { canPreview: boolean; isTeam: boolean; isOrganizer: boolean };
+  /**
+   * Submission fields the story schema doesn't carry (D2: the page shows every
+   * asset the team submitted). Only from a finalized submission, or the team's
+   * own draft preview; never from an unfinalized draft on a public page.
+   */
+  extras: SubmissionExtras | null;
+};
+
+export type SubmissionExtras = { run_command: string | null; devpost_url: string | null; social_links: string[] };
+
+const extrasOf = (d: SubmissionDraft): SubmissionExtras | null => {
+  const https = (u: string | null | undefined) => (u && /^https:\/\/[^\s]+$/.test(u) ? u : null);
+  const x = { run_command: d.run_command?.trim() || null, devpost_url: https(d.devpost_url), social_links: (d.social_links ?? []).map(https).filter((u): u is string => !!u) };
+  return x.run_command || x.devpost_url || x.social_links.length ? x : null;
 };
 
 /**
@@ -340,6 +363,7 @@ export async function getShowcase(
       runs: await runsByIds(project.id, ids),
       finalizedAt: sub?.finalizedAt ?? null,
       viewer: v,
+      extras: sub?.finalizedAt ? extrasOf(sub.draft) : null,
     };
   }
   // Nothing published yet: only the team / organizers get a draft preview.
@@ -355,6 +379,7 @@ export async function getShowcase(
     runs: await runsByIds(project.id, sub.draft.kane_run_ids),
     finalizedAt: sub.finalizedAt,
     viewer: v,
+    extras: extrasOf(sub.draft),
   };
 }
 

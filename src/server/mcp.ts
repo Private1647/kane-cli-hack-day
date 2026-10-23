@@ -526,30 +526,32 @@ export function buildMcpServer(auth: BearerAuth) {
   tool(
     "submission_finalize",
     {
-      title: "Finalize submission",
+      title: "Finalize submission (hand-off)",
       description:
-        "Finalize the official submission (the same as the Submit tab): immutable snapshot + signed receipt, and the public /ship page unless publish_showcase is false. The person must type their team name as confirm_phrase, and confirm. The server clock decides the lock.",
-      input: { confirm_phrase: z.string().trim().min(1).max(120), publish_showcase: z.boolean().optional(), idempotency_key: z.string().min(8).max(200).optional(), explicit_confirmation: confirmField },
+        "Finalizing the official submission is irreversible, so it is never done by an agent. This returns the link where the team captain finalizes in the browser (typed team name + confirmation), plus what preflight still needs. If the team already finalized, it returns the receipt link.",
+      input: { confirm_phrase: z.string().trim().max(120).optional(), publish_showcase: z.boolean().optional(), idempotency_key: z.string().min(8).max(200).optional(), explicit_confirmation: confirmField },
     },
     async (args, ctx) => {
-      const publish = args.publish_showcase ?? true;
-      if (args.explicit_confirmation !== true) {
-        return confirmFirst(
-          "submission_finalize",
-          "Finalize submission",
-          `Finalize your team's submission${publish ? " and publish its showcase page" : ""}. After this it can't be edited.`,
-          "submission_receipt",
-          { confirm_phrase: args.confirm_phrase, publish_showcase: publish },
-        );
+      const r = await A.finalizeSubmission(ctx, { confirm_phrase: args.confirm_phrase ?? "", publish_showcase: args.publish_showcase ?? true, idempotency_key: args.idempotency_key });
+      if (r.already_finalized) {
+        return {
+          message: `Already finalized. Receipt ${r.receipt_code}.`,
+          data: r,
+          evidence: [{ kind: "submission_receipt", id: r.receipt_code ?? "", confidence: "unverified" }],
+          links: [{ label: `Receipt ${r.receipt_code}`, url: r.url }],
+          uiType: "submission_receipt",
+          fallbackText: `RECEIPT ${r.receipt_code} · ${siteUrl(r.url)}`,
+        };
       }
-      const r = await A.finalizeSubmission(ctx, { confirm_phrase: args.confirm_phrase, publish_showcase: publish, idempotency_key: args.idempotency_key });
+      const actions: EnvelopeAction[] = [{ id: "finalize_in_browser", label: "Captain: finalize in the browser", requires_human_confirmation: true, href: siteUrl(r.url) }];
       return {
-        message: `${r.replayed ? "Already finalized" : "Finalized"}. Receipt ${r.receipt_code} at ${r.server_time} (server time).`,
+        status: "needs_action",
+        message: `${r.preflight_ok ? "Ready." : `Still missing: ${r.missing.join(", ")}.`} The team captain finalizes in the browser at ${siteUrl(r.url)} (agents can't finalize).`,
         data: r,
-        evidence: [{ kind: "submission_receipt", id: r.receipt_code, confidence: r.signed ? "verified" : "unverified" }],
-        links: [{ label: `Receipt ${r.receipt_code}`, url: r.url }, ...(r.showcase_url ? [{ label: "Public showcase", url: r.showcase_url }] : [])],
+        actions,
+        links: [{ label: "Submit tab", url: r.url }],
         uiType: "submission_receipt",
-        fallbackText: `RECEIPT ${r.receipt_code} · ${r.server_time} · ${siteUrl(r.url)}`,
+        fallbackText: `Captain: finalize at ${siteUrl(r.url)}`,
       };
     },
   );
@@ -593,13 +595,23 @@ export function buildMcpServer(auth: BearerAuth) {
     {
       title: "Publish showcase",
       description:
-        "Publish a reviewed story version as the public ship page. The person types the project slug as confirm_phrase; everyone credited must have consented themselves. Needs explicit confirmation.",
-      input: { project_id: zx.id.optional(), story_version: z.number().int().positive(), confirm_phrase: z.string().trim().min(1).max(120), idempotency_key: z.string().min(8).max(200).optional(), explicit_confirmation: confirmField },
+        "Hand-off: publishing the public ship page is done by a teammate in the browser (typed slug + consent check). Returns the studio link plus any blockers. Agents can't publish.",
+      input: { project_id: zx.id.optional(), story_version: z.number().int().positive(), confirm_phrase: z.string().trim().max(120).optional(), idempotency_key: z.string().min(8).max(200).optional(), explicit_confirmation: confirmField },
     },
     async (args, ctx) => {
-      if (args.explicit_confirmation !== true) return confirmFirst("showcase_publish", "Publish ship page", `Publish story v${args.story_version} as your public ship page.`, "ship_preview");
+      // Publishing names people on a public page, so a teammate does it in the browser.
       const r = await A.showcasePublish(ctx, args);
-      return { message: `Published ${r.id}.`, data: r, links: [{ label: "Ship page", url: r.url }], uiType: "ship_preview", fallbackText: `Live: ${siteUrl(r.url)}` };
+      const blockers = [...r.publish_blockers, ...r.consent_missing];
+      const actions: EnvelopeAction[] = [{ id: "publish_in_browser", label: "Publish in the studio", requires_human_confirmation: true, href: siteUrl(r.url) }];
+      return {
+        status: "needs_action",
+        message: `${blockers.length ? `Fix first: ${blockers.join(" ")} ` : ""}A teammate publishes story v${r.story_version} in the browser at ${siteUrl(r.url)} (agents can't publish).`,
+        data: r,
+        actions,
+        links: [{ label: "Studio publish", url: r.url }],
+        uiType: "ship_preview",
+        fallbackText: `Publish at ${siteUrl(r.url)}`,
+      };
     },
   );
 

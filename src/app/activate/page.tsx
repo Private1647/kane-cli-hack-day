@@ -7,7 +7,7 @@ import StatusPill from "@/components/ui/StatusPill";
 import { formatEventTime, getEvent } from "@/lib/event";
 import { isEnabled } from "@/lib/flags";
 import { beginActivation, checkAdmission, getActivationState, type ActivationState } from "@/server/activation";
-import { getMember, type MemberRow } from "@/server/auth";
+import { getPersonalMember, type MemberRow } from "@/server/auth";
 import { githubEnabled } from "@/server/pairing";
 import { CONSENT_CATEGORIES, CONSENT_COPY, getConsents, getPassport } from "@/server/passport";
 import { AdmissionForm, CameraStep, CodeForm, ConsentForm, IdentityForm, StepFrame } from "./steps";
@@ -58,7 +58,7 @@ async function Flow({ searchParams }: Pick<PageProps<"/activate">, "searchParams
       </DegradedServiceAlert>
     );
   }
-  const member = await getMember();
+  const member = await getPersonalMember();
   if (!member) return <SignedOut code={code} />;
   // Opening /activate is "resume": it creates the session if there is none.
   await beginActivation(member);

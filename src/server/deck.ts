@@ -174,20 +174,34 @@ export async function publishDeck(access: ProjectAccess, input: unknown): Promis
 
 export type PublishedDeck = { story: PublicStory; deck: Deck; deckVersion: number; publishedVersion: number; publishedAt: string; projectId: number };
 
-/** The latest published deck for /ship/[slug]/deck, rendered with the published Ship Page story. */
+/**
+ * The deck for /ship/[slug]/deck, rendered with the published Ship Page story.
+ * A team that published a deck in the Studio gets that pinned version. A team
+ * that only finalized on /t/[slug]/submit (D2: the official path) gets the
+ * default kane-ship-5 deck generated from the same published story
+ * (deckVersion 0), so the showcase's deck link always resolves. A deck an
+ * organizer hid, or one the team switched off, stays down.
+ */
 export async function getPublishedDeck(slug: string): Promise<PublishedDeck | null> {
   const page = await getPublishedStory(slug);
-  if (!page || !page.story.hasDeck) return null;
+  if (!page) return null;
   const [pub] = await query<{ version: number; published_at: Date; source_deck_id: number | null; state: string }>(
     "select version, published_at, source_deck_id, state from published_assets where project_id = $1 and kind = 'deck' order by version desc limit 1",
     [page.projectId],
   );
-  if (!pub?.source_deck_id || pub.state === "hidden_by_moderation" || pub.state === "draft") return null;
+  if (!pub) {
+    const at = page.story.publishedAt ?? (await serverNow()).toISOString();
+    return { story: page.story, deck: defaultDeck(page.story), deckVersion: 0, publishedVersion: 0, publishedAt: at, projectId: page.projectId };
+  }
+  if (!pub.source_deck_id || pub.state === "hidden_by_moderation" || pub.state === "draft") return null;
   const [row] = await query<DeckRow>(`select ${DECK_COLS} from deck_versions where id = $1`, [pub.source_deck_id]);
   if (!row) return null;
   const dv = toDeckVersion(row);
   return { story: page.story, deck: dv.deck, deckVersion: dv.version, publishedVersion: pub.version, publishedAt: pub.published_at.toISOString(), projectId: page.projectId };
 }
+
+/** Presenter label for a deck: the pinned version, or the generated default. */
+export const deckLabel = (d: Pick<PublishedDeck, "deckVersion">) => (d.deckVersion ? `Published deck v${d.deckVersion}` : "Default deck from the published story");
 
 /** QR for the Ship Page URL as SVG markup (dark on light). */
 export async function shipQrSvg(slug: string) {

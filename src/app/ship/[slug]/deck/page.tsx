@@ -6,7 +6,7 @@ import DeckPresenter from "@/components/deck/DeckPresenter";
 import DeckSlide from "@/components/deck/DeckSlide";
 import { isEnabled } from "@/lib/flags";
 import { siteUrl } from "@/server/core";
-import { getPublishedDeck, shipQrSvg } from "@/server/deck";
+import { deckLabel, getPublishedDeck, shipQrSvg } from "@/server/deck";
 import { getPublishedStory } from "@/server/story";
 
 // /ship/[slug]/deck: the public HTML deck (T-DECK-02). Only a published,
@@ -64,7 +64,7 @@ async function Deck({ params, searchParams }: Pick<PageProps<"/ship/[slug]/deck"
       </header>
       <DeckPresenter
         printMode={printMode}
-        label={`Published deck v${pub.deckVersion} · ${new Date(pub.publishedAt).toLocaleDateString("en-US", { timeZone: "America/Los_Angeles", dateStyle: "medium" })}`}
+        label={`${deckLabel(pub)} · ${new Date(pub.publishedAt).toLocaleDateString("en-US", { timeZone: "America/Los_Angeles", dateStyle: "medium" })}`}
         titles={pub.deck.slides.map((s) => s.headline)}
         notes={pub.deck.slides.map((s) => s.notes)}
         slides={pub.deck.slides.map((s, i) => (

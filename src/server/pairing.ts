@@ -8,6 +8,7 @@ import {
   authenticateBearer,
   getMember,
   getMemberById,
+  getPersonalMember,
   memberActor,
   newToken,
   randomCode,
@@ -219,12 +220,17 @@ export async function memberLoginWithPassword(email: string, password: string) {
     [email.trim()],
   );
   dummyHash ??= hashPassword(randomBytes(12).toString("hex"));
-  const candidates = row ? [row.password_hash, row.team_hash].filter((h): h is string => !!h) : [await dummyHash];
+  // A personal password proves the person. The shared team password only
+  // proves team membership, so it gives a team-level session (hub access),
+  // never a personal one: anyone on the team knows it.
+  let personal = false;
   let ok = false;
-  for (const h of candidates) if (await verifyPassword(password, h)) ok = true;
+  if (row?.password_hash && (await verifyPassword(password, row.password_hash))) personal = ok = true;
+  else if (row?.team_hash && (await verifyPassword(password, row.team_hash))) ok = true;
+  else if (!row) await verifyPassword(password, await dummyHash);
   if (!row || !ok) throw new AppError("UNAUTHENTICATED", { userMessage: SIGN_IN_FAILED });
-  await setMemberSession({ memberId: row.id });
-  await writeAudit(memberActor(row), { action: "member.login_password", resourceType: "member", resourceId: row.id });
+  await setMemberSession({ memberId: row.id, personal });
+  await writeAudit(memberActor(row), { action: personal ? "member.login_password" : "member.login_team_password", resourceType: "member", resourceId: row.id });
   return row.id;
 }
 
@@ -245,7 +251,7 @@ export async function memberLoginWithCode(email: string, code: string) {
     return row.id;
   });
   if (!memberId) throw new AppError("UNAUTHENTICATED", { userMessage: SIGN_IN_FAILED });
-  await setMemberSession({ memberId });
+  await setMemberSession({ memberId, personal: true });
   return memberId;
 }
 
@@ -315,7 +321,7 @@ export async function completeGithubLink(code: string, state: string) {
   if (!mac || !checkSignature("gh", payload, mac) || cookieNonce !== nonce || Number(exp) < Date.now()) {
     throw new AppError("UNAUTHENTICATED", { userMessage: "That GitHub sign-in expired. Start again from your passport." });
   }
-  const member = await getMember();
+  const member = await getPersonalMember();
   if (!member || member.id !== Number(memberId)) throw new AppError("UNAUTHENTICATED");
 
   const tokenRes = await fetch("https://github.com/login/oauth/access_token", {

@@ -1,7 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { requireMember } from "@/server/auth";
+import { requirePersonalMember } from "@/server/auth";
 import { runAction, z } from "@/server/core";
 import { decidePairing, formatCode } from "@/server/pairing";
 
@@ -12,7 +12,7 @@ export async function decide(form: FormData) {
   const code = z.string().trim().min(8).max(20).safeParse(form.get("code"));
   if (!code.success) redirect("/pair?result=invalid");
   const approve = form.get("decision") === "approve";
-  const r = await runAction(async () => decidePairing(code.data, await requireMember(), approve));
+  const r = await runAction(async () => decidePairing(code.data, await requirePersonalMember(), approve));
   redirect(`/pair?code=${formatCode(code.data)}&result=${r.ok ? (approve ? "approved" : "denied") : "expired"}`);
 }
 

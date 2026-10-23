@@ -2,7 +2,7 @@
 
 import { refresh } from "next/cache";
 import { redirect } from "next/navigation";
-import { requireRole } from "@/server/auth";
+import { rememberMember, requireRole } from "@/server/auth";
 import { AppError, formObject, runAction, type ActionResult } from "@/server/core";
 import {
   actingMember,
@@ -19,7 +19,7 @@ import {
   updateTeamSettings,
   type CreatedInvite,
 } from "@/server/teams";
-import { setMemberSession, setTeamSession } from "@/lib/session";
+import { setTeamSession } from "@/lib/session";
 
 // Thin wrappers: every rule (who, when, how many) lives in src/server/teams.ts.
 // After creating or joining, the browser gets the team cookie (so the hub at
@@ -39,7 +39,7 @@ export async function createTeamAction(_prev: TeamFormState, form: FormData): Pr
   return runAction(async () => {
     const who = await actingMember();
     const team = await createTeam(who, formObject(form));
-    await setMemberSession({ memberId: who.member.id });
+    await rememberMember(who.member.id);
     await setTeamSession({ teamId: team.teamId, memberId: who.member.id });
     redirect(`/team/${team.slug}/manage?created=1`);
   });
@@ -49,7 +49,7 @@ export async function joinTeamAction(_prev: TeamFormState, form: FormData): Prom
   return runAction(async () => {
     const who = await actingMember();
     const joined = await joinTeam(who, formObject(form));
-    await setMemberSession({ memberId: who.member.id });
+    await rememberMember(who.member.id);
     await setTeamSession({ teamId: joined.teamId, memberId: who.member.id });
     redirect(`/t/${joined.slug}`);
   });
@@ -107,7 +107,7 @@ export async function leaveTeamAction(_prev: TeamFormState, form: FormData): Pro
     const who = await actingMember();
     await leaveTeam(who);
     // Stay signed in as a person; the team cookie no longer matches.
-    await setMemberSession({ memberId: who.member.id });
+    await rememberMember(who.member.id);
     redirect("/team");
   });
 }

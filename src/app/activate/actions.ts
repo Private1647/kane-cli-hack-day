@@ -11,7 +11,7 @@ import {
   saveIdentity,
   skipSelfie,
 } from "@/server/activation";
-import { requireMember } from "@/server/auth";
+import { requirePersonalMember } from "@/server/auth";
 import { formObject, parse, runAction, z, zx } from "@/server/core";
 import { CONSENT_CATEGORIES, profileSchema, type ConsentCategory } from "@/server/passport";
 
@@ -38,7 +38,7 @@ export async function redeemCode(_prev: StepState, form: FormData): Promise<Step
 
 export async function admission(_prev: StepState, form: FormData): Promise<StepState> {
   const isMe = form.get("answer") === "yes";
-  const r = await runAction(async () => confirmAdmission(await requireMember(), isMe));
+  const r = await runAction(async () => confirmAdmission(await requirePersonalMember(), isMe));
   refresh();
   return r.ok ? null : fail(r.error);
 }
@@ -50,7 +50,7 @@ const identitySchema = profileSchema.pick({ display_name: true, github_handle: t
 export async function identity(_prev: StepState, form: FormData): Promise<StepState> {
   const r = await runAction(async () => {
     const input = parse(identitySchema, formObject(form));
-    return saveIdentity(await requireMember(), input);
+    return saveIdentity(await requirePersonalMember(), input);
   });
   if (!r.ok) return fail(r.error);
   refresh();
@@ -60,27 +60,27 @@ export async function identity(_prev: StepState, form: FormData): Promise<StepSt
 export async function consents(_prev: StepState, form: FormData): Promise<StepState> {
   // Every category gets an explicit answer: a missing checkbox is a "no".
   const answers = Object.fromEntries(CONSENT_CATEGORIES.map((c) => [c, form.get(c) === "on"])) as Record<ConsentCategory, boolean>;
-  const r = await runAction(async () => saveActivationConsents(await requireMember(), answers));
+  const r = await runAction(async () => saveActivationConsents(await requirePersonalMember(), answers));
   if (!r.ok) return fail(r.error);
   refresh();
   return null;
 }
 
 export async function openCamera() {
-  const r = await runAction(async () => markCameraOpened(await requireMember(), "desktop"));
+  const r = await runAction(async () => markCameraOpened(await requirePersonalMember(), "desktop"));
   return r.ok ? null : fail(r.error);
 }
 
 export async function skipPhoto(_prev: StepState, form: FormData): Promise<StepState> {
   const reason = z.enum(["declined", "no_camera", "no_consent", "later"]).catch("declined").parse(form.get("reason"));
-  const r = await runAction(async () => skipSelfie(await requireMember(), reason));
+  const r = await runAction(async () => skipSelfie(await requirePersonalMember(), reason));
   if (!r.ok) return fail(r.error);
   refresh();
   return null;
 }
 
 export async function phoneHandoff(): Promise<{ url?: string; minutes?: number; error?: string }> {
-  const r = await runAction(async () => issuePhoneHandoff(await requireMember()));
+  const r = await runAction(async () => issuePhoneHandoff(await requirePersonalMember()));
   return r.ok ? { url: r.data.url, minutes: r.data.expires_minutes } : fail(r.error);
 }
 
