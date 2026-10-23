@@ -1,4 +1,8 @@
 @import "tailwindcss";
+/* Tailwind scans every non-gitignored file for class names. kane-cli writes and
+   seals evidence packs under .testmuai/ while the dev server runs (a folder that
+   turns into a zip of the same name), which crashed Turbopack mid-scan. */
+@source not "../../.testmuai";
 
 /* Tokens follow gradium.ai/phonon: black ink, off-white text, grey body copy,
    hairline rules and a single lime accent. */
