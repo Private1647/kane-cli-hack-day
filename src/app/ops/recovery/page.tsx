@@ -24,6 +24,10 @@ const JUMPS = [
   ["kit", "Print kit"],
 ] as const;
 
+/** "2026-10-23T00:15" in the event zone: the form the paper time was written in. */
+const wallTime = (d: Date | string, tz: string) =>
+  new Intl.DateTimeFormat("sv-SE", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date(d)).replace(" ", "T");
+
 const RECON_TONE: Record<ReconRow["state"], { tone: "pending" | "unverified" | "danger"; label: string }> = {
   needs_review: { tone: "pending", label: "Needs review" },
   recorded: { tone: "unverified", label: "Manual · unverified" },
@@ -106,6 +110,14 @@ export default function RecoveryPage() {
                   </Link>{" "}
                   to anyone not on it, marked NEEDS_RECONCILIATION. When the network is back, admit them at the desk as walk-ins with the slip number in the note.
                 </p>
+                <p className="mt-3 max-w-2xl font-plex text-sm text-lightgray">
+                  Approved guests checked in on paper go back in through the <span className="text-bright">check-in ledger</span> under{" "}
+                  <a href="#ledgers" className="text-bright underline underline-offset-4 hover:text-lime">
+                    CSV ledgers
+                  </a>
+                  : one row per signed slip with the attendee&apos;s Luma guest id or P-code, the time on the slip and why it was entered late. The slip time is kept as the
+                  check-in time beside the entry time, and the same slip id never checks anyone in twice.
+                </p>
               </section>
 
               <section>
@@ -148,7 +160,7 @@ export default function RecoveryPage() {
                           ))}
                         </ul>
                         <p className="mt-3 font-plex text-xs text-lightgray">
-                          Roster CSVs go through{" "}
+                          The check-in ledger checks in admitted roster guests only; it never admits anyone. Roster CSVs go through{" "}
                           <Link href="/ops/roster/import" className="underline underline-offset-4 hover:text-lime">
                             Roster → Import
                           </Link>{" "}
@@ -188,8 +200,26 @@ export default function RecoveryPage() {
                               <td className="px-3 py-3">
                                 <span className="text-bright">{r.title}</span>
                                 <span className="block text-xs text-lightgray">{r.detail}</span>
+                                {r.links && (
+                                  <span className="mt-1 flex flex-wrap gap-x-3 text-xs">
+                                    {r.links.map((l) => (
+                                      <Link key={l.href} href={l.href} className="inline-flex min-h-11 items-center text-bright underline underline-offset-4 hover:text-lime">
+                                        {l.label} →
+                                      </Link>
+                                    ))}
+                                  </span>
+                                )}
                               </td>
-                              <td className="px-3 py-3 text-lightgray">{fmtTime(r.at)}</td>
+                              <td className="px-3 py-3 text-lightgray">
+                                {r.at ? (
+                                  <time dateTime={new Date(r.at).toISOString()}>
+                                    {fmtTime(r.at)}
+                                    <span className="block text-xs">{wallTime(r.at, ev.timezone)}</span>
+                                  </time>
+                                ) : (
+                                  "—"
+                                )}
+                              </td>
                               <td className="px-3 py-3 text-lightgray">{fmtTime(r.entered_at)}</td>
                               <td className="px-3 py-3">
                                 <StatusPill tone={RECON_TONE[r.state].tone}>{RECON_TONE[r.state].label}</StatusPill>

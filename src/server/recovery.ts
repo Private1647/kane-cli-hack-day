@@ -4,13 +4,13 @@ import type { PoolClient } from "pg";
 import { query } from "@/lib/db";
 import { getEvent } from "@/lib/event";
 import { randomCode, staffActor, type Staff } from "./auth";
-import { AppError, idempotent, sha256, stableStringify, withAudit, type Receipt } from "./core";
+import { AppError, idempotent, sha256, stableStringify, withAudit, writeAudit, type Receipt } from "./core";
 import { csvObjects } from "./csv";
 
 // /ops/recovery (T-OPS-05, T-FB-02): incidents, and the manual intake paths
 // that keep Tier-0 alive when the online flow can't be used: paper help
 // tickets, manual submission receipts, and batch CSV upload of paper ledgers
-// as source 'manual_offline' with their original timestamps.
+// (signed check-in slips, submissions, help) with their original timestamps.
 //
 // Never backdate: the paper time goes in its own column (paper_original_at /
 // received_at) and the server time of entry is always recorded too.
@@ -285,6 +285,11 @@ export async function recordManualReceipt(input: ManualReceiptInput, staff: Staf
 // ── Batch CSV upload of paper ledgers (manual_offline) ───────────────────────
 
 export const LEDGERS = {
+  checkin_ledger: {
+    label: "Check-in ledger (signed paper slips)",
+    file: "checkin-ledger-template.csv",
+    headers: ["receipt_id", "attendee_id", "checked_in_at", "timezone", "delay_reason", "staff_id", "staff_signature", "witness_id"],
+  },
   submission_ledger: {
     label: "Submission ledger",
     file: "submission-ledger-template.csv",
@@ -326,6 +331,131 @@ async function paperTime(tx: Db, raw: string, tz: string | null): Promise<Date |
   }
 }
 
+// ── Check-in ledger rows ─────────────────────────────────────────────────────
+
+export type CheckinLedgerRow = {
+  receiptId: string;
+  /** As written on the slip: a Luma guest id, a P-#### code or a roster row id (R-12). */
+  attendeeRef: string;
+  /** The wall time on the slip, unparsed; paperTime() turns it into an instant. */
+  rawTime: string;
+  timezone: string | null;
+  reason: string;
+  staffId: string;
+  signature: string;
+  witness: string | null;
+};
+
+/**
+ * Validate one checkin-ledger-template.csv row. No database: the time is
+ * resolved and the attendee matched in applyCheckinLedgerRow.
+ */
+export function parseCheckinLedgerRow(v: Record<string, string | undefined>): CheckinLedgerRow {
+  const t = (k: string) => (v[k] ?? "").trim();
+  const bad = (userMessage: string) => new AppError("VALIDATION_FAILED", { userMessage });
+  const receiptId = t("receipt_id").toUpperCase();
+  if (!/^[A-Z0-9][A-Z0-9-]{2,23}$/.test(receiptId)) throw bad("receipt_id is missing or not a slip id (e.g. CHK-OFF042, P-OFF-0042)");
+  const attendeeRef = t("attendee_id");
+  if (!attendeeRef || attendeeRef.length > 80) throw bad("attendee_id is missing (Luma guest id, P-code or roster id)");
+  const rawTime = t("checked_in_at");
+  if (!rawTime) throw bad("checked_in_at is missing: enter the time written on the slip");
+  const reason = t("delay_reason");
+  if (reason.length < 3) throw bad("delay_reason is required: say why this check-in is entered late");
+  const staffId = t("staff_id");
+  const signature = t("staff_signature");
+  if (!staffId || !signature) throw bad("A paper check-in needs the staff_id and staff_signature from the slip");
+  const witness = t("witness_id") || null;
+  if (witness && witness.toLowerCase() === staffId.toLowerCase()) throw bad("witness_id must be a different person from staff_id");
+  return {
+    receiptId,
+    attendeeRef,
+    rawTime,
+    timezone: t("timezone") || null,
+    reason: reason.slice(0, 300),
+    staffId: staffId.slice(0, 80),
+    signature: signature.slice(0, 80),
+    witness: witness?.slice(0, 80) ?? null,
+  };
+}
+
+/**
+ * Enter one signed paper check-in. The slip's time becomes the attendance
+ * time (it is when they arrived) but is never silently backdated: the row
+ * keeps the slip id, the entry time and the delayed-entry reason beside it,
+ * and both facts are audited. A slip id seen before changes nothing (replay);
+ * an attendee already checked in keeps that earlier record. Admission is never
+ * created here: a guest who isn't admitted on the roster is refused.
+ */
+async function applyCheckinLedgerRow(tx: Db, r: CheckinLedgerRow, staff: Staff, batchHash: string) {
+  const { rows: seen } = await tx.query<{ attendee_ref: string; outcome: string }>(
+    "select attendee_ref, outcome from checkin_reconciliations where event_id = current_event_id() and receipt_id = $1",
+    [r.receiptId],
+  );
+  if (seen[0]) {
+    if (seen[0].attendee_ref.toLowerCase() !== r.attendeeRef.toLowerCase()) {
+      throw new AppError("CONFLICT", { userMessage: `${r.receiptId} was already entered for ${seen[0].attendee_ref}. Check the slip.` });
+    }
+    return { replayed: true, message: `Already reconciled (${seen[0].outcome.replace(/_/g, " ")}); nothing changed` };
+  }
+  const paperAt = await paperTime(tx, r.rawTime, r.timezone);
+  if (!paperAt) throw new AppError("VALIDATION_FAILED", { userMessage: "checked_in_at is not a date" });
+  const { rows: n } = await tx.query<{ now: Date }>("select now()");
+  const now = n[0].now;
+  if (paperAt.getTime() > now.getTime() + 60_000) throw new AppError("VALIDATION_FAILED", { userMessage: "checked_in_at is in the future. Enter the time written on the slip." });
+
+  const { rows: gs } = await tx.query<{ id: number; name: string; admission_status: string; checked_in_at: Date | null; checkin_source: string | null; member_id: number | null }>(
+    `select g.id, g.name, g.admission_status, g.checked_in_at, g.checkin_source, m.id as member_id
+       from roster_guests g
+       left join members m on m.id = coalesce(g.member_id, (select x.id from members x where x.guest_id = g.id limit 1)) and m.deleted_at is null
+      where g.event_id = current_event_id()
+        and (g.luma_guest_id = $1 or upper(m.public_code) = upper($1) or 'R-' || g.id::text = upper($1))
+      limit 1 for update of g`,
+    [r.attendeeRef],
+  );
+  const g = gs[0];
+  if (!g) throw new AppError("NOT_FOUND", { userMessage: `No roster row for ${r.attendeeRef}. A walk-in is admitted at the desk, with the slip id in the note.` });
+  if (g.admission_status !== "admitted") {
+    throw new AppError("NOT_APPROVED", { userMessage: `${g.name} is ${g.admission_status.replace(/_/g, " ")} on the roster, so the slip can't check them in. An organizer decides first.` });
+  }
+
+  const already = !!g.checked_in_at;
+  if (!already) {
+    await tx.query(
+      `update roster_guests set checked_in_at = $2, checked_in_by = $3, checkin_source = 'offline_ledger', checkin_ref = $4, checkin_entered_at = now(), updated_at = now()
+        where id = $1`,
+      [g.id, paperAt, staff.id, r.receiptId],
+    );
+    if (g.member_id) {
+      await tx.query("update members set checked_in_at = coalesce(checked_in_at, $2), admission_state = 'admitted', guest_id = coalesce(guest_id, $3) where id = $1", [g.member_id, paperAt, g.id]);
+    }
+  }
+  const outcome = already ? "already_checked_in" : "checked_in";
+  const note = already ? `Already checked in ${new Date(g.checked_in_at!).toISOString()} (${g.checkin_source ?? "desk"}); that record is kept.` : null;
+  await tx.query(
+    `insert into checkin_reconciliations (receipt_id, attendee_ref, guest_id, member_id, paper_at, delay_reason, staff_id, staff_signature, witness_id, outcome, note, batch_sha256, entered_by)
+     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+    [r.receiptId, r.attendeeRef, g.id, g.member_id, paperAt, r.reason, r.staffId, r.signature, r.witness, outcome, note, batchHash, staff.id],
+  );
+  const actor = staffActor(staff);
+  const facts = {
+    receipt_id: r.receiptId,
+    attendee_id: r.attendeeRef,
+    guest_id: g.id,
+    paper_at: paperAt.toISOString(),
+    entered_at: new Date(now).toISOString(),
+    staff_id: r.staffId,
+    staff_signature: r.signature,
+    witness_id: r.witness,
+    batch_sha256: batchHash,
+  };
+  // The reconciliation (found in /ops/audit by the slip id), then the attendance fact on the roster row.
+  await writeAudit(actor, { action: "checkin.offline_ledger", resourceType: "checkin_reconciliation", resourceId: r.receiptId, reason: r.reason, after: { outcome }, payload: { ...facts, outcome } }, tx);
+  if (!already) {
+    await writeAudit(actor, { action: "checkin.guest", resourceType: "roster_guest", resourceId: g.id, reason: r.reason, after: { checked_in_at: paperAt }, payload: { via: "offline_ledger", ...facts } }, tx);
+  }
+  return { replayed: false, message: already ? `${g.name} was already checked in: slip recorded, earlier check-in kept` : `${g.name} checked in at the paper time` };
+}
+
 export type BatchLine = { line: number; ok: boolean; id?: string; message: string };
 export type BatchResult = Receipt & { kind: LedgerKind; sha256: string; total: number; imported: number; failed: number; lines: BatchLine[] };
 
@@ -347,13 +477,17 @@ export async function importLedger(kind: LedgerKind, csv: string, staff: Staff):
   if (rows.length > 1000) throw new AppError("VALIDATION_FAILED", { userMessage: "Split ledgers over 1000 rows into several files." });
   if (kind === "roster_import") throw new AppError("VALIDATION_FAILED", { userMessage: "Roster CSVs go through Roster → Import, which previews the diff first." });
 
-  const { result } = await idempotent(digest, `recovery.ledger:${kind}`, () =>
+  const run = () =>
     withAudit(staffActor(staff), `recovery.ledger_import.${kind}`, "ledger_batch", async (tx) => {
       const lines: BatchLine[] = [];
       for (const { line, values: v } of rows) {
         await tx.query("savepoint row_sp");
         try {
-          if (kind === "submission_ledger") {
+          if (kind === "checkin_ledger") {
+            const r = parseCheckinLedgerRow(v);
+            const out = await applyCheckinLedgerRow(tx, r, staff, digest);
+            lines.push({ line, ok: true, id: r.receiptId, message: out.message });
+          } else if (kind === "submission_ledger") {
             const receivedAt = await paperTime(tx, v.received_at, v.timezone || null);
             if (!receivedAt) throw new AppError("VALIDATION_FAILED", { userMessage: "received_at is missing or not a date" });
             const sha = v.commit_sha?.trim().toLowerCase() || null;
@@ -418,14 +552,28 @@ export async function importLedger(kind: LedgerKind, csv: string, staff: Staff):
         after: { kind, total: rows.length, imported },
         payload: { sha256: digest, failed_lines: lines.filter((l) => !l.ok).map((l) => l.line) },
       };
-    }),
-  );
+    });
+  // A check-in ledger is idempotent per slip (receipt_id), so a re-upload after
+  // fixing the roster applies what failed before; other ledgers replay the
+  // first result for the same file.
+  if (kind === "checkin_ledger") return run();
+  const { result } = await idempotent(digest, `recovery.ledger:${kind}`, run);
   return result;
 }
 
 // ── Reconciliation view ──────────────────────────────────────────────────────
 
-export type ReconRow = { kind: "submission" | "help" | "roster" | "member" | "batch"; ref: string; title: string; detail: string; at: Date | null; entered_at: Date | null; state: "needs_review" | "recorded" | "conflict" };
+export type ReconRow = {
+  kind: "checkin" | "submission" | "help" | "roster" | "member" | "batch";
+  ref: string;
+  title: string;
+  detail: string;
+  at: Date | null;
+  entered_at: Date | null;
+  state: "needs_review" | "recorded" | "conflict";
+  /** Where to confirm it against the online record (roster, desk, audit). */
+  links?: { label: string; href: string }[];
+};
 
 /** Everything that came in by hand and still needs a human to confirm it against the online record. */
 export async function reconciliationView(): Promise<{ rows: ReconRow[]; partial: string[] }> {
@@ -435,7 +583,32 @@ export async function reconciliationView(): Promise<{ rows: ReconRow[]; partial:
       partial.push(name);
       return [] as T[];
     });
-  const [subs, help, roster, members, batches] = await Promise.all([
+  const [checkins, subs, help, roster, members, batches] = await Promise.all([
+    safe(
+      "check-ins",
+      query<{
+        receipt_id: string;
+        attendee_ref: string;
+        outcome: string;
+        note: string | null;
+        paper_at: Date;
+        entered_at: Date;
+        delay_reason: string;
+        staff_id: string;
+        staff_signature: string;
+        witness_id: string | null;
+        guest_name: string | null;
+        luma_guest_id: string | null;
+        public_code: string | null;
+      }>(
+        `select c.receipt_id, c.attendee_ref, c.outcome, c.note, c.paper_at, c.entered_at, c.delay_reason, c.staff_id, c.staff_signature, c.witness_id,
+                g.name as guest_name, g.luma_guest_id, m.public_code
+           from checkin_reconciliations c
+           left join roster_guests g on g.id = c.guest_id
+           left join members m on m.id = coalesce(c.member_id, g.member_id)
+          where c.event_id = current_event_id() order by c.entered_at desc limit 200`,
+      ),
+    ),
     safe(
       "submissions",
       query<{ receipt_code: string; team_name: string; status: string; received_at: Date | null; finalized_at: Date | null; witness: string | null; incident_ref: string | null }>(
@@ -470,6 +643,28 @@ export async function reconciliationView(): Promise<{ rows: ReconRow[]; partial:
     ),
   ]);
   const rows: ReconRow[] = [
+    ...checkins.map((c) => {
+      const who = c.luma_guest_id ?? c.public_code ?? c.attendee_ref;
+      return {
+        kind: "checkin" as const,
+        ref: c.receipt_id,
+        title: `${c.guest_name ?? c.attendee_ref} · paper check-in`,
+        detail: [
+          `Attendee ${c.attendee_ref}${c.public_code && c.public_code !== c.attendee_ref ? ` (${c.public_code})` : ""}`,
+          c.outcome === "checked_in" ? "checked in at the paper time" : (c.note ?? "already checked in"),
+          `Delayed entry: ${c.delay_reason}`,
+          `Signed ${c.staff_signature} (${c.staff_id})${c.witness_id ? ` · witness ${c.witness_id}` : ""}`,
+        ].join(" · "),
+        at: c.paper_at,
+        entered_at: c.entered_at,
+        state: c.outcome === "checked_in" ? ("recorded" as const) : ("needs_review" as const),
+        links: [
+          { label: "Roster", href: `/ops/roster?q=${encodeURIComponent(who)}` },
+          { label: "Check-in desk", href: `/ops/checkin?q=${encodeURIComponent(who)}` },
+          { label: "Audit", href: `/ops/audit?resource_id=${encodeURIComponent(c.receipt_id)}` },
+        ],
+      };
+    }),
     ...subs.map((s) => ({
       kind: "submission" as const,
       ref: s.receipt_code,
