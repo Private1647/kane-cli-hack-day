@@ -56,6 +56,7 @@ const emailHash = (e: string) => sha(e.trim().toLowerCase());
     await c.query(`delete from projects where id in ${demoProjects}`);
     await c.query("delete from teams where slug like 'demo-%'");
     await c.query("delete from members where email like '%@demo.test'");
+    await c.query("delete from codex_credit_codes where code like 'DEMO-CDX-%'");
     await c.query("commit");
   } catch (e) {
     await c.query("rollback");
@@ -112,8 +113,24 @@ await team("Demo Atlas", "atlas-team-pass", "AI Agent and Voice", "A voice agent
 ]);
 await team("Demo Nova", "nova-team-pass", "Wildcard", "A standalone validation harness for browser extensions.", [{ name: "Finn Lake", email: "finn@demo.test" }], true);
 
-// A participant with no team yet (for Matchmaker / create / join flows).
-await query("insert into members (team_id, name, email, email_hash, display_name) values (null, 'Gia Park', 'gia@demo.test', $1, 'Gia P.')", [emailHash("gia@demo.test")]);
+// People with no team yet, in the matchmaking pool (event-day flow: profile and
+// photo step done, "looking for a team?" = yes).
+for (const [name, mail, short, skills, interests] of [
+  ["Gia Park", "gia@demo.test", "Gia P.", ["python", "ci"], ["agents"]],
+  ["Pax Reed", "pax@demo.test", "Pax R.", ["react", "design"], ["voice"]],
+  ["Uma Sol", "uma@demo.test", "Uma S.", ["playwright", "qa"], ["dev tools"]],
+] as const) {
+  await query(
+    `insert into members (team_id, name, email, email_hash, display_name, skills, interests, looking_for_team, photo_step_at)
+     values (null, $1, $2, $3, $4, $5, $6, true, now())`,
+    [name, mail, emailHash(mail), short, skills, interests],
+  );
+  await query(
+    `insert into teammate_profiles (member_id, discoverable, skills, interests) select id, true, $2, $3 from members where email = $1
+     on conflict (member_id) do update set discoverable = true, skills = excluded.skills, interests = excluded.interests`,
+    [mail, skills, interests],
+  );
+}
 
 // Every demo person can sign in personally with the same password.
 const pw = await hashPassword(PERSONAL_PASSWORD);
@@ -130,7 +147,14 @@ for (const e of ["ana@demo.test", "ben@demo.test", "cara@demo.test"]) {
     await query("insert into member_consents (member_id, category, granted, source) values ($1, $2, true, 'web')", [mid(e), c]);
   }
 }
-await query("insert into member_consents (member_id, category, granted, source) values ($1, 'teammate_discovery', true, 'web')", [mid("gia@demo.test")]);
+for (const e of ["gia@demo.test", "pax@demo.test", "uma@demo.test"]) {
+  await query("insert into member_consents (member_id, category, granted, source) values ($1, 'teammate_discovery', true, 'web')", [mid(e)]);
+}
+
+// OpenAI Codex credit codes for the /activate checklist (fake, local only).
+for (let i = 1; i <= 10; i++) {
+  await query("insert into codex_credit_codes (code, batch, extra) values ($1, 'demo', $2) on conflict (code) do nothing", [`DEMO-CDX-${String(i).padStart(4, "0")}`, JSON.stringify({ amount: "250" })]);
+}
 
 // ── Roster (as if the Luma CSV was imported) ────────────────────────────────
 const roster: [string, string, string, string][] = [
@@ -143,6 +167,8 @@ const roster: [string, string, string, string][] = [
   ["Gia Park", "gia@demo.test", "gst-gia", "approved"],
   ["Hal Declined", "hal@demo.test", "gst-hal", "declined"],
   ["Ivy Waitlist", "ivy@demo.test", "gst-ivy", "waitlist"],
+  // On the roster and checked in at the desk, but no profile yet: walk /register with this email.
+  ["Jo New", "jo@demo.test", "gst-jo", "approved"],
 ];
 for (const [name, email, gid, approval] of roster) {
   const admitted = approval === "approved" ? "admitted" : "not_admitted";
@@ -153,7 +179,7 @@ for (const [name, email, gid, approval] of roster) {
   );
 }
 // Ana and Ben are already at the venue.
-await query("update roster_guests set checked_in_at = now() where luma_guest_id in ('gst-ana','gst-ben') and staff_reference = 'demo-seed'");
+await query("update roster_guests set checked_in_at = now() where luma_guest_id in ('gst-ana','gst-ben','gst-jo') and staff_reference = 'demo-seed'");
 await query("update members set checked_in_at = now() where email in ('ana@demo.test','ben@demo.test')");
 
 // ── Staff, each with a single-use login code ────────────────────────────────
@@ -222,7 +248,10 @@ const { fixtureSummary } = await import("./seed-fixtures.mts");
 const pcodes = await query<{ email: string; public_code: string | null }>("select email, public_code from members where email like '%@demo.test' order by id");
 console.log(JSON.stringify({
   personal_password: PERSONAL_PASSWORD,
-  teams: { "demo-orbit": "orbit-team-pass", "demo-atlas": "atlas-team-pass", "demo-nova": "nova-team-pass" },
+  // Event-day flow: there is no team password; everyone signs in with the personal password above.
+  teams: ["demo-orbit", "demo-atlas", "demo-nova"],
+  matchmaking_pool: ["gia@demo.test", "pax@demo.test", "uma@demo.test"],
+  register_with_roster_email: "jo@demo.test",
   staff_codes: staffCodes,
   admin_password: "(ADMIN_PASSWORD from .env.local)",
   orbit_receipt: fin.data.receipt_code,
