@@ -258,18 +258,19 @@ export const submissions = {
   },
   idea: {
     deadline: "12:00",
-    devpost: { label: "Create your Devpost project", href: "[link]" },
+    // D2: the team hub is the official record (key name kept for callers).
+    devpost: { label: "Save your idea in the team hub", href: "/login?next=idea" },
     needs: ["Title", "Track", "Two sentences on what it does", "What Kane will verify"],
     note: "You can edit everything later. Mentors use this to find you, so be specific.",
   },
   final: {
     deadline: "18:00",
-    devpost: { label: "Submit on Devpost", href: "[link]" },
+    devpost: { label: "Finalize on your Submit tab", href: "/login?next=submit" },
     minimum: ["Repo", "Live URL or run command", "Kane CLI run report"],
     pickTwo: ["Video", "Blog", "X post", "HN post"],
     minimumNote: "Minimum for the shipped prize: the three essentials, plus any two content pieces, all live by 6:00.",
     fullBundle: "Full bundle: all four content pieces.",
-    closing: "Devpost closes at 6:00. No exceptions.",
+    closing: "Submissions lock at 6:00 by the server clock. No exceptions.",
   },
 };
 
@@ -293,7 +294,7 @@ export const evaluations = {
 };
 
 export const judging = {
-  shortlist: "Top 7 from the 4:00 scores, confirmed against Devpost at 6:00.",
+  shortlist: "Top 7 from the 4:00 scores, confirmed against the finalized submissions at 6:00.",
   stage: { demo: "3-minute demo", qa: "2 minutes of questions" },
   // EVALUATION.md (D3). `key` is what judge_scores.category_scores stores;
   // `label` is short enough for the Themis scale; `name` is the full category.
@@ -383,7 +384,7 @@ export const contentHour = {
     { minutes: 15, title: "Generate the blog from your run report", href: "/resources#content-skills" },
     { minutes: 5, title: "Thread from the blog", href: "/resources#content-skills" },
     { minutes: 5, title: "Post to Hacker News", href: "/resources#content-skills" },
-    { minutes: 15, title: "Complete Devpost", href: "/submit#final" },
+    { minutes: 15, title: "Finalize your submission", href: "/submit#final" },
   ],
 };
 
@@ -442,7 +443,7 @@ export const resources: ResourceGroup[] = [
     title: "Content skills",
     blurb: "A prompt pack to drop into your agent.",
     items: [
-      { label: "Video", body: "Script and shot list from your Devpost description." },
+      { label: "Video", body: "Script and shot list from your submission description." },
       { label: "Blog", body: "First draft from your run report and commit log." },
       { label: "X thread", body: "Launch tweet plus a 3-tweet thread from the blog." },
       {
@@ -450,7 +451,7 @@ export const resources: ResourceGroup[] = [
         body: "Show HN title formula and guidance. Post from your own account, in your own words; HN flags generated text.",
       },
       { label: "Marketing assets", body: "Logo and hero image prompt, screenshot-to-social-card prompt, one-line pitch prompt." },
-      { label: "Demo deck", body: "10-slide template plus the prompt that fills it from Devpost." },
+      { label: "Demo deck", body: "10-slide template plus the prompt that fills it from your submission." },
       { label: "Download the pack", href: "[link]" },
     ],
   },

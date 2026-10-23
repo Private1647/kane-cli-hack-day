@@ -30,7 +30,7 @@ export default function ContentHourBody() {
         <div className="mt-2 flex justify-between font-plex text-xs text-lightgray">
           <span>{clock(START)}</span>
           <span>
-            {total} min · Devpost locks {clock(START + 60)}
+            {total} min · submissions lock {clock(START + 60)}
           </span>
         </div>
 

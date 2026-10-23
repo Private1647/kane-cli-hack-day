@@ -23,7 +23,7 @@ export default function SubmitBody({ dashboard }: { dashboard: string }) {
         </p>
       </StepBlock>
 
-      <StepBlock id="idea" kicker="Step 2 · Idea submission" time={to12h(idea.deadline)} tag="Locks" title="Create your Devpost project">
+      <StepBlock id="idea" kicker="Step 2 · Idea submission" time={to12h(idea.deadline)} tag="Locks" title="Save your idea in the hub">
         <Checklist label="Add" items={idea.needs} />
         <p>{idea.note}</p>
         <Button href={idea.devpost.href}>{idea.devpost.label} →</Button>

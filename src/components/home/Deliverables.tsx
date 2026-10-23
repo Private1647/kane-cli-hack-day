@@ -37,7 +37,7 @@ export default function Deliverables() {
       <SectionHeading
         eyebrow="Submissions"
         dim="Three deadlines,"
-        bright="One Devpost."
+        bright="One submission."
         intro="Everything you hand in today, in order. Each one has a hard lock."
       />
 
