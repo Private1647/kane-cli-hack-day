@@ -1,0 +1,2 @@
+source_event_id,source_system,event_type,event_time,ingested_time,team_id,verification_state,evidence_hash,manual_witness,canonical_event_id,reconciliation_status
+,,,,,,,,,,
