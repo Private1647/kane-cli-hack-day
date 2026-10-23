@@ -1,7 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { adminPasswordLogin, staffLoginWithCode } from "@/server/auth";
+import { adminPasswordLogin, getStaff, staffLoginWithCode } from "@/server/auth";
 import { formObject, parse, toAppError, z } from "@/server/core";
 import { clientKey, enforceRateLimit } from "@/server/ratelimit";
 
@@ -26,6 +26,10 @@ export async function staffLogin(_prev: StaffLoginState, form: FormData): Promis
     else if (input.email && input.code) await staffLoginWithCode(input.email, input.code);
     else return { error: "Enter your staff email and code.", email: input.email };
   } catch (e) {
+    // A double-submitted form: the first request signed this person in and spent the
+    // code, so the second sees it as used. They are in; carry on instead of showing an error.
+    const staff = await getStaff();
+    if (staff?.email && input.email && staff.email.toLowerCase() === input.email.toLowerCase()) redirect(safeNext(input.next));
     return { error: toAppError(e).userMessage, email: input.email };
   }
   redirect(safeNext(input.next));
