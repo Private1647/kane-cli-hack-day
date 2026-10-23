@@ -1,46 +1,34 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import { redirect } from "next/navigation";
 import { Suspense, type ReactNode } from "react";
-import DegradedServiceAlert from "@/components/ui/DegradedServiceAlert";
+import FlowProgress from "@/components/FlowProgress";
+import Button from "@/components/ui/Button";
+import CopyField from "@/components/ui/CopyField";
 import PageHeader from "@/components/ui/PageHeader";
 import StatusPill from "@/components/ui/StatusPill";
-import { formatEventTime, getEvent } from "@/lib/event";
-import { isEnabled } from "@/lib/flags";
-import { beginActivation, checkAdmission, getActivationState, type ActivationState } from "@/server/activation";
-import { getPersonalMember, type MemberRow } from "@/server/auth";
-import { githubEnabled } from "@/server/pairing";
-import { CONSENT_CATEGORIES, CONSENT_COPY, getConsents, getPassport } from "@/server/passport";
-import { AdmissionForm, CameraStep, CodeForm, ConsentForm, IdentityForm, StepFrame } from "./steps";
+import { ACTIVATION_STEPS, CODEX_REDEEM_INSTRUCTIONS, CODEX_REDEEM_URL, PLAN_MESSAGES, TESTMU_SIGNUP_URL, isPlaceholder, type ActivationStepId } from "@/data/activation-steps";
+import { getPersonalMember } from "@/server/auth";
+import { getActivationView, type ActivationView } from "@/server/event-activation";
+import { flowState } from "@/server/flow";
+import { ClaimPlanButton, GetCodeButton, TickButton } from "./parts";
 
-export const metadata: Metadata = { title: "Activate your passport", robots: { index: false } };
+export const metadata: Metadata = { title: "Activate", robots: { index: false } };
 
-// /activate: one step at a time, always from the server's stored state, so a
-// refresh, a crashed browser or a Kane run that stopped half way resumes at
-// the right place. The wrapper carries data-checkpoint / data-activation-status
-// for the Kane two-run controller (docs/hack-os/ACTIVATION_CONTRACT.md).
-
-const STEPS = [
-  { id: "code", label: "Sign in" },
-  { id: "admission", label: "Registration" },
-  { id: "identity", label: "Identity" },
-  { id: "consent", label: "Privacy" },
-  { id: "camera", label: "Selfie" },
-  { id: "receipt", label: "Receipt" },
-] as const;
+// Step 3 of the event-day flow, once you're on a team: three things to switch
+// on, each with a Done tick that stays done. All three → "Next: set up Codex".
+// A desk activation code (/activate?code=…) still works: it goes to sign-in.
 
 export default function ActivatePage({ searchParams }: PageProps<"/activate">) {
   return (
     <main>
-      <PageHeader
-        eyebrow="Activate"
-        dim="Hacker Passport,"
-        bright="Activation."
-        intro="Confirm your registration, choose what you share, and take an optional selfie. Your coding agent and Kane can do the typing; only you can press the shutter."
-      />
+      <Suspense fallback={<FlowProgress stage={null} viewing="activate" />}>
+        <Progress />
+      </Suspense>
+      <PageHeader eyebrow="Activate" dim="Three switches," bright="Then you build." intro="Your TestMu AI account, your TestMu AI plan, and your OpenAI Codex credits. Tick each one when it's done." />
       <section className="py-12 sm:py-16">
-        <div className="container-page">
-          <Suspense fallback={<p className="font-plex text-sm text-lightgray">Loading your activation…</p>}>
-            <Flow searchParams={searchParams} />
+        <div className="container-page max-w-3xl">
+          <Suspense fallback={<p className="font-plex text-sm text-lightgray">Loading…</p>}>
+            <Checklist searchParams={searchParams} />
           </Suspense>
         </div>
       </section>
@@ -48,258 +36,128 @@ export default function ActivatePage({ searchParams }: PageProps<"/activate">) {
   );
 }
 
-async function Flow({ searchParams }: Pick<PageProps<"/activate">, "searchParams">) {
+async function Progress() {
+  const m = await getPersonalMember();
+  return <FlowProgress stage={m ? (await flowState(m.id)).stage : null} viewing="activate" />;
+}
+
+async function Checklist({ searchParams }: Pick<PageProps<"/activate">, "searchParams">) {
   const sp = await searchParams;
-  const code = typeof sp.code === "string" ? sp.code.slice(0, 20) : "";
-  if (!(await isEnabled("activation"))) {
-    return (
-      <DegradedServiceAlert state="degraded" system="Activation" manualRoute="/passport" manualLabel="Open your passport">
-        Online activation is switched off right now. Check-in at the desk still works, and your passport is available.
-      </DegradedServiceAlert>
-    );
-  }
   const member = await getPersonalMember();
-  if (!member) return <SignedOut code={code} />;
-  // Opening /activate is "resume": it creates the session if there is none.
-  await beginActivation(member);
-  const state = await getActivationState(member.id);
-  return <Signed member={member} state={state} />;
-}
-
-function Shell({ current, state, children }: { current: (typeof STEPS)[number]["id"]; state: ActivationState | null; children: ReactNode }) {
-  const idx = STEPS.findIndex((s) => s.id === current);
-  return (
-    <div
-      data-checkpoint={state?.marker ?? "awaiting_participant"}
-      data-activation-status={state?.session?.status ?? "signed_out"}
-      data-activation-step={current}
-      className="grid gap-10 lg:grid-cols-[minmax(0,3fr)_minmax(0,9fr)]"
-    >
-      <nav aria-label="Activation steps">
-        <ol className="flex flex-wrap gap-2 lg:flex-col lg:gap-0 lg:border-l lg:border-hairline">
-          {STEPS.map((s, i) => {
-            const here = i === idx;
-            const done = i < idx;
-            return (
-              <li
-                key={s.id}
-                aria-current={here ? "step" : undefined}
-                className={`flex min-h-11 items-center gap-3 border px-3 font-plex text-sm lg:-ml-px lg:border-0 lg:border-l-2 lg:px-4 ${
-                  here ? "border-lime text-lime" : done ? "border-hairline text-bright" : "border-hairline text-lightgray"
-                }`}
-              >
-                <span className="font-dots text-base">{String(i + 1).padStart(2, "0")}</span>
-                <span>{s.label}</span>
-                <span className="sr-only">{here ? "(current step)" : done ? "(done)" : "(to do)"}</span>
-                {done && (
-                  <span aria-hidden="true" className="text-lightgray">
-                    ·done
-                  </span>
-                )}
-              </li>
-            );
-          })}
-        </ol>
-      </nav>
-      <div className="min-w-0">{children}</div>
-    </div>
-  );
-}
-
-function SignedOut({ code }: { code: string }) {
-  return (
-    <Shell current="code" state={null}>
-      <StepFrame
-        n={1}
-        title="Enter your activation code"
-        intro={
-          <>
-            The check-in desk gave you a code with your badge. Enter it here with your Luma email: it signs you in as yourself and starts your passport.
-          </>
-        }
-      >
-        <CodeForm initialCode={code} />
-        <div className="mt-8 grid gap-3 border-t border-dashed border-hairline pt-6 font-plex text-sm sm:grid-cols-2">
-          <Link href="/passport/login?next=/activate" className="inline-flex min-h-11 items-center text-bright underline decoration-hairline underline-offset-4 hover:text-lime">
-            Already have a personal password? Sign in →
-          </Link>
-          <p className="text-lightgray">Not registered at all? Go to the check-in desk; walk-ins are welcome.</p>
-        </div>
-      </StepFrame>
-    </Shell>
-  );
-}
-
-async function Signed({ member, state }: { member: MemberRow; state: ActivationState }) {
-  switch (state.step) {
-    case "code":
-    case "admission":
-      return <AdmissionStep member={member} state={state} />;
-    case "blocked":
-      return <BlockedStep state={state} />;
-    case "identity":
-      return <IdentityStep member={member} state={state} />;
-    case "consent":
-      return <ConsentStep member={member} state={state} />;
-    case "camera":
-      return <CameraCheckpoint member={member} state={state} />;
-    case "receipt":
-      return <ReceiptStep state={state} />;
+  if (!member) {
+    const code = typeof sp.code === "string" ? sp.code : "";
+    redirect(code ? `/passport/login?mode=code&code=${encodeURIComponent(code)}&next=/me` : "/passport/login?next=/activate");
   }
-}
+  if (!member.team_id) redirect((await flowState(member.id)).next);
+  const view = await getActivationView(member.id);
+  const step1 = view.ticks.has("testmu_signup");
 
-async function AdmissionStep({ member, state }: { member: MemberRow; state: ActivationState }) {
-  const check = await checkAdmission(member);
   return (
-    <Shell current="admission" state={state}>
-      <StepFrame n={2} title="Is this your registration?" intro="We match you against the approved guest list. We only ever show a masked email.">
-        {check.status === "matched" && (
-          <div className="space-y-6">
-            <dl className="grid gap-4 border border-dashed border-hairline p-4 font-plex text-sm sm:grid-cols-3">
-              <div>
-                <dt className="font-pixel text-[10px] uppercase tracking-[0.2em] text-lightgray">Name</dt>
-                <dd className="mt-1 text-bright">{check.guest?.name ?? member.name}</dd>
-              </div>
-              <div>
-                <dt className="font-pixel text-[10px] uppercase tracking-[0.2em] text-lightgray">Email</dt>
-                <dd className="mt-1 text-bright">{check.guest?.email_hint ?? "Admitted at the desk"}</dd>
-              </div>
-              <div>
-                <dt className="font-pixel text-[10px] uppercase tracking-[0.2em] text-lightgray">Source</dt>
-                <dd className="mt-1 text-bright">{check.guest?.source === "walk_in" ? "Walk-in" : check.guest ? "Luma" : "Check-in desk"}</dd>
-              </div>
-            </dl>
-            <AdmissionForm yesLabel="Yes, that’s me →" noLabel="That’s not me" />
-          </div>
-        )}
-        {check.status === "no_roster" && (
-          <div className="space-y-6">
-            <p className="flex flex-wrap items-center gap-3 font-plex text-sm text-bright">
-              <StatusPill tone="pending">Roster pending</StatusPill>
-              The guest list hasn’t been loaded yet. Carry on; staff confirm your registration at check-in.
-            </p>
-            <AdmissionForm yesLabel="Continue →" />
-          </div>
-        )}
-        {check.status === "not_approved" && <NotApproved reason={check.reason} />}
-      </StepFrame>
-    </Shell>
-  );
-}
+    <div className="space-y-6" data-activation-done={view.done}>
+      <ol className="space-y-6">
+        {ACTIVATION_STEPS.map((s) => (
+          <StepCard key={s.id} n={s.n} title={s.title} body={s.body} done={view.ticks.has(s.id)} highlight={s.id === "testmu_signup" && view.plan?.status === "not_registered"} id={s.id}>
+            {s.id === "testmu_signup" && <SignupStep done={step1} />}
+            {s.id === "testmu_plan" && <PlanStep view={view} email={member.email} />}
+            {s.id === "codex_credits" && <CodexStep view={view} ready={step1} />}
+          </StepCard>
+        ))}
+      </ol>
 
-function NotApproved({ reason }: { reason: string }) {
-  return (
-    <div className="space-y-6">
-      <DegradedServiceAlert state="degraded" system="Registration" manualRoute="/help" manualLabel="Find the help desk">
-        {reason === "needs_reconciliation"
-          ? "Your registration needs a quick check by staff. Head to the check-in desk."
-          : "We couldn’t find an approved registration for you. Go to the check-in desk: staff can admit you as a walk-in, then come back here."}
-      </DegradedServiceAlert>
-      <AdmissionForm yesLabel="I’ve been admitted at the desk, check again" />
+      {view.done ? (
+        <div className="brackets border border-lime bg-lime-deep p-5">
+          <p className="font-pixel text-[10px] uppercase tracking-[0.2em] text-lime">All three done</p>
+          <p className="mt-2 font-display text-2xl text-bright">You&apos;re activated.</p>
+          <div className="mt-4 flex flex-wrap gap-3">
+            <Button href="/setup" className="min-h-11">
+              Next: set up Codex →
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <p className="font-plex text-xs text-lightgray">Stuck on a step? The help desk can sort it out, or open a ticket at /help.</p>
+      )}
     </div>
   );
 }
 
-function BlockedStep({ state }: { state: ActivationState }) {
+function StepCard({ id, n, title, body, done, highlight, children }: { id: ActivationStepId; n: string; title: string; body: string; done: boolean; highlight?: boolean; children: ReactNode }) {
   return (
-    <Shell current="admission" state={state}>
-      <StepFrame n={2} title="Let’s sort out your registration">
-        <NotApproved reason="not_approved" />
-      </StepFrame>
-    </Shell>
-  );
-}
-
-async function IdentityStep({ member, state }: { member: MemberRow; state: ActivationState }) {
-  const p = await getPassport(member.id);
-  return (
-    <Shell current="identity" state={state}>
-      <StepFrame n={3} title="Confirm who you are" intro="Only what helps on the day. Teams come later, and nothing here creates or joins one.">
-        <IdentityForm
-          defaults={{
-            display_name: p.member.display_name ?? p.member.name,
-            github_handle: p.member.github_handle ?? "",
-            x_handle: "",
-            skills: p.member.skills.join(", "),
-            interests: p.member.interests.join(", "),
-          }}
-          githubHref={githubEnabled() ? "/api/v1/auth/github/start?next=/activate" : null}
-          githubVerified={p.member.github_verified}
-        />
-      </StepFrame>
-    </Shell>
-  );
-}
-
-async function ConsentStep({ member, state }: { member: MemberRow; state: ActivationState }) {
-  const current = await getConsents(member.id);
-  return (
-    <Shell current="consent" state={state}>
-      <StepFrame n={4} title="Your privacy, one switch each" intro="Each choice is separate. Saying no to any of them never blocks check-in, help or submission.">
-        <ConsentForm items={CONSENT_CATEGORIES.map((c) => ({ name: c, ...CONSENT_COPY[c], on: current[c] === true }))} />
-      </StepFrame>
-    </Shell>
-  );
-}
-
-async function CameraCheckpoint({ member, state }: { member: MemberRow; state: ActivationState }) {
-  const c = await getConsents(member.id);
-  return (
-    <Shell current="camera" state={state}>
-      <StepFrame
-        n={5}
-        title="Human camera checkpoint"
-        intro="If an agent brought you here, it has stopped. Press the shutter yourself, or skip. Your photo is stored privately and never sent to an AI."
-      >
-        <div className="mb-6 flex flex-wrap items-center gap-3">
-          <StatusPill tone="pending">Waiting on you</StatusPill>
-          {state.session?.status === "recoverable_error" && <StatusPill tone="danger">Last upload failed</StatusPill>}
+    <li id={id} data-step={id} data-done={done} className={`scroll-mt-24 border p-5 sm:p-6 ${highlight ? "border-warning" : done ? "border-hairline" : "border-hairline"}`}>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="font-pixel text-[10px] uppercase tracking-[0.2em] text-lightgray">Step {n}</p>
+          <h2 className="mt-2 font-display text-xl text-bright sm:text-2xl">{title}</h2>
         </div>
-        <CameraStep canStore={c.selfie_storage === true} />
-      </StepFrame>
-    </Shell>
+        {done ? <StatusPill tone="neutral">Done</StatusPill> : highlight ? <StatusPill tone="pending">Do this first</StatusPill> : <StatusPill tone="accent">To do</StatusPill>}
+      </div>
+      <p className="mt-3 max-w-2xl font-plex text-sm text-lightgray">{body}</p>
+      <div className="mt-5 space-y-4">{children}</div>
+    </li>
   );
 }
 
-async function ReceiptStep({ state }: { state: ActivationState }) {
-  const ev = await getEvent();
-  const r = state.receipt;
+const linkCls = "inline-flex min-h-11 items-center justify-center gap-2 border border-hairline px-4 py-2.5 font-plex text-sm text-bright transition-colors hover:border-lime hover:text-lime";
+
+function SignupStep({ done }: { done: boolean }) {
   return (
-    <Shell current="receipt" state={state}>
-      <StepFrame n={6} title="You’re activated" intro="Keep this receipt. It’s also on the back of your passport.">
-        {r ? (
-          <div className="space-y-6">
-            <div className="border border-hairline bg-card p-5 text-ink">
-              <p className="font-pixel text-[10px] uppercase tracking-[0.2em] text-ink/60">Activation receipt</p>
-              <p className="mt-2 font-dots text-4xl font-black" data-testid="activation-receipt">
-                {r.code}
-              </p>
-              <p className="mt-2 font-plex text-xs text-ink/70">
-                Server time {formatEventTime(r.server_time, ev)} · {r.server_time.toISOString()}
-              </p>
-            </div>
-            <ul className="space-y-2 font-plex text-sm">
-              {r.checks.map((c) => (
-                <li key={c.id} className="flex flex-wrap items-center gap-3">
-                  {c.ok ? <span className="text-bright">✓ Done</span> : <StatusPill tone="unverified">Not run</StatusPill>}
-                  <span className="text-bright">{c.label}</span>
-                  {c.detail && <span className="text-xs text-lightgray">{c.detail}</span>}
-                </li>
-              ))}
-            </ul>
-            <div className="flex flex-wrap gap-3">
-              <Link href="/passport" className="inline-flex min-h-11 items-center bg-bright px-5 font-plex text-sm text-ink transition-colors hover:bg-lime">
-                Open my passport →
-              </Link>
-              <Link href="/readiness" className="inline-flex min-h-11 items-center border border-hairline px-5 font-plex text-sm text-bright transition-colors hover:border-lime hover:text-lime">
-                Check Kane readiness
-              </Link>
-            </div>
-          </div>
-        ) : (
-          <p className="font-plex text-sm text-lightgray">Finishing up… reload in a moment.</p>
+    <div className="flex flex-wrap items-center gap-3">
+      <a href={TESTMU_SIGNUP_URL} target="_blank" rel="noopener noreferrer" className={linkCls}>
+        Open TestMu AI ↗
+      </a>
+      <TickButton step="testmu_signup" done={done} label="I’m registered" />
+    </div>
+  );
+}
+
+function PlanStep({ view, email }: { view: ActivationView; email: string }) {
+  const plan = view.plan;
+  if (plan?.status === "claimed") {
+    return <p className="font-plex text-sm text-bright">{PLAN_MESSAGES.claimed}</p>;
+  }
+  return (
+    <div className="space-y-3">
+      {plan?.status === "not_registered" && (
+        <p role="alert" className="border-l-2 border-warning pl-3 font-plex text-sm text-warning">
+          Looks like you haven&apos;t registered with TestMu AI yet.{" "}
+          <a href={TESTMU_SIGNUP_URL} target="_blank" rel="noopener noreferrer" className="underline underline-offset-4">
+            Register ↗
+          </a>{" "}
+          with <span className="text-bright">{email}</span>, tick step 1, then press Try again.
+        </p>
+      )}
+      {plan?.status === "error" && (
+        <p role="alert" className="border-l-2 border-danger pl-3 font-plex text-sm text-danger">
+          {PLAN_MESSAGES.error}
+        </p>
+      )}
+      <ClaimPlanButton retry={!!plan && plan.status !== "pending"} />
+      <p className="font-plex text-xs text-lightgray">Uses the email on your profile ({email}). Change it on your profile if it isn&apos;t the one you used for TestMu AI.</p>
+    </div>
+  );
+}
+
+function CodexStep({ view, ready }: { view: ActivationView; ready: boolean }) {
+  if (!view.code) {
+    if (!ready) return <p className="font-plex text-sm text-lightgray">Finish step 1 first, then get your code here.</p>;
+    return <GetCodeButton />;
+  }
+  return (
+    <div className="space-y-4">
+      <div className="brackets border border-lime bg-lime-deep p-4" data-codex-code="assigned">
+        <p className="font-pixel text-[10px] uppercase tracking-[0.2em] text-lime">Your OpenAI Codex credit code · only you see this</p>
+        <p className="mt-2 break-all font-dots text-3xl leading-tight font-black text-bright sm:text-4xl">{view.code.code}</p>
+        <CopyField value={view.code.code} className="mt-3" />
+      </div>
+      <p className="font-plex text-sm text-lightgray">{CODEX_REDEEM_INSTRUCTIONS}</p>
+      <div className="flex flex-wrap items-center gap-3">
+        {!isPlaceholder(CODEX_REDEEM_URL) && (
+          <a href={CODEX_REDEEM_URL} target="_blank" rel="noopener noreferrer" className={linkCls}>
+            Redeem on OpenAI ↗
+          </a>
         )}
-      </StepFrame>
-    </Shell>
+        <TickButton step="codex_credits" done={view.ticks.has("codex_credits")} label="Credits enabled" />
+      </div>
+    </div>
   );
 }

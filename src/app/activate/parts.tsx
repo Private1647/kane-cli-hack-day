@@ -1,0 +1,67 @@
+"use client";
+
+import { useState, type ReactNode } from "react";
+import { useFormStatus } from "react-dom";
+import type { ActivationStepId } from "@/data/activation-steps";
+import { claimPlanAction, codexCodeAction, tickAction, type ActState } from "./actions";
+
+// Small client controls for the /activate checklist. Each posts a server
+// action; the page re-renders from the database afterwards.
+
+const primary = "inline-flex min-h-11 items-center justify-center gap-2 bg-bright px-4 py-2.5 font-plex text-sm text-ink transition-colors hover:bg-lime disabled:cursor-wait disabled:opacity-60";
+const secondary = "inline-flex min-h-11 items-center justify-center gap-2 border border-hairline px-4 py-2.5 font-plex text-sm text-bright transition-colors hover:border-lime hover:text-lime disabled:cursor-wait disabled:opacity-60";
+
+function Submit({ className, pending, children }: { className: string; pending: ReactNode; children: ReactNode }) {
+  const { pending: busy } = useFormStatus();
+  return (
+    <button type="submit" disabled={busy} className={className}>
+      {busy ? pending : children}
+    </button>
+  );
+}
+
+function Note({ state }: { state: ActState }) {
+  if (!state?.message || state.ok) return null;
+  return (
+    <p role="alert" className="basis-full border-l-2 border-danger pl-3 font-plex text-sm text-danger">
+      {state.message}
+    </p>
+  );
+}
+
+export function TickButton({ step, done, label = "Done" }: { step: ActivationStepId; done: boolean; label?: string }) {
+  const [state, setState] = useState<ActState>(null);
+  return (
+    <form action={async () => setState(await tickAction(step, !done))} className="flex flex-wrap items-center gap-3">
+      <Submit className={done ? secondary : primary} pending="Saving…">
+        {done ? "Undo" : `✓ ${label}`}
+      </Submit>
+      <Note state={state} />
+    </form>
+  );
+}
+
+export function ClaimPlanButton({ retry }: { retry: boolean }) {
+  const [state, setState] = useState<ActState>(null);
+  return (
+    <form action={async () => setState(await claimPlanAction())} className="flex flex-wrap items-center gap-3">
+      <Submit className={primary} pending="Activating…">
+        {retry ? "Try again" : "Activate my plan"}
+      </Submit>
+      {state?.outcome === "in_progress" && <p className="basis-full font-plex text-sm text-lightgray">{state.message}</p>}
+      {state && !state.outcome && <Note state={state} />}
+    </form>
+  );
+}
+
+export function GetCodeButton() {
+  const [state, setState] = useState<ActState>(null);
+  return (
+    <form action={async () => setState(await codexCodeAction())} className="flex flex-wrap items-center gap-3">
+      <Submit className={primary} pending="Getting your code…">
+        Get my Codex credit code
+      </Submit>
+      <Note state={state} />
+    </form>
+  );
+}
