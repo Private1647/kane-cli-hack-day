@@ -40,7 +40,7 @@ export default function DegradedServiceAlert({
         {system ? `${system}: ` : ""}
         {LABEL[state]}
       </p>
-      {children && <div className="min-w-0 flex-1 font-plex text-sm text-bright">{children}</div>}
+      {children && <div className="min-w-[min(100%,16rem)] flex-1 font-plex text-sm text-bright">{children}</div>}
       {manualRoute && (
         <a href={manualRoute} className="inline-flex min-h-11 items-center font-plex text-sm underline underline-offset-4 hover:text-bright">
           {manualLabel} →
