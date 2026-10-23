@@ -169,9 +169,9 @@ export function TicketForm({ defaultTable }: { defaultTable?: string | null }) {
 
 function Created({ t }: { t: CreatedTicket }) {
   return (
-    <div role="status" className="border border-lime bg-lime-deep p-4 font-plex text-sm">
+    <div role="status" className="border border-hairline border-l-2 border-l-warning bg-surface p-4 font-plex text-sm">
       <p className="text-bright">
-        Ticket <span className="font-dots text-lg text-lime">{t.ticket.code}</span> is in the mentor queue{t.replayed ? " (already opened; same ticket)" : ""}.
+        Ticket <span className="font-dots text-lg text-bright">{t.ticket.code}</span> is in the mentor queue{t.replayed ? " (already opened; same ticket)" : ""}.
       </p>
       <p className="mt-1 text-lightgray">
         Opened {new Date(t.receipt.server_time).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })} by the server clock. Nobody has claimed it yet; this page updates when someone does.
