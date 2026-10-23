@@ -1,0 +1,581 @@
+# KANE HACK OS REST API: our copy of the blueprint contract with the
+# per-operation schemas filled in (T-API-02). Paths marked
+# `x-implemented: kane-mcp` exist on the eng/kane-mcp branch; the others are
+# owned by the area in `x-owner` and must match these shapes when they land.
+# Every response body is an Envelope; `data` carries the per-operation schema.
+openapi: 3.1.0
+info:
+  title: KANE HACK OS API
+  version: 0.1.0
+  description: |
+    Kane CLI Hack Day backend. Server clock is the authority for every deadline.
+    Mutations accept `{ idempotency_key, payload }` (MutationRequest) or a flat
+    object, plus an optional `Idempotency-Key` header. Errors use stable codes
+    (`error.code`) with a user-safe next action and manual web route.
+servers:
+  - url: https://kaneclihack.sh
+tags:
+  - { name: auth }
+  - { name: participants }
+  - { name: teams }
+  - { name: ideas }
+  - { name: kane }
+  - { name: help }
+  - { name: submissions }
+  - { name: studio }
+  - { name: social }
+  - { name: live }
+  - { name: ops }
+  - { name: webhooks }
+  - { name: mcp }
+
+components:
+  securitySchemes:
+    BearerAuth: { type: http, scheme: bearer, description: "khk_… token from pairing (kanehack pair)" }
+    SessionCookie: { type: apiKey, in: cookie, name: hd_member, description: "Browser session (also hd_team / hd_staff)" }
+    GitHubSignature: { type: apiKey, in: header, name: X-Hub-Signature-256, description: "sha256=<HMAC of raw body, GITHUB_WEBHOOK_SECRET>" }
+    RendererSignature: { type: apiKey, in: header, name: X-Renderer-Signature, description: "sha256=<HMAC of raw body, RENDERER_WEBHOOK_SECRET>" }
+
+  parameters:
+    IdempotencyKey: { name: Idempotency-Key, in: header, required: false, schema: { type: string, minLength: 8, maxLength: 200 } }
+    ProjectId: { name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }
+
+  responses:
+    Error:
+      description: Error envelope (status "error")
+      content: { application/json: { schema: { $ref: "#/components/schemas/Envelope" } } }
+
+  schemas:
+    ErrorCode:
+      type: string
+      enum: [PAIR_EXPIRED, NOT_APPROVED, CONSENT_REQUIRED, TEAM_FULL, PRIVACY_RESTRICTED, KANE_RUN_UNVERIFIED, SUBMISSION_LOCKED, DOWNSTREAM_DEGRADED, RENDER_PENDING, RENDER_FAILED, IDEMPOTENT_REPLAY, OUTAGE_MANUAL_RECEIPT_REQUIRED, VALIDATION_FAILED, UNAUTHENTICATED, FORBIDDEN, NOT_FOUND, CONFLICT, DEADLINE_PASSED, FEATURE_DISABLED, RATE_LIMITED, INTERNAL]
+    Envelope:
+      type: object
+      required: [schema_version, status, message, data, evidence, actions, links, ui_resource, ui_type, design_version, fallback, freshness, warnings, error, request_id, server_time]
+      properties:
+        schema_version: { const: 1 }
+        status: { type: string, enum: [ok, needs_action, partial, error] }
+        message: { type: string }
+        data: { description: "Per-operation payload (see each path)" }
+        evidence:
+          type: array
+          items:
+            type: object
+            required: [kind, id, confidence]
+            properties:
+              kind: { type: string }
+              id: { type: string }
+              confidence: { type: string, enum: [verified, participant_reported, inferred, unverified] }
+              url: { type: string, format: uri }
+        actions:
+          type: array
+          items:
+            type: object
+            required: [id, label, requires_human_confirmation]
+            properties:
+              id: { type: string }
+              label: { type: string }
+              requires_human_confirmation: { type: boolean }
+              href: { type: string, format: uri }
+              tool: { type: string }
+        links:
+          type: array
+          description: HTTPS only, allowlisted hosts
+          items: { type: object, required: [label, url], properties: { label: { type: string }, url: { type: string, format: uri } } }
+        ui_resource: { type: [string, "null"] }
+        ui_type: { type: [string, "null"], enum: [builder_passport, readiness_check, idea_checklist, idea_radar, team_match, mentor_ticket, kane_run, metric_pulse, submission_receipt, deck_preview, ship_preview, social_review, null] }
+        design_version: { const: "kane-hack-os@1" }
+        fallback: { type: object, required: [text], properties: { text: { type: string } } }
+        freshness:
+          type: [object, "null"]
+          properties:
+            as_of: { type: string, format: date-time }
+            state: { type: string, enum: [fresh, delayed, stale, offline] }
+            source: { type: string }
+        warnings: { type: array, items: { type: string } }
+        error:
+          type: [object, "null"]
+          properties:
+            code: { $ref: "#/components/schemas/ErrorCode" }
+            message: { type: string }
+            next_action: { type: string }
+            manual_route: { type: string }
+            details: { type: [object, "null"] }
+        request_id: { type: string, format: uuid }
+        server_time: { type: string, format: date-time }
+
+    MutationRequest:
+      type: object
+      required: [payload]
+      properties:
+        idempotency_key: { type: string, minLength: 8, maxLength: 200 }
+        payload: { type: object, additionalProperties: true }
+    Receipt:
+      type: object
+      required: [id, server_time]
+      properties:
+        id: { type: string, description: "Quotable id: KR-12, EV-3, MS-4, DF-7, H-0042, S-7KQ2, P-0142" }
+        server_time: { type: string, format: date-time }
+
+    # ── kane ──
+    KaneRunSummary:
+      type: object
+      description: The kanehack CLI's parse of the NDJSON stream. The server re-derives status from exit_code.
+      properties:
+        family: { type: string, enum: [run, testmd, testrun, assurance, unknown] }
+        terminal: { type: [object, "null"], properties: { type: { type: string, enum: [run_end, test_md_done, testrun_done, remote_done, done] }, status: { type: [string, "null"] } } }
+        execution_id: { type: [string, "null"] }
+        summary: { type: object, additionalProperties: true }
+        members:
+          type: array
+          maxItems: 500
+          items:
+            type: object
+            required: [upstream_member_id, name, status]
+            properties:
+              upstream_member_id: { type: string }
+              name: { type: string }
+              status: { type: string, enum: [passed, failed, blocked, skipped, errored] }
+              duration_ms: { type: [integer, "null"] }
+              failure: { type: [string, "null"], maxLength: 400 }
+        coverage: { type: [object, "null"], properties: { designed: { type: [number, "null"] }, proven: { type: [number, "null"] }, total: { type: [number, "null"] } } }
+    RecordRunRequest:
+      type: object
+      required: [source_execution_id]
+      description: Credential-looking fields and transcript/prompt/env keys are rejected with VALIDATION_FAILED.
+      properties:
+        project_id: { type: integer, description: "Must be the caller's own team project" }
+        source_execution_id: { type: string, minLength: 3, maxLength: 120, pattern: "^[A-Za-z0-9._:@/-]+$" }
+        batch_execution_id: { type: string, maxLength: 120 }
+        exit_code: { type: [integer, "null"], minimum: -1, maximum: 255, description: "0 passed · 1 failed · 2 nothing ran · 3 cancelled. Omitted = still running." }
+        command: { type: string, enum: [run, testmd, testrun, cover, other] }
+        objective: { type: string, maxLength: 500 }
+        commit_sha: { type: string, pattern: "^[0-9a-f]{40}$" }
+        ndjson: { type: string, maxLength: 2000000, description: "Raw --agent stdout (redacted). Preferred over run_summary." }
+        run_summary: { $ref: "#/components/schemas/KaneRunSummary" }
+        evidence_sha256: { type: string, pattern: "^[0-9a-f]{64}$" }
+        started_at: { type: string, format: date-time }
+        finished_at: { type: string, format: date-time }
+        report_url: { type: string, format: uri, pattern: "^https://" }
+    RunReceipt:
+      allOf:
+        - $ref: "#/components/schemas/Receipt"
+        - type: object
+          properties:
+            run_id: { type: integer }
+            status: { type: string, enum: [running, passed, failed, blocked, errored, cancelled] }
+            verification_state: { type: string, enum: [reported, verified, manual_unverified] }
+            source_verified: { type: boolean, description: "Paired token + own project + completion event + exit code that agrees" }
+            has_terminal_event: { type: boolean }
+            defects_opened: { type: integer }
+            defects_reverified: { type: integer }
+            warnings: { type: array, items: { type: string } }
+            url: { type: string }
+            replayed: { type: boolean }
+    KaneRun:
+      type: object
+      properties:
+        id: { type: integer }
+        status: { type: string, enum: [running, passed, failed, blocked, errored, cancelled] }
+        exit_code: { type: [integer, "null"] }
+        has_terminal_event: { type: boolean }
+        source: { type: string, enum: [kanehack_cli, mcp, manual, github_action, webhook] }
+        upstream_execution_id: { type: string }
+        commit_sha: { type: [string, "null"] }
+        objective: { type: [string, "null"] }
+        verification_state: { type: string, enum: [reported, verified, manual_unverified] }
+        source_verified: { type: boolean }
+        trust_reasons: { type: array, items: { type: string } }
+        summary: { type: object, additionalProperties: true }
+        received_at: { type: string, format: date-time }
+        finished_at: { type: [string, "null"], format: date-time }
+        report_url: { type: [string, "null"] }
+        members: { type: array, items: { type: object, properties: { id: { type: string }, name: { type: [string, "null"] }, status: { type: string }, duration_ms: { type: [integer, "null"] } } } }
+        evidence: { type: array, items: { type: object, properties: { id: { type: integer }, kind: { type: string }, sha256: { type: string }, redaction_state: { type: string }, url: { type: string } } } }
+        defects: { type: array, items: { type: object, properties: { id: { type: integer }, title: { type: string }, status: { type: string }, failure_class: { type: string } } } }
+    EvidenceUpload:
+      type: object
+      required: [file, kind]
+      properties:
+        file: { type: string, format: binary, description: "≤ 4 MB here; larger via the signed upload" }
+        kind: { type: string, enum: [ndjson, screenshot, video, report, testmd, zip, log, other] }
+        project_id: { type: integer }
+        run_id: { type: integer }
+        sha256: { type: string, pattern: "^[0-9a-f]{64}$" }
+        visibility: { type: string, enum: [team, judges], default: team }
+    EvidenceSignedComplete:
+      type: object
+      required: [pathname, name, kind]
+      properties:
+        pathname: { type: string, description: "evidence-incoming/{projectId}/… from the signed upload" }
+        name: { type: string }
+        kind: { type: string, enum: [ndjson, screenshot, video, report, testmd, zip, log, other] }
+        project_id: { type: integer }
+        run_id: { type: integer }
+        sha256: { type: string }
+        visibility: { type: string, enum: [team, judges] }
+    EvidenceReceipt:
+      allOf:
+        - $ref: "#/components/schemas/Receipt"
+        - type: object
+          properties:
+            evidence_id: { type: integer }
+            sha256: { type: string }
+            redaction_state: { type: string, enum: [unreviewed, clean, redacted, quarantined] }
+            quarantine_reason: { type: [string, "null"] }
+            deduped: { type: boolean }
+            url: { type: string }
+    MilestoneRequest:
+      type: object
+      required: [title, claim]
+      properties:
+        title: { type: string, maxLength: 120 }
+        claim: { type: string, maxLength: 600 }
+        evidence_ids: { type: array, maxItems: 10, items: { type: integer } }
+        source_run_id: { type: integer }
+        visibility: { type: string, enum: [team, judges, public], default: team, description: "judges/public wait for a teammate's approval" }
+    MilestoneReceipt:
+      allOf:
+        - $ref: "#/components/schemas/Receipt"
+        - type: object
+          properties:
+            milestone_id: { type: integer }
+            confidence: { type: string, enum: [verified, participant_reported, inferred], description: "Decided server-side" }
+            status: { type: string, enum: [proposed, approved] }
+            visibility: { const: team }
+            requested_visibility: { type: string, enum: [team, judges, public] }
+            needs_team_approval: { type: boolean }
+            url: { type: string }
+    MilestoneDecision:
+      type: object
+      required: [milestone_id, decision]
+      properties:
+        milestone_id: { type: integer }
+        decision: { type: string, enum: [approve, withdraw] }
+    DefectAction:
+      type: object
+      required: [defect_id, action]
+      properties:
+        defect_id: { type: integer }
+        action: { type: string, enum: [confirm, not_a_bug, mark_fixed, reopen], description: "reverified is only set by a later passing run on a different commit" }
+        failure_class: { type: string, enum: [product, infra, auth, unknown] }
+        note: { type: string, maxLength: 400 }
+
+    # ── other areas (shapes the MCP adapters use today) ──
+    PairStartRequest: { type: object, properties: { label: { type: string }, client: { type: string }, client_version: { type: string } } }
+    PairStartData: { type: object, required: [pair_code, poll_token], properties: { pair_code: { type: string }, approve_url: { type: string }, poll_token: { type: string }, expires_at: { type: string, format: date-time }, interval: { type: integer } } }
+    PairConfirmRequest: { type: object, required: [poll_token], properties: { poll_token: { type: string } } }
+    PairConfirmData: { type: object, properties: { token: { type: [string, "null"], description: "khk_… once approved; shown once" }, status: { type: string, enum: [pending, approved, expired] } } }
+    ProfilePatch:
+      type: object
+      properties:
+        delta: { type: object, properties: { display_name: { type: string }, github_handle: { type: string }, skills: { type: array, items: { type: string } }, interests: { type: array, items: { type: string } } } }
+        consent_changes: { type: array, items: { type: object, properties: { category: { type: string, enum: [selfie_storage, photo_publication, face_matching, social_mention, teammate_discovery, idea_discovery, activity_publication] }, granted: { type: boolean } } } }
+    ReadinessReport: { type: object, required: [checks], properties: { checks: { type: array, items: { type: object, required: [id, status], properties: { id: { type: string }, status: { type: string, enum: [pass, fail, warn, skipped] }, version: { type: string }, detail: { type: string } } } } } }
+    TeamCreate: { type: object, required: [name], properties: { name: { type: string, maxLength: 60 }, recruiting: { type: boolean }, max_size: { type: integer, minimum: 1, maximum: 5 } } }
+    TeamJoin: { type: object, required: [invite_code], properties: { invite_code: { type: string } } }
+    IdeaValidate: { type: object, required: [project_idea], properties: { project_idea: { type: string, minLength: 20, maxLength: 2000 }, publication_intent: { type: string, enum: [private, share_summary] } } }
+    IdeaAssessment:
+      type: object
+      properties:
+        criteria: { type: array, minItems: 8, maxItems: 8, items: { type: object, properties: { id: { type: string }, met: { type: string, enum: [yes, partly, no] }, note: { type: string } } } }
+        verdict: { type: string, enum: [qualifies, needs_work, ineligible] }
+        changes: { type: array, minItems: 3, maxItems: 3, items: { type: string } }
+        kane_path: { type: array, items: { type: string } }
+        generator: { type: string, enum: [llm, rules] }
+    HelpCreate:
+      type: object
+      required: [category, safe_summary]
+      properties:
+        category: { type: string, enum: [kane_cli, test_manager, auth, ci_cloud, mobile, idea, github, other] }
+        safe_summary: { type: string, minLength: 5, maxLength: 300 }
+        details: { type: string, maxLength: 2000 }
+        tried: { type: string, maxLength: 1000 }
+        run_id: { type: string, maxLength: 80 }
+        priority: { type: string, enum: [low, normal, high] }
+        table_label: { type: string, maxLength: 40 }
+    HelpTicket: { type: object, properties: { code: { type: string }, status: { type: string, enum: [new, triaged, claimed, in_progress, resolved, closed, escalated, duplicate] }, priority: { type: string }, mentor: { type: [string, "null"] }, last_reply: { type: [object, "null"] }, url: { type: string } } }
+    Preflight:
+      type: object
+      properties:
+        project_id: { type: integer }
+        requirements: { type: array, items: { type: object, properties: { id: { type: string }, label: { type: string }, ok: { type: boolean }, detail: { type: [string, "null"] } } } }
+        ready: { type: boolean }
+        missing: { type: array, items: { type: string } }
+        locked: { type: boolean }
+        locks_at: { type: string, format: date-time }
+        preflight_version: { type: string, description: "Pins the snapshot finalize will freeze" }
+        snapshot: { type: object, additionalProperties: true }
+    Finalize: { type: object, required: [preflight_version, explicit_confirmation], properties: { project_id: { type: integer }, preflight_version: { type: string }, explicit_confirmation: { const: true } } }
+    SubmissionReceipt: { type: object, properties: { receipt_code: { type: string, pattern: "^S-[2-9A-Z]{4}$" }, server_time: { type: string, format: date-time }, snapshot_sha256: { type: string }, signed: { type: boolean }, url: { type: string }, showcase_url: { type: string } } }
+    DeckUpdate: { type: object, required: [expected_version, scenes], properties: { expected_version: { type: integer }, scenes: { type: array, maxItems: 12, items: { type: object, properties: { id: { type: string }, title: { type: string }, body: { type: string }, evidence_ids: { type: array, items: { type: integer } } } } }, theme: { type: object, additionalProperties: { type: string } } } }
+    RenderRequest: { type: object, required: [story_version, outputs], properties: { story_version: { type: integer }, outputs: { type: array, items: { type: string, enum: [html_deck, pdf_deck, mp4_video, og_card, social_card] } } } }
+    ShowcasePublish: { type: object, required: [approved_story_version, consent_receipt, explicit_confirmation], properties: { approved_story_version: { type: integer }, consent_receipt: { type: object }, explicit_confirmation: { const: true } } }
+    SocialDraft: { type: object, required: [project_id], properties: { project_id: { type: integer }, photo_id: { type: integer }, tone: { type: string, enum: [proof, story, hype, plain] } } }
+    RenderCallback: { type: object, required: [job_id, status], properties: { job_id: { type: integer }, status: { type: string, enum: [running, succeeded, failed, cancelled] }, object_key: { type: string }, error_code: { type: string } } }
+    LiveMetrics: { type: object, properties: { metrics: { type: array, items: { type: object, properties: { name: { type: string }, value: { type: [number, "null"] }, denominator: { type: [number, "null"] }, as_of: { type: string, format: date-time }, freshness: { type: string, enum: [fresh, delayed, stale] }, source: { type: string }, definition_version: { type: string } } } } } }
+
+x-envelope: &env
+  "200":
+    description: Envelope
+    content: { application/json: { schema: { $ref: "#/components/schemas/Envelope" } } }
+  "400": { $ref: "#/components/responses/Error" }
+  "401": { $ref: "#/components/responses/Error" }
+  "403": { $ref: "#/components/responses/Error" }
+  "404": { $ref: "#/components/responses/Error" }
+  "409": { $ref: "#/components/responses/Error" }
+  "423": { $ref: "#/components/responses/Error" }
+  "429": { $ref: "#/components/responses/Error" }
+  "503": { $ref: "#/components/responses/Error" }
+
+paths:
+  # ── kane (implemented) ────────────────────────────────────────────────────
+  /api/v1/kane/runs:
+    post:
+      tags: [kane]
+      operationId: recordKaneRun
+      x-implemented: kane-mcp
+      summary: Report a Kane run (kanehack report). Status from exit code; dedupe on (source, execution id).
+      security: [{ BearerAuth: [] }, { SessionCookie: [] }]
+      parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { oneOf: [{ $ref: "#/components/schemas/RecordRunRequest" }, { $ref: "#/components/schemas/MutationRequest" }] } } }
+      responses:
+        <<: *env
+        "200": { description: "data: RunReceipt", content: { application/json: { schema: { $ref: "#/components/schemas/Envelope" } } }, x-data: { $ref: "#/components/schemas/RunReceipt" } }
+    get:
+      tags: [kane]
+      operationId: listKaneRuns
+      x-implemented: kane-mcp
+      security: [{ BearerAuth: [] }, { SessionCookie: [] }]
+      parameters:
+        - { name: project_id, in: query, schema: { type: integer }, description: "Staff (judge/mentor/organizer) only; members get their own project" }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+      responses:
+        <<: *env
+        "200": { description: "data: { project_id, team_slug, runs: KaneRun[] }", content: { application/json: { schema: { $ref: "#/components/schemas/Envelope" } } } }
+  /api/v1/kane/runs/{id}:
+    get:
+      tags: [kane]
+      operationId: getKaneRun
+      x-implemented: kane-mcp
+      security: [{ BearerAuth: [] }, { SessionCookie: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, description: "12 or KR-12" } }]
+      responses:
+        <<: *env
+        "200": { description: "data: KaneRun", content: { application/json: { schema: { $ref: "#/components/schemas/Envelope" } } }, x-data: { $ref: "#/components/schemas/KaneRun" } }
+  /api/v1/kane/evidence:
+    post:
+      tags: [kane]
+      operationId: uploadEvidence
+      x-implemented: kane-mcp
+      summary: Store evidence in private Blob. Type/size/magic/zip/executable checks; quarantine; sha256 dedupe.
+      security: [{ BearerAuth: [] }, { SessionCookie: [] }]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data: { schema: { $ref: "#/components/schemas/EvidenceUpload" } }
+          application/json: { schema: { $ref: "#/components/schemas/EvidenceSignedComplete" } }
+      responses:
+        <<: *env
+        "200": { description: "data: EvidenceReceipt", content: { application/json: { schema: { $ref: "#/components/schemas/Envelope" } } }, x-data: { $ref: "#/components/schemas/EvidenceReceipt" } }
+    get:
+      tags: [kane]
+      operationId: listEvidence
+      x-implemented: kane-mcp
+      security: [{ BearerAuth: [] }, { SessionCookie: [] }]
+      parameters: [{ name: project_id, in: query, schema: { type: integer } }]
+      responses: *env
+  /api/v1/kane/evidence/upload:
+    post:
+      tags: [kane]
+      operationId: evidenceUploadToken
+      x-implemented: kane-mcp
+      summary: "@vercel/blob/client handleUpload token for files > 4 MB (≤ 50 MB), path evidence-incoming/{projectId}/ only."
+      security: [{ BearerAuth: [] }, { SessionCookie: [] }]
+      requestBody: { required: true, content: { application/json: { schema: { type: object, description: "HandleUploadBody" } } } }
+      responses:
+        "200": { description: "{ type: blob.generate-client-token, clientToken }" }
+        "401": { description: Unauthenticated }
+        "403": { description: Wrong project path }
+  /api/v1/kane/evidence/{id}:
+    get:
+      tags: [kane]
+      operationId: getEvidenceFile
+      x-implemented: kane-mcp
+      summary: The file, streamed. Team, judges/mentors (judges-visible), organizers; quarantined = organizers only. 404 otherwise.
+      security: [{ BearerAuth: [] }, { SessionCookie: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        "200": { description: "File; images/video/pdf inline, everything else as attachment text/plain, CSP sandbox", headers: { X-Evidence-Sha256: { schema: { type: string } } } }
+        "404": { description: Not found or not allowed }
+  /api/v1/projects/{id}/milestones:
+    get:
+      tags: [kane]
+      operationId: listMilestones
+      x-implemented: kane-mcp
+      security: [{ BearerAuth: [] }, { SessionCookie: [] }]
+      parameters: [{ $ref: "#/components/parameters/ProjectId" }]
+      responses: *env
+    post:
+      tags: [kane]
+      operationId: proposeMilestone
+      x-implemented: kane-mcp
+      security: [{ BearerAuth: [] }, { SessionCookie: [] }]
+      parameters: [{ $ref: "#/components/parameters/ProjectId" }, { $ref: "#/components/parameters/IdempotencyKey" }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/MilestoneRequest" } } } }
+      responses:
+        <<: *env
+        "200": { description: "data: MilestoneReceipt", content: { application/json: { schema: { $ref: "#/components/schemas/Envelope" } } }, x-data: { $ref: "#/components/schemas/MilestoneReceipt" } }
+    patch:
+      tags: [kane]
+      operationId: decideMilestone
+      x-implemented: kane-mcp
+      summary: A teammate (browser session only) approves wider visibility or withdraws.
+      security: [{ SessionCookie: [] }]
+      parameters: [{ $ref: "#/components/parameters/ProjectId" }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/MilestoneDecision" } } } }
+      responses: *env
+  /api/v1/projects/{id}/defects:
+    get:
+      tags: [kane]
+      operationId: listDefects
+      x-implemented: kane-mcp
+      security: [{ BearerAuth: [] }, { SessionCookie: [] }]
+      parameters: [{ $ref: "#/components/parameters/ProjectId" }]
+      responses: *env
+    post:
+      tags: [kane]
+      operationId: actOnDefect
+      x-implemented: kane-mcp
+      security: [{ BearerAuth: [] }, { SessionCookie: [] }]
+      parameters: [{ $ref: "#/components/parameters/ProjectId" }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/DefectAction" } } } }
+      responses: *env
+
+  # ── webhooks + MCP (implemented) ──────────────────────────────────────────
+  /webhooks/github:
+    post:
+      tags: [webhooks]
+      operationId: githubWebhook
+      x-implemented: kane-mcp
+      summary: "GitHub App: HMAC over raw body, X-GitHub-Delivery dedupe, push → repository_links + commit timeline. Permissions: contents:read, metadata:read."
+      security: [{ GitHubSignature: [] }]
+      parameters:
+        - { name: X-GitHub-Delivery, in: header, required: true, schema: { type: string } }
+        - { name: X-GitHub-Event, in: header, required: true, schema: { type: string } }
+      responses:
+        "200": { description: "{ ok, duplicate? , status?, detail? }" }
+        "401": { description: Bad signature }
+        "503": { description: GITHUB_WEBHOOK_SECRET not configured }
+  /webhooks/renderer:
+    post:
+      tags: [webhooks]
+      operationId: rendererWebhook
+      x-implemented: kane-mcp
+      security: [{ RendererSignature: [] }]
+      parameters: [{ name: X-Renderer-Delivery, in: header, required: true, schema: { type: string } }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/RenderCallback" } } } }
+      responses:
+        "200": { description: "{ ok, applied, status }" }
+        "401": { description: Bad signature }
+  /webhooks/luma:
+    post: { tags: [webhooks], operationId: lumaWebhook, x-owner: admissions-ops, summary: "Only if Luma Plus is confirmed; CSV import is the default", security: [{ GitHubSignature: [] }], responses: { "200": { description: ok } } }
+  /mcp:
+    post:
+      tags: [mcp]
+      operationId: mcp
+      x-implemented: kane-mcp
+      summary: "Streamable HTTP MCP, stateless JSON. Tools: event_get_brief, participant_get_status, participant_update_profile, activation_begin, activation_get_checkpoint, readiness_report, team_find, team_create, team_join, idea_validate, idea_check_overlap, harness_get_capabilities, kane_record_run, milestone_propose, help_diagnose, help_create, help_get_status, submission_preflight, submission_finalize, demo_generate, deck_get, deck_update, showcase_preview, showcase_publish, social_draft. Each returns an Envelope as JSON text content. social_publish is not exposed."
+      security: [{ BearerAuth: [] }]
+      parameters: [{ name: Accept, in: header, required: true, schema: { const: "application/json, text/event-stream" } }]
+      requestBody: { required: true, content: { application/json: { schema: { type: object, description: JSON-RPC 2.0 } } } }
+      responses:
+        "200": { description: JSON-RPC response }
+        "401": { description: Missing/invalid token (Envelope) }
+        "405": { description: GET/DELETE not offered (stateless) }
+        "503": { description: mcp flag off }
+
+  # ── other areas (contract) ────────────────────────────────────────────────
+  /api/v1/pair/start:
+    post: { tags: [auth], operationId: pairStart, x-owner: identity, summary: "Device-code pairing used by `kanehack pair` (no auth). Returns pair_code to approve in the signed-in browser.", requestBody: { content: { application/json: { schema: { $ref: "#/components/schemas/PairStartRequest" } } } }, responses: { <<: *env, "200": { description: "data: PairStartData" } } }
+  /api/v1/pair/confirm:
+    post: { tags: [auth], operationId: pairConfirm, x-owner: identity, summary: "Polled by kanehack with poll_token; returns data.token once approved (shown once), PAIR_EXPIRED (410) after expiry.", requestBody: { content: { application/json: { schema: { $ref: "#/components/schemas/PairConfirmRequest" } } } }, responses: { <<: *env, "200": { description: "data: PairConfirmData" } } }
+  /api/v1/auth/start:
+    post: { tags: [auth], operationId: authStart, x-owner: identity, responses: *env }
+  /api/v1/auth/callback:
+    get: { tags: [auth], operationId: authCallback, x-owner: identity, responses: { "302": { description: redirect } } }
+  /api/v1/participants/me:
+    get: { tags: [participants], operationId: getMe, x-owner: identity, security: [{ BearerAuth: [] }, { SessionCookie: [] }], responses: *env }
+    patch: { tags: [participants], operationId: patchMe, x-owner: identity, security: [{ BearerAuth: [] }, { SessionCookie: [] }], requestBody: { content: { application/json: { schema: { $ref: "#/components/schemas/ProfilePatch" } } } }, responses: *env }
+  /api/v1/activate/checkpoints:
+    post: { tags: [participants], operationId: activateCheckpoint, x-owner: identity, responses: *env }
+  /api/v1/activate/selfie:
+    post: { tags: [participants], operationId: activateSelfie, x-owner: identity, summary: "Browser upload by the person only; never via an agent", responses: *env }
+  /api/v1/activate/resume:
+    post: { tags: [participants], operationId: activateResume, x-owner: identity, responses: *env }
+  /api/v1/readiness:
+    post: { tags: [participants], operationId: readiness, x-owner: identity, requestBody: { content: { application/json: { schema: { $ref: "#/components/schemas/ReadinessReport" } } } }, responses: *env }
+  /api/v1/teams:
+    post: { tags: [teams], operationId: createTeam, x-owner: teams-ideas, requestBody: { content: { application/json: { schema: { $ref: "#/components/schemas/TeamCreate" } } } }, responses: *env }
+  /api/v1/teams/join:
+    post: { tags: [teams], operationId: joinTeam, x-owner: teams-ideas, requestBody: { content: { application/json: { schema: { $ref: "#/components/schemas/TeamJoin" } } } }, responses: *env }
+  /api/v1/teams/{id}/invites:
+    post: { tags: [teams], operationId: createInvite, x-owner: teams-ideas, parameters: [{ $ref: "#/components/parameters/ProjectId" }], responses: *env }
+  /api/v1/match/profile:
+    put: { tags: [teams], operationId: matchProfile, x-owner: teams-ideas, responses: *env }
+  /api/v1/match/suggestions:
+    get: { tags: [teams], operationId: matchSuggestions, x-owner: teams-ideas, responses: *env }
+  /api/v1/ideas:
+    put: { tags: [ideas], operationId: putIdea, x-owner: teams-ideas, responses: *env }
+  /api/v1/ideas/validate:
+    post: { tags: [ideas], operationId: validateIdea, x-owner: teams-ideas, requestBody: { content: { application/json: { schema: { $ref: "#/components/schemas/IdeaValidate" } } } }, responses: { <<: *env, "200": { description: "data: IdeaAssessment (advisory, never a score)" } } }
+  /api/v1/ideas/radar:
+    get: { tags: [ideas], operationId: ideaRadar, x-owner: teams-ideas, summary: "Opted-in public summaries only", responses: *env }
+  /api/v1/help:
+    post: { tags: [help], operationId: createHelp, x-owner: help, parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }], requestBody: { content: { application/json: { schema: { $ref: "#/components/schemas/HelpCreate" } } } }, responses: { <<: *env, "200": { description: "data: Receipt + HelpTicket" } } }
+  /api/v1/help/{id}:
+    get: { tags: [help], operationId: getHelp, x-owner: help, parameters: [{ name: id, in: path, required: true, schema: { type: string } }], responses: { <<: *env, "200": { description: "data: HelpTicket" } } }
+  /api/v1/help/{id}/claim:
+    post: { tags: [help], operationId: claimHelp, x-owner: help, summary: "Atomic; 409 if already claimed", parameters: [{ name: id, in: path, required: true, schema: { type: string } }], responses: *env }
+  /api/v1/help/{id}/resolve:
+    post: { tags: [help], operationId: resolveHelp, x-owner: help, parameters: [{ name: id, in: path, required: true, schema: { type: string } }], responses: *env }
+  /api/v1/ops/help:
+    get: { tags: [ops], operationId: opsHelpQueue, x-owner: help, responses: *env }
+  /api/v1/submissions/preflight:
+    post: { tags: [submissions], operationId: preflight, x-owner: submission-showcase, responses: { <<: *env, "200": { description: "data: Preflight" } } }
+  /api/v1/submissions/finalize:
+    post: { tags: [submissions], operationId: finalize, x-owner: submission-showcase, parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }], requestBody: { content: { application/json: { schema: { $ref: "#/components/schemas/Finalize" } } } }, responses: { <<: *env, "200": { description: "data: SubmissionReceipt" } } }
+  /api/v1/submissions/receipt/{id}:
+    get: { tags: [submissions], operationId: getReceipt, x-owner: submission-showcase, parameters: [{ name: id, in: path, required: true, schema: { type: string } }], responses: *env }
+  /api/v1/projects/{id}/story:
+    put: { tags: [studio], operationId: putStory, x-owner: studio-deck, parameters: [{ $ref: "#/components/parameters/ProjectId" }], responses: *env }
+  /api/v1/decks/{id}/versions:
+    post: { tags: [studio], operationId: deckVersion, x-owner: studio-deck, parameters: [{ $ref: "#/components/parameters/ProjectId" }], requestBody: { content: { application/json: { schema: { $ref: "#/components/schemas/DeckUpdate" } } } }, responses: *env }
+  /api/v1/decks/{id}/render:
+    post: { tags: [studio], operationId: deckRender, x-owner: studio-deck, summary: "Always answers queued", parameters: [{ $ref: "#/components/parameters/ProjectId" }], requestBody: { content: { application/json: { schema: { $ref: "#/components/schemas/RenderRequest" } } } }, responses: *env }
+  /api/v1/renders/{id}:
+    get: { tags: [studio], operationId: getRender, x-owner: studio-deck, parameters: [{ $ref: "#/components/parameters/ProjectId" }], responses: *env }
+  /api/v1/showcase/{id}/publish:
+    post: { tags: [studio], operationId: publishShowcase, x-owner: studio-deck, parameters: [{ $ref: "#/components/parameters/ProjectId" }], requestBody: { content: { application/json: { schema: { $ref: "#/components/schemas/ShowcasePublish" } } } }, responses: *env }
+  /api/v1/media:
+    post: { tags: [social], operationId: media, x-owner: judge-photo, responses: *env }
+  /api/v1/social/drafts:
+    post: { tags: [social], operationId: socialDraft, x-owner: judge-photo, requestBody: { content: { application/json: { schema: { $ref: "#/components/schemas/SocialDraft" } } } }, responses: *env }
+  /api/v1/social/{id}/approve:
+    post: { tags: [social], operationId: socialApprove, x-owner: judge-photo, parameters: [{ $ref: "#/components/parameters/ProjectId" }], responses: *env }
+  /api/v1/social/{id}/publish:
+    post: { tags: [social], operationId: socialPublish, x-owner: judge-photo, summary: "Organizer only, after approval; flag social_publish", parameters: [{ $ref: "#/components/parameters/ProjectId" }], responses: *env }
+  /api/v1/live/metrics:
+    get: { tags: [live], operationId: liveMetrics, x-owner: live, responses: { <<: *env, "200": { description: "data: LiveMetrics; unknown values are null, never 0" } } }
+  /api/v1/live/stream:
+    get: { tags: [live], operationId: liveStream, x-owner: live, summary: "SSE with Last-Event-ID resume", responses: { "200": { description: text/event-stream } } }
+  /api/v1/ops/announcements:
+    post: { tags: [ops], operationId: announce, x-owner: admissions-ops, responses: *env }
+  /api/v1/ops/integrations/health:
+    get: { tags: [ops], operationId: integrationsHealth, x-owner: admissions-ops, responses: *env }
+  /api/v1/ops/recovery:
+    post: { tags: [ops], operationId: recovery, x-owner: admissions-ops, responses: *env }
+  /api/v1/ops/override:
+    post: { tags: [ops], operationId: override, x-owner: admissions-ops, summary: "Phase override; audited", responses: *env }
