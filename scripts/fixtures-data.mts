@@ -12,6 +12,8 @@ export const SHIP_PASSWORD = "swift-team-pass";
 
 /** The participant every local test signs in as (participant_email). */
 export const P = { name: "Pat Quill", email: "pat@demo.test", display: "Pat Q." };
+/** Stopped at the activation camera step (ready_for_camera) for t-108; runs in its own wave. */
+export const SELFIE_PENDING = { email: "eve@demo.test", display: "Eve M." };
 /** The second participant (other_participant_email): on team_two, not discoverable. */
 export const O = { name: "Olu Bankole", email: "olu@demo.test", display: "Olu Bankole" };
 

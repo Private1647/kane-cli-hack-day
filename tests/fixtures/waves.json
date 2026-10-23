@@ -523,19 +523,16 @@
       "target": "http://localhost:3100",
       "tests": [
         ".testmuai/tests/no-biometric-suggestion-for-attendee-without-separate_test.md",
-        ".testmuai/tests/signing-back-in-restores-the-pending-selfie-step_test.md",
         ".testmuai/tests/restore-default-deck-after-invalid-custom-html-2_test.md",
         ".testmuai/tests/retry-finalization-without-creating-another-receipt-2_test.md"
       ],
       "test_ids": [
         "t-94",
-        "t-108",
         "t-127",
         "t-147"
       ],
       "titles": [
         "No biometric suggestion for attendee without separate enrollment",
-        "Signing back in restores the pending Selfie step",
         "Restore default deck after invalid custom HTML",
         "Retry finalization without creating another receipt"
       ],
@@ -746,6 +743,24 @@
       "overrides": {
         "complete_submission_team_slug": "demo-tern",
         "submission_captain_email": "tern.captain@demo.test"
+      }
+    },
+    {
+      "id": "W27",
+      "runnable_locally": true,
+      "target": "http://localhost:3100",
+      "test_ids": [
+        "t-108"
+      ],
+      "titles": [
+        "Signing back in restores the pending selfie step"
+      ],
+      "tests": [
+        ".testmuai/tests/signing-back-in-restores-the-pending-selfie-step_test.md"
+      ],
+      "single_use_credentials": [],
+      "overrides": {
+        "participant_email": "eve@demo.test"
       }
     }
   ],

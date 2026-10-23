@@ -437,6 +437,17 @@ await soft("ship swift v2", async () => {
   };
   await story.saveStory(access, { content, expected_version: v1.version });
 });
+// Eve: mid-activation, stopped at the human camera checkpoint (t-108 signs out and back in).
+await soft("eve selfie pending", async () => {
+  const activation = await import("../src/server/activation.ts");
+  const m = (await memberRow(F.SELFIE_PENDING.email)) as never;
+  await activation.confirmAdmission(m, true).catch(() => null);
+  await activation.saveIdentity(m, { display_name: F.SELFIE_PENDING.display } as never);
+  await activation.saveActivationConsents(m, {
+    selfie_storage: true, photo_publication: false, face_matching: false, social_mention: false,
+    teammate_discovery: false, idea_discovery: false, activity_publication: false,
+  });
+});
 // Puffin: published with a private marker in its story, then hidden by an organizer.
 await submission("puffin", "finalized");
 await soft("ship puffin hidden", async () => {
