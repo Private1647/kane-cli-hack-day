@@ -1,6 +1,8 @@
 import Hero from "@/components/Hero";
 import BootScreen from "@/components/BootScreen";
 import NowNext from "@/components/home/NowNext";
+import HomeStats from "@/components/live/HomeStats";
+import { Suspense } from "react";
 import Schedule from "@/components/home/Schedule";
 import Challenge from "@/components/home/Challenge";
 import Prizes from "@/components/home/Prizes";
@@ -16,6 +18,9 @@ export default function Home() {
     <main>
       <Hero />
       <NowNext />
+      <Suspense fallback={null}>
+        <HomeStats />
+      </Suspense>
       <Schedule keyOnly />
       <Challenge />
       <Prizes />
