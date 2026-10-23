@@ -132,7 +132,7 @@ async function Proof({ team, members, me }: HubContext) {
               <p className="font-pixel text-[10px] uppercase tracking-[0.2em] text-lightgray">1 · Install and pair once</p>
               <CopyField value="curl -fsSL https://kaneclihack.sh/install.sh | sh" />
               <p className="font-plex text-xs text-lightgray">
-                Windows: <code>irm https://kaneclihack.sh/install.ps1 | iex</code>. Read the{" "}
+                Windows: <code>irm https://www.kaneclihack.sh/install.ps1 | iex</code>. Read the{" "}
                 <a href="/install.sh" className="underline decoration-hairline underline-offset-4 hover:text-lime">
                   script
                 </a>{" "}
