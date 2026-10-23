@@ -6,3 +6,8 @@ photo-pipeline
 .env.production.local
 /*.png
 skills-lock.json
+# kane-cli test store, evidence packs and test variables (local demo credentials)
+.testmuai
+.context
+.hyperexecute
+hyperexecute-cli.log

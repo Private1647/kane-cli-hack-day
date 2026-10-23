@@ -226,19 +226,16 @@
       "tests": [
         ".testmuai/tests/preflight-reports-missing-repository-and-missing-evidence_test.md",
         ".testmuai/tests/consent-checked-photo-gains-captions-and-alt-text-before_test.md",
-        ".testmuai/tests/human-selfie-handoff-ends-in-activation-receipt-2_test.md",
         ".testmuai/tests/export-the-five-default-scenes-with-correct-pdf-breaks-2_test.md"
       ],
       "test_ids": [
         "t-34",
         "t-95",
-        "t-109",
         "t-129"
       ],
       "titles": [
         "Preflight reports missing repository and missing evidence",
         "Consent-checked photo gains captions and alt text before approved gallery release",
-        "Human selfie handoff ends in activation receipt",
         "Export the five default scenes with correct PDF breaks"
       ],
       "single_use_credentials": [
@@ -750,6 +747,13 @@
         "complete_submission_team_slug": "demo-tern",
         "submission_captain_email": "tern.captain@demo.test"
       }
+    }
+  ],
+  "human_only": [
+    {
+      "test_id": "t-109",
+      "path": ".testmuai/tests/human-selfie-handoff-ends-in-activation-receipt-2_test.md",
+      "why": "A person must press the camera shutter (Kane never takes the selfie); run it attended."
     }
   ]
 }
