@@ -1,0 +1,13 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+  "mcpServers": {
+    "kane-hack-event": {
+      "type": "streamable-http",
+      "url": "https://kaneclihack.sh/mcp",
+      "headers": {
+        "Authorization": "Bearer ${KANEHACK_TOKEN}"
+      },
+      "bearer_token_env_var": "KANEHACK_TOKEN"
+    }
+  }
+}

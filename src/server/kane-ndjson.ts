@@ -284,7 +284,7 @@ export function findCredentialLike(value: unknown, path = "", out: string[] = []
 
 /** Local filesystem paths (session_dir, log_path…) are private; strip them from anything stored. */
 export function stripLocalPaths<T>(v: T): T {
-  if (typeof v === "string") return v.replace(/(~|\/Users\/[^/\s]+|\/home\/[^/\s]+|[A-Za-z]:\\Users\\[^\\\s]+)[^\s"']*/g, "[local path]") as T;
+  if (typeof v === "string") return v.replace(/(~\/|\/Users\/[^/\s]+|\/home\/[^/\s]+|[A-Za-z]:\\Users\\[^\\\s]+)[^\s"']*/g, "[local path]") as T;
   if (Array.isArray(v)) return v.map(stripLocalPaths) as T;
   if (v && typeof v === "object") {
     const o: Record<string, unknown> = {};

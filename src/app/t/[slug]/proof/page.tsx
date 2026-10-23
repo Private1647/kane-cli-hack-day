@@ -129,11 +129,19 @@ async function Proof({ team, members, me }: HubContext) {
         >
           <div className="grid gap-10 lg:grid-cols-2">
             <div className="space-y-3">
-              <p className="font-pixel text-[10px] uppercase tracking-[0.2em] text-lightgray">1 · Pair once</p>
-              <CopyField value="npx kanehack pair" />
+              <p className="font-pixel text-[10px] uppercase tracking-[0.2em] text-lightgray">1 · Install and pair once</p>
+              <CopyField value="curl -fsSL https://kaneclihack.sh/install.sh | sh" />
+              <p className="font-plex text-xs text-lightgray">
+                Windows: <code>irm https://kaneclihack.sh/install.ps1 | iex</code>. Read the{" "}
+                <a href="/install.sh" className="underline decoration-hairline underline-offset-4 hover:text-lime">
+                  script
+                </a>{" "}
+                first if you like; it never uses sudo.
+              </p>
+              <CopyField value="kanehack pair" />
               <p className="font-pixel text-[10px] uppercase tracking-[0.2em] text-lightgray">2 · Wrap any Kane command</p>
-              <CopyField value={'npx kanehack report -- kane-cli run "Sign up and reach the dashboard" --agent'} />
-              <CopyField value="npx kanehack report --evidence ./pack.zip -- kane-cli testrun run tests/ --agent" />
+              <CopyField value={'kanehack report -- kane-cli run "Sign up and reach the dashboard" --agent'} />
+              <CopyField value="kanehack report --evidence ./pack.zip -- kane-cli testrun run tests/ --agent" />
               <p className="font-plex text-xs text-lightgray">
                 Agents can call the <code>kane_record_run</code> MCP tool instead. Exit 2 means nothing ran (auth or setup), not a failed test.
               </p>
@@ -286,7 +294,7 @@ async function Proof({ team, members, me }: HubContext) {
             </div>
           ) : (
             <p className="border border-dashed border-hairline p-4 font-plex text-sm text-lightgray">
-              No coverage reported. Run <code className="text-bright">npx kanehack report -- kane-cli cover --mode agent</code> after designing tests.
+              No coverage reported. Run <code className="text-bright">kanehack report -- kane-cli cover --mode agent</code> after designing tests.
             </p>
           )}
         </Block>

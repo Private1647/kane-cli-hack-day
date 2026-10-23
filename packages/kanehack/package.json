@@ -1,0 +1,20 @@
+{
+  "name": "kanehack",
+  "version": "0.1.0",
+  "description": "Kane CLI Hack Day helper: pair this machine, check your setup, report Kane CLI runs (exit code + NDJSON) to your team's Proof tab, ask a mentor, preflight your submission.",
+  "type": "module",
+  "bin": {
+    "kanehack": "bin/kanehack.mjs"
+  },
+  "files": [
+    "bin",
+    "lib",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18.17"
+  },
+  "homepage": "https://kaneclihack.sh",
+  "license": "UNLICENSED",
+  "private": true
+}

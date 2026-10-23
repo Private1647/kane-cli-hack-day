@@ -11,7 +11,7 @@ import { assertMcpEnabled, buildMcpServer } from "@/server/mcp";
 
 function unauthorized(message: string) {
   return Response.json(
-    toEnvelope({ status: "error", message, fallbackText: `${message} Pair this machine: npx kanehack pair (or ${siteUrl("/pair")}).` }),
+    toEnvelope({ status: "error", message, fallbackText: `${message} Pair this machine: kanehack pair (or ${siteUrl("/pair")}).` }),
     { status: 401, headers: { "www-authenticate": `Bearer realm="kaneclihack", error="invalid_token"` } },
   );
 }
