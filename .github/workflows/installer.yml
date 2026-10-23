@@ -1,0 +1,179 @@
+name: installer
+
+# Cross-OS regression tests for public/install.sh, public/install.ps1 and the kanehack CLI.
+# What is real and what is mocked, per job:
+#   linux-real     the real app (next build + next start, Postgres 16 service, migrations + seed-local);
+#                  pairing is approved through the real /passport/login and /pair forms. Also the mock suite.
+#   alpine-busybox tests/installer/mock-server.mjs (serves public/, implements the pair / runs / MCP
+#                  endpoints kanehack calls with the real envelope). busybox ash + sha256sum, no shasum, root.
+#   macos          mock server; zsh only (sh/bash/dash run locally); lean on purpose (10x minutes).
+#   windows        mock server; Windows PowerShell 5.1 and pwsh 7; Git Bash for the sh shim.
+# kane-cli is always tests/installer/fake-kane-cli.mjs (no browser, no account).
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "public/install*"
+      - "public/kanehack-*.tgz"
+      - "public/hack-skills-*.tgz"
+      - "packages/kanehack/**"
+      - "plugin/**"
+      - "tests/installer/**"
+      - ".github/workflows/installer.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: installer-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pins:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tarballs match the shas pinned in both installers
+        run: |
+          set -eu
+          V=$(sed -n 's/^KANEHACK_VERSION="\(.*\)"/\1/p' public/install.sh)
+          test "$V" = "$(sed -n 's/^\$KanehackVersion = "\(.*\)"/\1/p' public/install.ps1)"
+          test "$V" = "$(node -p 'require("./packages/kanehack/package.json").version')"
+          K=$(sha256sum public/kanehack-$V.tgz | cut -d' ' -f1); S=$(sha256sum public/hack-skills-$V.tgz | cut -d' ' -f1)
+          grep -q "^KANEHACK_SHA256=\"$K\"" public/install.sh && grep -q "^SKILLS_SHA256=\"$S\"" public/install.sh
+          grep -q "^\$KanehackSha256 = \"$K\"" public/install.ps1 && grep -q "^\$SkillsSha256 = \"$S\"" public/install.ps1
+          diff -r plugin/skills .agents/skills
+          mkdir -p /tmp/pk && tar -xzf public/kanehack-$V.tgz -C /tmp/pk && diff /tmp/pk/package/bin/kanehack.mjs packages/kanehack/bin/kanehack.mjs
+          mkdir -p /tmp/sk && tar -xzf public/hack-skills-$V.tgz -C /tmp/sk && diff -r /tmp/sk plugin/skills
+          echo "pins ok for $V"
+
+  linux-real:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+          POSTGRES_DB: hackos_ci
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      DATABASE_URL: postgres://postgres@127.0.0.1:5432/hackos_ci
+      DATABASE_URL_UNPOOLED: postgres://postgres@127.0.0.1:5432/hackos_ci
+      SITE_URL: http://localhost:3300
+      HACKOS_ENV: local
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: npm }
+      - name: Secrets for this run only
+        run: |
+          for k in SESSION_SECRET RECEIPT_SIGNING_KEY CRON_SECRET ROSTER_EMAIL_KEY ADMIN_PASSWORD EXPORT_TOKEN; do
+            echo "$k=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+          done
+      - run: npm ci
+      - name: Migrate + seed the demo fixtures
+        run: |
+          node scripts/migrate.mjs
+          node --import ./tests/support/register.mjs scripts/seed-local.mts > /tmp/seed.json
+          grep -q demo-pass-1234 /tmp/seed.json
+      - run: npm run build
+      - name: Start the app on :3300
+        run: |
+          nohup npx next start -p 3300 > /tmp/next.log 2>&1 &
+          for i in $(seq 1 60); do curl -s -o /dev/null -w '%{http_code}' http://localhost:3300/api/v1/kane/runs | grep -q 401 && break; sleep 1; done
+          curl -sI http://localhost:3300/install.ps1 | grep -i content-type
+      - name: install.sh under dash (real app)
+        run: sudo apt-get install -y dash >/dev/null 2>&1 || true; SITE=http://localhost:3300 SH_UNDER_TEST=dash sh tests/installer/installer.sh
+      - name: install.sh under bash (real app), keep the installed HOME
+        run: SITE=http://localhost:3300 SH_UNDER_TEST=bash WORK=/tmp/kh-bash KEEP_INSTALLED=1 sh tests/installer/installer.sh
+      - name: kanehack suite against the real app (installed copy, real /pair approval)
+        run: TEST_HOME="$(cat /tmp/kh-bash/installed-home)" KANEHACK_API=http://localhost:3300 APPROVE=real:ana@demo.test:demo-pass-1234 node tests/installer/kanehack-suite.mjs
+      - name: The reported runs are in the database
+        run: |
+          psql "$DATABASE_URL" -tAc "select count(*) from kane_runs where source = 'kanehack_cli' and objective like 'Open the site & find%'" | tee /tmp/n
+          test "$(cat /tmp/n)" -ge 1
+      - name: Revoked token (real revocation in the DB)
+        run: |
+          H="$(cat /tmp/kh-bash/installed-home)"
+          psql "$DATABASE_URL" -c "update member_tokens set revoked_at = now() where kind = 'bearer' and revoked_at is null"
+          set +e; HOME="$H" KANEHACK_API=http://localhost:3300 "$H/.kanehack/bin/kanehack" status --json; rc=$?; set -e
+          test "$rc" -eq 2
+      - name: kanehack suite against the mock (mock-only checks)
+        run: |
+          node tests/installer/mock-server.mjs --port 3399 & sleep 1
+          KANEHACK_API=http://localhost:3399 APPROVE=mock node tests/installer/kanehack-suite.mjs
+      - if: failure()
+        run: tail -100 /tmp/next.log
+
+  alpine-busybox:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    container: node:20-alpine
+    steps:
+      - run: apk add --no-cache curl git python3 >/dev/null
+      - uses: actions/checkout@v4
+      - name: No shasum, busybox ash as sh
+        run: '! command -v shasum && command -v sha256sum && ls -l /bin/sh'
+      - name: install.sh under busybox ash (mock server), keep the installed HOME
+        run: |
+          node tests/installer/mock-server.mjs --port 3399 > /tmp/mock.log 2>&1 &
+          sleep 1
+          SITE=http://localhost:3399 SH_UNDER_TEST=sh WORK=/tmp/kh-ash KEEP_INSTALLED=1 sh tests/installer/installer.sh
+          TEST_HOME="$(cat /tmp/kh-ash/installed-home)" KANEHACK_API=http://localhost:3399 APPROVE=mock node tests/installer/kanehack-suite.mjs
+
+  macos:
+    runs-on: macos-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: install.sh under zsh + kanehack suite (mock server)
+        run: |
+          node tests/installer/mock-server.mjs --port 3399 > /tmp/mock.log 2>&1 &
+          sleep 1
+          SITE=http://localhost:3399 SH_UNDER_TEST=zsh WORK=/tmp/kh-zsh KEEP_INSTALLED=1 sh tests/installer/installer.sh
+          TEST_HOME="$(cat /tmp/kh-zsh/installed-home)" KANEHACK_API=http://localhost:3399 APPROVE=mock node tests/installer/kanehack-suite.mjs
+
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        shell: [powershell, pwsh]
+    defaults:
+      run:
+        shell: ${{ matrix.shell }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: Start the mock server
+        run: |
+          Start-Process -FilePath node -ArgumentList "tests/installer/mock-server.mjs","--port","3399" -WindowStyle Hidden
+          Start-Sleep -Seconds 2
+          (Invoke-WebRequest http://localhost:3399/install.ps1 -UseBasicParsing).StatusCode
+      - name: install.ps1 (${{ matrix.shell }})
+        run: |
+          $env:SITE = "http://localhost:3399"; $env:KEEP_INSTALLED = "1"
+          & tests\installer\installer.ps1
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+      - name: kanehack suite (installed copy; kane-cli is a .cmd shim, so args go through cmd.exe)
+        run: |
+          $h = Get-Content (Get-ChildItem $env:TEMP -Directory -Filter "kh-ps-*" | Sort-Object LastWriteTime | Select-Object -Last 1 | ForEach-Object { Join-Path $_.FullName "installed-home.txt" })
+          $env:TEST_HOME = $h.Trim(); $env:KANEHACK_API = "http://localhost:3399"; $env:APPROVE = "mock"
+          node tests/installer/kanehack-suite.mjs
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+      - name: Probe production (read-only GETs) - how irm handles the apex 308 and the content type
+        continue-on-error: true
+        run: |
+          foreach ($u in "https://www.kaneclihack.sh/install.ps1", "https://kaneclihack.sh/install.ps1") {
+            try { $r = Invoke-WebRequest $u -UseBasicParsing; Write-Host "$u -> $($r.StatusCode) $($r.Headers['Content-Type'])"; $t = Invoke-RestMethod $u; Write-Host "  irm returned $($t.GetType().Name), starts: $(([string]$t).Substring(0, 40))" }
+            catch { Write-Host "$u -> FAILED: $($_.Exception.Message)" }
+          }
