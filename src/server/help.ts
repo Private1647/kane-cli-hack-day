@@ -827,7 +827,7 @@ export async function addPaperTicket(staffIn: Staff | null, raw: unknown): Promi
   return transaction(async (tx) => {
     // Resolve times in the DB (the event zone) and refuse slips from the future.
     const { rows: tr } = await tx.query<{ opened: Date; claimed: Date | null; resolved: Date | null; now: Date }>(
-      `select ${tsExpr(1, times.opened)} as opened, ${tsExpr(2, times.claimed)} as claimed, ${tsExpr(3, times.resolved)} as resolved, now() as now`,
+      `select ${tsExpr(1, times.opened)} as opened, ${tsExpr(2, times.claimed)} as claimed, ${tsExpr(3, times.resolved)} as resolved, now() as now, $4::text as tz`,
       [times.opened!.value, times.claimed?.value ?? null, times.resolved?.value ?? null, tz],
     );
     const at = tr[0];
@@ -852,8 +852,8 @@ export async function addPaperTicket(staffIn: Staff | null, raw: unknown): Promi
     let teamId: number | null = null;
     if (input.team) {
       const { rows } = await tx.query<{ id: number }>(
-        "select id from teams where slug = lower($1) or lower(name) = lower($1) or ($1 ~ '^[0-9]+$' and id = $1::bigint) order by id limit 1",
-        [input.team],
+        "select id from teams where slug = lower($1) or lower(name) = lower($1) or id = $2 order by (id = $2) desc, id limit 1",
+        [input.team, /^\d{1,12}$/.test(input.team) ? Number(input.team) : null],
       );
       teamId = rows[0]?.id ?? null;
     }
