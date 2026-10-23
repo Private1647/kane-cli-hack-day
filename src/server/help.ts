@@ -16,6 +16,7 @@ import {
   type Staff,
 } from "./auth";
 import { AppError, idempotent, parse, siteUrl, transaction, writeAudit, z, zx, type Actor, type Receipt } from "./core";
+import { redactRestricted, scrubSecrets, type RedactionKind } from "./help-rules";
 
 // Help desk (Tier-0, SPEC §12). Tickets come from the hub, from /help for
 // members without a team, from the CLI/MCP, or from a paper slip typed in by
@@ -78,28 +79,9 @@ const HELP_STAFF_ROLES = ["mentor", "organizer"] as const;
 const MAX_OPEN_PER_MEMBER = 3;
 const MAX_CREATED_PER_15_MIN = 5;
 
-// ── Secrets never go on a ticket ─────────────────────────────────────────────
-
-const SECRET_PATTERNS: RegExp[] = [
-  /\b(?:sk|pk|rk)-(?:proj-|live-|test-)?[A-Za-z0-9_-]{16,}\b/g, // OpenAI / Stripe style keys
-  /\bkh[kpbh]_[A-Za-z0-9_-]{10,}\b/g, // our own bearer / pairing tokens
-  /\bgh[pousr]_[A-Za-z0-9]{20,}\b/g, // GitHub tokens
-  /\bgithub_pat_[A-Za-z0-9_]{20,}\b/g,
-  /\bxox[abprs]-[A-Za-z0-9-]{10,}\b/g, // Slack
-  /\bAKIA[0-9A-Z]{16}\b/g, // AWS access key id
-  /\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{5,}\b/g, // JWTs
-  /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?(?:-----END [A-Z ]*PRIVATE KEY-----|$)/g,
-  /\b(password|passwd|pwd|secret|token|api[_-]?key|access[_-]?key)\s*[:=]\s*\S+/gi,
-];
-
-/** Strip anything that looks like a credential. Tickets are read by many mentors and go to Slack. */
-export function scrubSecrets(text: string): { text: string; redacted: boolean } {
-  let out = text;
-  for (const re of SECRET_PATTERNS) {
-    out = out.replace(re, (m, label?: string) => (typeof label === "string" && /[:=]/.test(m) ? `${label}=[redacted]` : "[redacted]"));
-  }
-  return { text: out, redacted: out !== text };
-}
+// Secret scrubbing, mentor redaction and slip-time parsing are pure rules in
+// help-rules.ts (unit-tested without a database).
+export { scrubSecrets };
 
 // ── Rows and views ───────────────────────────────────────────────────────────
 
@@ -190,6 +172,8 @@ export type HelpTicketView = {
   age_seconds: number;
   url: string;
   messages: HelpMessageView[];
+  /** What was hidden from this viewer (secrets, private-repo excerpts, biometrics). Empty for the ticket's author. */
+  redacted: RedactionKind[];
 };
 
 /** What staff see in addition: full names, participant code, who typed in a paper slip, staff-only notes. */
@@ -233,6 +217,7 @@ function toView(t: TicketJoined, messages: HelpMessageView[]): HelpTicketView {
     age_seconds: t.age_seconds,
     url: `/help/${t.code}`,
     messages,
+    redacted: [],
   };
 }
 
@@ -247,6 +232,56 @@ function toStaffView(t: TicketJoined, messages: HelpMessageView[]): HelpTicketSt
     entered_by: t.entered_by_name,
     paper_original_at: iso(t.paper_original_at),
   };
+}
+
+// ── Privacy: who reads a ticket decides what they see ────────────────────────
+//
+// The author sees their own words. Teammates see the team's private repo but
+// not someone else's face data. Mentors and organizers (web queue, REST, MCP)
+// see neither, and the UI says what was hidden. Applied on read, so the stored
+// ticket stays the participant's own text.
+
+type Audience = "author" | "team" | "staff";
+
+/** Linked private repositories per team (repository_links.permission_scope has "private"). */
+async function privateReposByTeam(teamIds: (number | null)[]): Promise<Map<number, string[]>> {
+  const ids = [...new Set(teamIds.filter((x): x is number => x !== null))];
+  const map = new Map<number, string[]>();
+  if (!ids.length) return map;
+  const rows = await query<{ team_id: number; repo: string }>(
+    `select p.team_id, rl.repo_full_name as repo
+       from repository_links rl join projects p on p.id = rl.project_id
+      where p.team_id = any($1::bigint[]) and rl.permission_scope ? 'private'`,
+    [ids],
+  );
+  for (const r of rows) map.set(r.team_id, [...(map.get(r.team_id) ?? []), r.repo]);
+  return map;
+}
+
+function restrictView<V extends HelpTicketView>(v: V, audience: Audience, privateRepos: string[]): V {
+  if (audience === "author") return v;
+  const ctx = { privateRepos, repoAccess: audience === "team" };
+  const kinds = new Set<RedactionKind>();
+  const r = (text: string | null) => {
+    if (!text) return text;
+    const out = redactRestricted(text, ctx);
+    for (const k of out.kinds) kinds.add(k);
+    return out.text;
+  };
+  return {
+    ...v,
+    summary: r(v.summary)!,
+    details: r(v.details),
+    tried: r(v.tried),
+    safe_run_id: r(v.safe_run_id),
+    messages: v.messages.map((m) => ({ ...m, body: r(m.body)! })),
+    redacted: [...kinds],
+  };
+}
+
+async function restrictMany<V extends HelpTicketView>(views: { view: V; teamId: number | null; audience: Audience }[]): Promise<V[]> {
+  const repos = await privateReposByTeam(views.filter((x) => x.audience !== "author").map((x) => x.teamId));
+  return views.map((x) => restrictView(x.view, x.audience, (x.teamId && repos.get(x.teamId)) || []));
 }
 
 async function loadMessages(ticketId: number, includeStaffOnly: boolean): Promise<HelpMessageView[]> {
@@ -466,7 +501,9 @@ export async function getHelpTicket(ref: string, viewer: { member?: MemberRow | 
   const t = await findTicket(ref);
   // Same answer for "missing" and "not yours", so codes can't be probed.
   if (!t || !canSee(t, viewer)) throw new AppError("NOT_FOUND", { userMessage: "No ticket with that code on your account." });
-  return toView(t, await loadMessages(t.id, false));
+  const audience: Audience = viewer.member && t.member_id === viewer.member.id ? "author" : viewer.staff && hasRole(viewer.staff, ...HELP_STAFF_ROLES) ? "staff" : "team";
+  const [view] = await restrictMany([{ view: toView(t, await loadMessages(t.id, false)), teamId: t.team_id, audience }]);
+  return view;
 }
 
 /** The member's own tickets plus their team's, newest first. */
@@ -479,7 +516,7 @@ export async function listTicketsFor(who: { memberId: number | null; teamId: num
       limit $4`,
     [who.memberId, who.teamId, OPEN_STATUSES, limit],
   );
-  return rows.map((r) => toView(r, []));
+  return restrictMany(rows.map((r) => ({ view: toView(r, []), teamId: r.team_id, audience: r.member_id !== null && r.member_id === who.memberId ? ("author" as const) : ("team" as const) })));
 }
 
 // ── Replies and reopen (participant or staff) ────────────────────────────────
@@ -577,15 +614,17 @@ export async function listHelpQueue(staff: Staff | null, opts: { mine?: boolean;
   ]);
   const c = Object.fromEntries(HELP_STATUSES.map((k) => [k, 0])) as Record<HelpStatus, number>;
   for (const r of counts) c[r.status] = r.n;
-  return { server_time: now.toISOString(), open: open.map((r) => toStaffView(r, [])), recent_done: done.map((r) => toStaffView(r, [])), counts: c };
+  const staffViews = (rows: TicketJoined[]) => restrictMany(rows.map((r) => ({ view: toStaffView(r, []), teamId: r.team_id, audience: "staff" as const })));
+  return { server_time: now.toISOString(), open: await staffViews(open), recent_done: await staffViews(done), counts: c };
 }
 
-/** One ticket with every message, staff-only notes included. */
+/** One ticket with every message, staff-only notes included, restricted content redacted. */
 export async function getHelpTicketForStaff(ref: string, staff: Staff | null): Promise<HelpTicketStaffView> {
   assertHelpStaff(staff);
   const t = await findTicket(ref);
   if (!t) throw new AppError("NOT_FOUND", { userMessage: `No help ticket ${ref}.` });
-  return toStaffView(t, await loadMessages(t.id, true));
+  const [view] = await restrictMany([{ view: toStaffView(t, await loadMessages(t.id, true)), teamId: t.team_id, audience: "staff" }]);
+  return view;
 }
 
 // ── Claim / start / release / resolve / escalate / duplicate / triage ────────

@@ -9,6 +9,7 @@ import { Eyebrow } from "@/components/ui/Section";
 import { getStaff, hasRole } from "@/server/auth";
 import { AppError, serverNow } from "@/server/core";
 import { getHelpTicketForStaff, OPEN_STATUSES, type HelpTicketStaffView } from "@/server/help";
+import { REDACTION_LABEL } from "@/server/help-rules";
 import { AdminLogin } from "../../parts";
 import { claimTicket, duplicateTicket, moveTicket, reopenTicketAsStaff, staffReply, triageTicket } from "../actions";
 import { CategorySelect, OpsAction, PrioritySelect } from "../parts";
@@ -68,6 +69,11 @@ async function TicketView({ params }: { params: PageProps<"/ops/help/[code]">["p
           <FreshnessStamp asOf={now} />
         </div>
         <p className="mt-6 max-w-3xl font-display text-2xl text-bright">{t.summary}</p>
+        {t.redacted.length > 0 && (
+          <p role="note" className="mt-4 max-w-3xl border border-hairline border-l-2 border-l-warning bg-surface p-3 font-plex text-sm text-lightgray">
+            <span className="text-bright">Redacted for privacy:</span> {t.redacted.map((k) => REDACTION_LABEL[k]).join(", ")}. The participant still sees their own text; ask them to show it at the table if you need it.
+          </p>
+        )}
       </div>
 
       <dl className="grid max-w-4xl grid-cols-2 gap-x-6 gap-y-4 border-y border-dashed border-hairline py-6 font-plex text-sm sm:grid-cols-4">
