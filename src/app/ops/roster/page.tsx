@@ -4,6 +4,7 @@ import FreshnessStamp from "@/components/ui/FreshnessStamp";
 import StatusPill, { type PillTone } from "@/components/ui/StatusPill";
 import { listRoster, listUnmatchedMembers, rosterStats, type RosterFilter } from "@/server/roster";
 import ActionForm from "../_kit/ActionForm";
+import { admissionLabel } from "../checkin/labels";
 import { OpsPage, SectionLabel, StaffGate, Stats, SubNav, fmtTime } from "../_kit/shell";
 import { reconcileAction } from "./actions";
 import { ROSTER_TABS } from "./tabs";
@@ -123,17 +124,33 @@ export default function RosterPage({ searchParams }: PageProps<"/ops/roster">) {
                                 {r.luma_guest_id ? ` · ${r.luma_guest_id}` : ""}
                               </span>
                             </td>
-                            <td className="px-3 py-3 text-lightgray">{r.source.replace("_", " ")}</td>
+                            <td className="px-3 py-3 text-lightgray">{r.source}</td>
                             <td className="px-3 py-3 text-lightgray">{r.approval_status.replace("_", " ")}</td>
-                            <td className="px-3 py-3">
+                            <td className="px-3 py-3" data-admission-basis={r.admission_basis ?? "roster"}>
                               <StatusPill tone={a.tone}>{a.label}</StatusPill>
-                              {r.staff_reference && <span className="mt-1 block text-xs text-lightgray">{r.staff_reference}</span>}
+                              <span className={`mt-1 block text-xs ${r.admission_basis ? "text-warning" : "text-lightgray"}`}>{admissionLabel(r.admission_basis, r.source)}</span>
+                              {r.admission_basis ? (
+                                <span className="block text-xs text-lightgray">
+                                  by {r.admitted_by_name ?? "staff"}
+                                  {r.admitted_at && ` · ${fmtTime(r.admitted_at)}`}
+                                  {r.admission_reason && ` · “${r.admission_reason}”`}
+                                </span>
+                              ) : (
+                                r.staff_reference && <span className="block text-xs text-lightgray">{r.staff_reference}</span>
+                              )}
                             </td>
-                            <td className="px-3 py-3 text-lightgray">
+                            <td className="px-3 py-3 text-lightgray" data-checkin-source={r.checkin_source ?? (r.checked_in_at ? "unknown" : "none")}>
                               {r.checked_in_at ? (
                                 <>
                                   {fmtTime(r.checked_in_at)}
-                                  <span className="block text-xs">{r.checked_in_by_name ?? (r.source === "luma_csv" ? "Luma" : "—")}</span>
+                                  <span className="block text-xs">
+                                    {r.checkin_source === "offline_ledger"
+                                      ? `paper slip ${r.checkin_ref ?? ""} · entered ${fmtTime(r.checkin_entered_at)} by ${r.checked_in_by_name ?? "staff"}`
+                                      : (r.checked_in_by_name ?? (r.source === "luma_csv" ? "Luma" : "—"))}
+                                  </span>
+                                  <Link href={`/ops/audit?resource_type=roster_guest&resource_id=${r.id}`} className="block text-xs underline underline-offset-4 hover:text-lime">
+                                    History
+                                  </Link>
                                 </>
                               ) : (
                                 "—"

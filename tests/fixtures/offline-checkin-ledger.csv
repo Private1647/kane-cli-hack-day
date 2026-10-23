@@ -1,2 +1,2 @@
-event_id,luma_guest_id,approval_status,display_name,checked_in_at,source_version,staff_reference,email
-kane-hack-sf-2026,gst-quinn,approved,Quinn Archer,2026-10-23T00:15:00-07:00,demo-paper-ledger-1,CHK-OFF042 | Venue Wi-Fi outage at the check-in desk; paper slip entered after the backend recovered,quinn@demo.test
+receipt_id,attendee_id,checked_in_at,timezone,delay_reason,staff_id,staff_signature,witness_id
+CHK-OFF042,gst-quinn,2026-10-23 00:15,America/Los_Angeles,Venue Wi-Fi outage at the check-in desk; paper slip entered after the backend recovered,Sam Ortiz (check-in desk),S.O.,Morgan Reyes (volunteer lead)

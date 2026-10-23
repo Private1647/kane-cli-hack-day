@@ -103,6 +103,9 @@ export const OFFLINE = {
   timeIso: "2026-10-23T00:15:00-07:00",
   reason: "Venue Wi-Fi outage at the check-in desk; paper slip entered after the backend recovered",
   witness: "Morgan Reyes (volunteer lead)",
+  /** Who took the paper check-in at the desk, and their initials on the slip. */
+  checkinStaff: "Sam Ortiz (check-in desk)",
+  checkinSignature: "S.O.",
   incident: "INC-901",
   commitSha: "9b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c",
   projectName: "Outage Relay",

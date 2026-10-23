@@ -748,6 +748,9 @@ export async function applyOverride(input: OverrideInput, staff: Staff) {
       const g = await findGuest();
       const next = input.kind === "admit_guest" ? "admitted" : "revoked";
       await tx.query("update roster_guests set admission_status = $2, staff_reference = $3, updated_at = now() where id = $1", [g.id, next, `override: ${input.reason}`.slice(0, 200)]);
+      if (next === "admitted") {
+        await tx.query("update roster_guests set admission_basis = 'override', admitted_by = $2, admitted_at = now(), admission_reason = $3 where id = $1", [g.id, staff.id, input.reason.slice(0, 300)]);
+      }
       if (g.member_id) await tx.query("update members set admission_state = $2 where id = $1", [g.member_id, next === "admitted" ? "admitted" : "not_admitted"]);
       resourceId = String(g.id);
       before = { admission_status: g.admission_status };
@@ -755,7 +758,7 @@ export async function applyOverride(input: OverrideInput, staff: Staff) {
     } else if (input.kind === "undo_checkin") {
       const g = await findGuest();
       if (!g.checked_in_at) throw new AppError("VALIDATION_FAILED", { userMessage: "That guest isn't checked in." });
-      await tx.query("update roster_guests set checked_in_at = null, checked_in_by = null, updated_at = now() where id = $1", [g.id]);
+      await tx.query("update roster_guests set checked_in_at = null, checked_in_by = null, checkin_source = null, checkin_ref = null, checkin_entered_at = null, updated_at = now() where id = $1", [g.id]);
       if (g.member_id) await tx.query("update members set checked_in_at = null where id = $1", [g.member_id]);
       resourceId = String(g.id);
       before = { checked_in_at: g.checked_in_at };

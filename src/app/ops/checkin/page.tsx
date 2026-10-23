@@ -20,10 +20,15 @@ export default function CheckinPage({ searchParams }: PageProps<"/ops/checkin">)
           const sp = await searchParams;
           const q = typeof sp.q === "string" ? sp.q.slice(0, 120) : "";
           const [stats, hits] = await Promise.all([rosterStats(), q ? searchCheckin(q) : Promise.resolve([])]);
+          const short = (d: Date | null) => (d ? fmtTime(d).replace(/^\w+ \d+, /, "") : null);
           const rows: Hit[] = hits.map((h) => ({
             ...h,
             checkedInAt: h.checkedInAt ? new Date(h.checkedInAt).toISOString() : null,
-            checkedInLabel: h.checkedInAt ? fmtTime(h.checkedInAt).replace(/^\w+ \d+, /, "") : null,
+            checkedInLabel: short(h.checkedInAt),
+            admittedAt: h.admittedAt ? new Date(h.admittedAt).toISOString() : null,
+            admittedLabel: short(h.admittedAt),
+            checkinEnteredAt: h.checkinEnteredAt ? new Date(h.checkinEnteredAt).toISOString() : null,
+            enteredLabel: h.checkinEnteredAt ? fmtTime(h.checkinEnteredAt) : null,
           }));
           return (
             <div className="space-y-12">
