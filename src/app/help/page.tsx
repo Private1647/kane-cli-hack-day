@@ -45,7 +45,7 @@ async function HelpView() {
         {staffLink}
         <p className="font-plex text-sm text-lightgray">Sign in so mentors know who and where you are, and so you can follow your ticket.</p>
         <div className="flex flex-wrap gap-3">
-          <Link href="/login?next=help" className="inline-flex min-h-11 items-center bg-bright px-4 py-2.5 font-plex text-sm text-ink transition-colors hover:bg-lime">
+          <Link href="/passport/login?next=/help" className="inline-flex min-h-11 items-center bg-bright px-4 py-2.5 font-plex text-sm text-ink transition-colors hover:bg-lime">
             Sign in →
           </Link>
         </div>

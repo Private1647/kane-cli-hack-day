@@ -30,7 +30,7 @@ async function TicketView({ params }: { params: PageProps<"/help/[code]">["param
     return (
       <Shell code={code.toUpperCase()}>
         <p className="font-plex text-sm text-lightgray">Sign in to see this ticket.</p>
-        <Link href="/login?next=help" className="mt-4 inline-flex min-h-11 items-center bg-bright px-4 py-2.5 font-plex text-sm text-ink hover:bg-lime">
+        <Link href={`/passport/login?next=${encodeURIComponent(`/help/${code.toUpperCase()}`)}`} className="mt-4 inline-flex min-h-11 items-center bg-bright px-4 py-2.5 font-plex text-sm text-ink hover:bg-lime">
           Sign in →
         </Link>
       </Shell>
