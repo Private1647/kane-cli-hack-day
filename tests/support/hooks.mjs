@@ -12,6 +12,7 @@ const STUBS = {
   "next/headers": stub("next-headers.mjs"),
   "next/navigation": stub("next-navigation.mjs"),
   "next/cache": stub("next-cache.mjs"),
+  "next/server": stub("next-server.mjs"),
 };
 
 function probe(base) {
