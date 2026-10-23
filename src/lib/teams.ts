@@ -3,7 +3,8 @@ import { pool, query } from "./db";
 import { emailHash } from "@/server/core";
 import { hashPassword } from "./password";
 
-export const MAX_MEMBERS = 5;
+// The published rule: solo, or teams of up to 4 (same cap as src/server/teams.ts TEAM_SIZE_CAP).
+export const MAX_MEMBERS = 4;
 
 export const slugify = (s: string) =>
   s
