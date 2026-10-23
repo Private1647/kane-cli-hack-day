@@ -33,7 +33,9 @@ $NoSkills = $NoSkills -or (EnvOn "KANEHACK_NO_SKILLS")
 $DefaultSite = "https://www.kaneclihack.sh"
 if (-not $Site) { $Site = if ($env:KANEHACK_SITE) { $env:KANEHACK_SITE } else { $DefaultSite } }
 $Site = $Site.TrimEnd("/")
-$Prefix = Join-Path $HOME ".kanehack"
+# The same home folder kanehack (Node's os.homedir()) uses.
+$UserHome = if ($env:USERPROFILE) { $env:USERPROFILE } else { $HOME }
+$Prefix = Join-Path $UserHome ".kanehack"
 $script:Failed = $false
 $script:NoTtySkips = 0
 
@@ -81,13 +83,13 @@ if (Have kane-cli) {
   Warn "kane_auth" "skipped" "Install Kane CLI first"
 }
 
-$skill = @(".claude\skills\kane-cli", ".agents\skills\kane-cli", ".codex\skills\kane-cli") | Where-Object { Test-Path (Join-Path $HOME "$_\SKILL.md") }
+$skill = @(".claude\skills\kane-cli", ".agents\skills\kane-cli", ".codex\skills\kane-cli") | Where-Object { Test-Path (Join-Path $UserHome "$_\SKILL.md") }
 if ($skill) { Pass "kane_skill" } else { Warn "kane_skill" "not found" "npx @testmuai/kane-cli-skill" }
 
 # Where agents look for personal skills: .agents\skills always, plus Claude Code and Codex when present.
-$skillDirs = @(Join-Path $HOME ".agents\skills")
-if (Test-Path (Join-Path $HOME ".claude")) { $skillDirs += Join-Path $HOME ".claude\skills" }
-if (Test-Path (Join-Path $HOME ".codex")) { $skillDirs += Join-Path $HOME ".codex\skills" }
+$skillDirs = @(Join-Path $UserHome ".agents\skills")
+if (Test-Path (Join-Path $UserHome ".claude")) { $skillDirs += Join-Path $UserHome ".claude\skills" }
+if (Test-Path (Join-Path $UserHome ".codex")) { $skillDirs += Join-Path $UserHome ".codex\skills" }
 function SkillsCurrent($d) {
   $marker = Join-Path $d "hack-onboard\.bundle-version"
   (Test-Path (Join-Path $d "hack-onboard\SKILL.md")) -and (Test-Path $marker) -and ((Get-Content $marker -Raw).Trim() -eq $KanehackVersion)
