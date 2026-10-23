@@ -203,10 +203,11 @@ if want interactive; then
   else
     fresh interactive-yes
     mkdir -p "$NPMP/bin"
-    CMD="curl -fsSL '$SITE/install.sh' | env -u CI HOME='$H' NPM_CONFIG_PREFIX='$NPMP' PATH='$NPMP/bin:$ORIG_PATH' SHELL=/bin/sh $SHX -s -- --site '$SITE'"
+    CMD="$SHX -c '[ -t 1 ] && echo pty-diag stdout-tty; echo pty-diag TERM=\${TERM:-unset} NO_COLOR=\${NO_COLOR:-unset}'; curl -fsSL '$SITE/install.sh' | env -u CI HOME='$H' NPM_CONFIG_PREFIX='$NPMP' PATH='$NPMP/bin:$ORIG_PATH' SHELL=/bin/sh $SHX -s -- --site '$SITE'"
     python3 "$HERE/interactive.py" "y,y,y" "$CMD" >"$LOG" 2>&1; RC=$?
     check "interactive yes,yes,yes: exit 0 after 3 prompts" '[ "$RC" -eq 0 ] && grep -q "prompts answered: 3" "$LOG"' "$LOG"
     check "interactive yes,yes,yes: installed, skills, linked" '[ "$(installed_version)" = "$VERSION" ] && [ -L "$NPMP/bin/kanehack" ] && [ -f "$H/.agents/skills/hack-onboard/SKILL.md" ]' "$LOG"
+    grep "pty-diag" "$LOG" | sed 's/^/# /'
     check "interactive: colors on a terminal" 'grep -q "$ESC" "$LOG"' "$LOG"
     fresh interactive-no
     CMD="curl -fsSL '$SITE/install.sh' | env -u CI HOME='$H' NPM_CONFIG_PREFIX='$NPMP' PATH='$ORIG_PATH' SHELL=/bin/sh $SHX -s -- --site '$SITE'"
