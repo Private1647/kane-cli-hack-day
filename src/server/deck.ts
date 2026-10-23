@@ -1,4 +1,6 @@
 import "server-only";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import QRCode from "qrcode";
 import { query } from "@/lib/db";
 import { isEnabled } from "@/lib/flags";
@@ -336,6 +338,39 @@ export async function deckGet(access: ProjectAccess, version?: number | null) {
 
 // ── Offline single-file HTML (T-DECK-06) ─────────────────────────────────────
 
+let testmuCache: string | null | undefined;
+
+/** The authentic TestMu mark from public/logos, inlined for the offline file (null if unreadable). */
+export async function testmuSvgMarkup() {
+  if (testmuCache !== undefined) return testmuCache;
+  try {
+    const svg = await readFile(path.join(process.cwd(), "public", "logos", "testmu-ai.svg"), "utf8");
+    testmuCache = svg.replace(/<\?xml[^>]*>/, "").replace(/(<svg[^>]*?)\swidth="\d+"/, "$1").replace(/(<svg[^>]*?)\sheight="\d+"/, "$1");
+  } catch {
+    testmuCache = null;
+  }
+  return testmuCache;
+}
+
+/** The TestMu mark as a data URI for next/og cards. */
+export async function testmuDataUri() {
+  const svg = await testmuSvgMarkup();
+  return svg ? `data:image/svg+xml;base64,${Buffer.from(svg.replace("<svg ", '<svg width="1388" height="215" ')).toString("base64")}` : null;
+}
+
+/** A downloadable offline HTML response. */
+export async function offlineDeckResponse(opts: { story: PublicStory; deck: Deck; slug: string; label: string; filename: string }) {
+  const html = offlineDeckHtml({ story: opts.story, deck: opts.deck, qrSvg: await shipQrSvg(opts.slug), testmuSvg: await testmuSvgMarkup(), label: opts.label });
+  return new Response(html, {
+    headers: {
+      "content-type": "text/html; charset=utf-8",
+      "content-disposition": `attachment; filename="${opts.filename.replace(/[^\w.-]/g, "_")}"`,
+      "cache-control": "private, no-store",
+      "x-content-type-options": "nosniff",
+    },
+  });
+}
+
 const esc = (s: unknown) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 
 const GROUND_CSS = {
@@ -490,3 +525,7 @@ go(i)})();
 </script>
 </body></html>`;
 }
+
+// Names the MCP server (kane-mcp) registers: deck_get / deck_update / demo_generate.
+export const deckUpdate = saveDeckVersion;
+export const demoGenerate = requestRender;

@@ -183,7 +183,7 @@ export const isVideo = (src: string) => /\.(mp4|webm|mov)(\?|$)/i.test(src);
 
 export function HarnessFlow({ story }: { story: PublicStory }) {
   const stages = story.harness.stages.length ? story.harness.stages : [];
-  if (!stages.length && !story.harness.summary) return <p className="font-plex text-sm text-lightgray">The team hasn't described the harness yet.</p>;
+  if (!stages.length && !story.harness.summary) return <p className="font-plex text-sm text-lightgray">The team has not described the harness yet.</p>;
   return (
     <div className="space-y-5">
       {story.harness.summary && <p className="max-w-2xl font-plex text-sm leading-relaxed text-lightgray md:text-base">{story.harness.summary}</p>}

@@ -551,3 +551,33 @@ export async function studioPathFor(member: MemberRow | null) {
   const [t] = await query<{ slug: string }>("select slug from teams where id = $1", [member.team_id]);
   return t ? `/studio/${t.slug}` : null;
 }
+
+// ── API helpers (/api/v1 studio routes) ──────────────────────────────────────
+
+/** A positive integer path id, or NOT_FOUND. */
+export function pathId(raw: string) {
+  const n = Number(raw);
+  if (!Number.isSafeInteger(n) || n <= 0) throw new AppError("NOT_FOUND");
+  return n;
+}
+
+/**
+ * The JSON body of a mutation (`{ ...fields }` or `{ data: { ...fields } }`),
+ * with the `Idempotency-Key` header folded in as idempotency_key.
+ */
+export async function readMutation(req: Request): Promise<Record<string, unknown>> {
+  let body: unknown = {};
+  try {
+    const text = await req.text();
+    body = text ? JSON.parse(text) : {};
+  } catch {
+    throw new AppError("VALIDATION_FAILED", { userMessage: "The request body isn't valid JSON." });
+  }
+  const obj = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
+  const fields = obj.data && typeof obj.data === "object" && !Array.isArray(obj.data) ? (obj.data as Record<string, unknown>) : obj;
+  const key = req.headers.get("idempotency-key");
+  return key && !fields.idempotency_key ? { ...fields, idempotency_key: key } : fields;
+}
+
+// Names the MCP server (kane-mcp) registers: showcase_preview / showcase_publish.
+export const showcasePublish = publishShowcase;
