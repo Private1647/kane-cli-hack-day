@@ -197,20 +197,20 @@ if want no-node; then
 fi
 
 # 11. Interactive, under a real pseudo-terminal, answering each prompt after it appears.
-# (CI is unset for these: with CI set the installer never asks, by design.)
+# (CI is unset for these: with CI set the installer never asks, by design. TERM is set because
+# bash sets an unset TERM to "dumb", and the installer rightly turns colors off for that.)
 if want interactive; then
   if [ -n "${SKIP_INTERACTIVE:-}" ] || ! command -v python3 >/dev/null 2>&1; then echo "# skip interactive: no python3 for the pty driver"
   else
     fresh interactive-yes
     mkdir -p "$NPMP/bin"
-    CMD="$SHX -c '[ -t 1 ] && echo pty-diag stdout-tty; echo pty-diag TERM=\${TERM:-unset} NO_COLOR=\${NO_COLOR:-unset}'; curl -fsSL '$SITE/install.sh' | env -u CI HOME='$H' NPM_CONFIG_PREFIX='$NPMP' PATH='$NPMP/bin:$ORIG_PATH' SHELL=/bin/sh $SHX -s -- --site '$SITE'"
+    CMD="curl -fsSL '$SITE/install.sh' | env -u CI -u NO_COLOR TERM=xterm HOME='$H' NPM_CONFIG_PREFIX='$NPMP' PATH='$NPMP/bin:$ORIG_PATH' SHELL=/bin/sh $SHX -s -- --site '$SITE'"
     python3 "$HERE/interactive.py" "y,y,y" "$CMD" >"$LOG" 2>&1; RC=$?
     check "interactive yes,yes,yes: exit 0 after 3 prompts" '[ "$RC" -eq 0 ] && grep -q "prompts answered: 3" "$LOG"' "$LOG"
     check "interactive yes,yes,yes: installed, skills, linked" '[ "$(installed_version)" = "$VERSION" ] && [ -L "$NPMP/bin/kanehack" ] && [ -f "$H/.agents/skills/hack-onboard/SKILL.md" ]' "$LOG"
-    grep "pty-diag" "$LOG" | sed 's/^/# /'
     check "interactive: colors on a terminal" 'grep -q "$ESC" "$LOG"' "$LOG"
     fresh interactive-no
-    CMD="curl -fsSL '$SITE/install.sh' | env -u CI HOME='$H' NPM_CONFIG_PREFIX='$NPMP' PATH='$ORIG_PATH' SHELL=/bin/sh $SHX -s -- --site '$SITE'"
+    CMD="curl -fsSL '$SITE/install.sh' | env -u CI -u NO_COLOR TERM=xterm HOME='$H' NPM_CONFIG_PREFIX='$NPMP' PATH='$ORIG_PATH' SHELL=/bin/sh $SHX -s -- --site '$SITE'"
     python3 "$HERE/interactive.py" "n,n" "$CMD" >"$LOG" 2>&1; RC=$?
     check "interactive no,no: nothing installed, no re-run hint" '[ "$RC" -eq 0 ] && grep -q "prompts answered: 2" "$LOG" && [ ! -e "$H/.kanehack" ] && ! grep -q "no terminal to ask" "$LOG"' "$LOG"
   fi
