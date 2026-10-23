@@ -289,7 +289,12 @@ export function buildMcpServer(auth: BearerAuth) {
       const c = await A.activationCheckpoint(member, args.session_id);
       return {
         status: c.awaiting_human ? "needs_action" : c.status === "active" ? "ok" : "partial",
-        message: c.awaiting_human ? "Waiting for the participant at the camera step. Do not click the shutter." : `Activation is ${c.status}.`,
+        message:
+          c.marker === "awaiting_selfie"
+            ? "Waiting for the participant at the camera step. Do not click the shutter."
+            : c.awaiting_human
+              ? `Waiting for the participant (${c.step}). Activation is ${c.status}.`
+              : `Activation is ${c.status}.`,
         data: c,
         links: [{ label: "Activation page", url: `/activate?session=${c.session_id}` }],
         uiType: "builder_passport",

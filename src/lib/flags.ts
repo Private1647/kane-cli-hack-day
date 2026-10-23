@@ -45,7 +45,9 @@ export const isFlag = (s: string): s is Flag => s in FLAGS;
 
 /** Every flag's current value. If the DB is unreachable, the defaults. */
 export async function getFlags(): Promise<Record<Flag, boolean>> {
-  if (cache && Date.now() - cache.at < TTL) return cache.values;
+  // performance.now(), not Date.now(): a monotonic TTL clock that Cache
+  // Components allows during prerender (Date.now() there is a build error).
+  if (cache && performance.now() - cache.at < TTL) return cache.values;
   const values = { ...DEFAULTS };
   try {
     const rows = await query<{ key: string; value: string }>("select key, value from settings where key like 'flag:%'");
@@ -53,7 +55,7 @@ export async function getFlags(): Promise<Record<Flag, boolean>> {
       const name = r.key.slice(5);
       if (isFlag(name)) values[name] = r.value === "true";
     }
-    cache = { at: Date.now(), values };
+    cache = { at: performance.now(), values };
   } catch (err) {
     console.error("[flags] using defaults", err);
   }
