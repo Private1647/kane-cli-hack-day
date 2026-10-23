@@ -1,6 +1,6 @@
 #!/bin/sh
 # Kane CLI Hack Day installer: https://kaneclihack.sh/install.sh
-# Version: 0.1.1
+# Version: 0.1.2
 #
 # Read me before you run me. This script:
 #   - checks OS/arch, Node, Git, Chrome, Codex (optional), Kane CLI, Kane auth,
@@ -8,33 +8,77 @@
 #   - asks before it installs anything, and only installs the `kanehack` helper
 #     into ~/.kanehack and the hack-* skills into your agents' skill folders
 #     (each from a tarball whose sha256 is pinned below)
+#   - to make `kanehack` a command, links it into a folder that is already on your
+#     PATH and writable by you (npm's global bin, ~/.local/bin or ~/bin), or offers
+#     one line for your shell profile
 #   - never uses sudo, never edits your shell profile unless you say yes, never reads your repos,
 #     files or chat history, never sends anything except one unauthenticated
 #     "is the API up?" request
 # Anything missing is reported with the exact command to fix it; you run it.
+#
+# No terminal (an AI agent, CI)? Every question is a quiet "no" unless you pass --yes:
+#   curl -fsSL https://kaneclihack.sh/install.sh | sh -s -- --yes
+# Options: --yes (-y) answer yes to every install question · --no-path don't link kanehack or
+# touch your profile · --no-skills don't install the hack-* skills · --site URL another server.
+# The same as environment variables: KANEHACK_YES=1 KANEHACK_NO_PATH=1 KANEHACK_NO_SKILLS=1 KANEHACK_SITE=URL.
+# Exit codes: 0 done (problems are listed as ✗ lines) · 1 a download, checksum or install failed · 2 bad option.
 set -eu
+# `curl … | zsh` works too: behave like sh (word splitting, globbing).
+if [ -n "${ZSH_VERSION:-}" ]; then emulate sh; fi
 
-KANEHACK_VERSION="0.1.1"
-KANEHACK_SHA256="0e6d9b879c374955d93fa11c09ba8424ce84d665e8ffb91dff4ede1ae933e5fd"
-SKILLS_SHA256="15908514717814bae5546024b9718db0cf0b2f07001e0b9c163a0286d3719215"
-SITE="${KANEHACK_SITE:-https://kaneclihack.sh}"
+KANEHACK_VERSION="0.1.2"
+KANEHACK_SHA256="7d11e60e00f58be8e04e96b1a0821cc4886e83662803cf48fae1709caeeacb76"
+SKILLS_SHA256="6903a221b78f2e9c7789d0dc6545939b4c8523e8f674ab3ed4f6c2bd8ce049b6"
+DEFAULT_SITE="https://kaneclihack.sh"
+SITE="${KANEHACK_SITE:-$DEFAULT_SITE}"
+YES="${KANEHACK_YES:-}"
+NO_PATH="${KANEHACK_NO_PATH:-}"
+NO_SKILLS="${KANEHACK_NO_SKILLS:-}"
+case "$YES" in 0|false|no) YES="" ;; esac
+case "$NO_PATH" in 0|false|no) NO_PATH="" ;; esac
+case "$NO_SKILLS" in 0|false|no) NO_SKILLS="" ;; esac
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -y|--yes) YES=1 ;;
+    --no-path) NO_PATH=1 ;;
+    --no-skills) NO_SKILLS=1 ;;
+    --site) [ $# -ge 2 ] || { echo "install.sh: --site needs a URL" >&2; exit 2; }; SITE="$2"; shift ;;
+    --site=*) SITE="${1#--site=}" ;;
+    -h|--help) sed -n '2,25p' "$0" 2>/dev/null || echo "Options: --yes --no-path --no-skills --site URL"; exit 0 ;;
+    *) echo "install.sh: unknown option $1 (try --yes, --no-path, --no-skills, --site URL)" >&2; exit 2 ;;
+  esac
+  shift
+done
+SITE="${SITE%/}"
 PREFIX="${HOME}/.kanehack"
 
-if [ -t 1 ]; then G="$(printf '\033[32m')"; Y="$(printf '\033[33m')"; R="$(printf '\033[31m')"; D="$(printf '\033[2m')"; N="$(printf '\033[0m')"; else G=""; Y=""; R=""; D=""; N=""; fi
+if [ -t 1 ] && [ -z "${NO_COLOR:-}" ] && [ "${TERM:-}" != dumb ]; then G="$(printf '\033[32m')"; Y="$(printf '\033[33m')"; R="$(printf '\033[31m')"; D="$(printf '\033[2m')"; N="$(printf '\033[0m')"; else G=""; Y=""; R=""; D=""; N=""; fi
 pass() { printf '%s✓%s %-12s %s\n' "$G" "$N" "$1" "${2:-}"; }
 warn() { printf '%s!%s %-12s %s %s→ %s%s\n' "$Y" "$N" "$1" "${2:-}" "$D" "$3" "$N"; }
 fail() { printf '%s✗%s %-12s %s %s→ %s%s\n' "$R" "$N" "$1" "${2:-}" "$D" "$3" "$N"; FAILED=1; }
 have() { command -v "$1" >/dev/null 2>&1; }
+# Bound commands that could hang (network, auth) when `timeout` exists.
+bounded() { if have timeout; then timeout 20 "$@"; else "$@"; fi; }
+sha256() { if have shasum; then shasum -a 256 "$1" | cut -d' ' -f1; elif have sha256sum; then sha256sum "$1" | cut -d' ' -f1; else openssl dgst -sha256 "$1" | sed 's/.*= *//'; fi; }
 FAILED=0
+NO_TTY_SKIPS=0
+
+# A person is there only if our output goes to a terminal and /dev/tty opens.
+# (curl | sh has no stdin, so answers come from /dev/tty. Agents and CI have no terminal.)
+CAN_ASK=""
+if [ -z "${CI:-}" ] && { [ -t 1 ] || [ -t 2 ]; } && { : </dev/tty; } 2>/dev/null; then CAN_ASK=1; fi
 
 ask() {
-  # curl | sh has no stdin: read the answer from the terminal if there is one.
-  # (CI and agents have no terminal: that's a quiet "no".)
-  if { : </dev/tty; } 2>/dev/null; then printf '%s [y/N] ' "$1" >/dev/tty; read -r a </dev/tty || a=""; else a=""; fi
-  case "$a" in y|Y|yes|YES) return 0 ;; *) return 1 ;; esac
+  if [ -n "$YES" ]; then printf '%s [y/N] y (--yes)\n' "$1"; return 0; fi
+  if [ -z "$CAN_ASK" ]; then NO_TTY_SKIPS=$((NO_TTY_SKIPS + 1)); return 1; fi
+  printf '%s [y/N] ' "$1" >/dev/tty
+  read -r a </dev/tty || a=""
+  case "$a" in y|Y|yes|YES|Yes) return 0 ;; *) return 1 ;; esac
 }
 
 echo "Kane CLI Hack Day setup check (installer ${KANEHACK_VERSION})"
+[ -n "$YES" ] && echo "Non-interactive: --yes answers every install question."
+[ -z "$YES" ] && [ -z "$CAN_ASK" ] && echo "No terminal: install questions are answered no (re-run with --yes to install)."
 echo
 
 OS="$(uname -s)"; ARCH="$(uname -m)"
@@ -52,112 +96,204 @@ if have git; then pass git "$(git --version | sed 's/git version //')"; else fai
 
 CHROME=""
 if [ "$OS" = Darwin ]; then
-  [ -d "/Applications/Google Chrome.app" ] || [ -d "${HOME}/Applications/Google Chrome.app" ] && CHROME=yes
+  if [ -d "/Applications/Google Chrome.app" ] || [ -d "${HOME}/Applications/Google Chrome.app" ]; then CHROME=yes; fi
 else
-  for b in google-chrome google-chrome-stable chromium chromium-browser; do have "$b" && CHROME=yes && break; done
+  for b in google-chrome google-chrome-stable chromium chromium-browser; do if have "$b"; then CHROME=yes; break; fi; done
 fi
 if [ -n "$CHROME" ]; then pass chrome; else fail chrome "missing" "Install Google Chrome: Kane drives a real browser"; fi
 
-if have codex; then pass codex "$(codex --version 2>/dev/null | head -n1)"; else warn codex "not found" "Optional: any agent works; the web app works without one"; fi
+if have codex; then pass codex "$(bounded codex --version 2>/dev/null | head -n1)"; else warn codex "not found" "Optional: any agent works; the web app works without one"; fi
 
 if have kane-cli; then
-  pass kane_cli "$(kane-cli --version 2>/dev/null | head -n1)"
-  if kane-cli whoami >/dev/null 2>&1; then pass kane_auth; else fail kane_auth "signed out" "kane-cli login"; fi
+  pass kane_cli "$(bounded kane-cli --version 2>/dev/null | head -n1)"
+  if bounded kane-cli whoami >/dev/null 2>&1; then pass kane_auth; else fail kane_auth "signed out" "kane-cli login"; fi
 else
   fail kane_cli "missing" "npm i -g @testmuai/kane-cli   (no sudo: set an npm prefix in your home if it asks)"
   warn kane_auth "skipped" "Install Kane CLI first"
 fi
 
 SKILL=""
-for d in .claude/skills/kane-cli .agents/skills/kane-cli .codex/skills/kane-cli .gemini/skills/kane-cli; do [ -f "${HOME}/${d}/SKILL.md" ] && SKILL=yes; done
+for d in .claude/skills/kane-cli .agents/skills/kane-cli .codex/skills/kane-cli .gemini/skills/kane-cli; do if [ -f "${HOME}/${d}/SKILL.md" ]; then SKILL=yes; fi; done
 if [ -n "$SKILL" ]; then pass kane_skill; else warn kane_skill "not found" "npx @testmuai/kane-cli-skill"; fi
 
 # Where agents look for personal skills: ~/.agents/skills always, plus Claude Code and Codex when present.
-SKILL_DIRS="${HOME}/.agents/skills"
-[ -d "${HOME}/.claude" ] && SKILL_DIRS="${SKILL_DIRS} ${HOME}/.claude/skills"
-[ -d "${HOME}/.codex" ] && SKILL_DIRS="${SKILL_DIRS} ${HOME}/.codex/skills"
-NEED_SKILLS=""
-for d in $SKILL_DIRS; do [ -f "${d}/hack-onboard/SKILL.md" ] || NEED_SKILLS=yes; done
-if [ -z "$NEED_SKILLS" ]; then pass hack_skills; else warn hack_skills "not found" "Offered below"; fi
+# One per line, so a HOME with spaces in it works.
+skill_dirs() {
+  echo "${HOME}/.agents/skills"
+  if [ -d "${HOME}/.claude" ]; then echo "${HOME}/.claude/skills"; fi
+  if [ -d "${HOME}/.codex" ]; then echo "${HOME}/.codex/skills"; fi
+}
+SKILL_DIRS="$(skill_dirs | sed 's/$/,/' | tr '\n' ' ' | sed 's/, *$//')"
+# Missing, or installed by an older bundle: re-offer (the marker file names the bundle version).
+NEED_SKILLS="$(skill_dirs | while IFS= read -r d; do
+  if [ ! -f "${d}/hack-onboard/SKILL.md" ] || ! grep -qx "$KANEHACK_VERSION" "${d}/hack-onboard/.bundle-version" 2>/dev/null; then echo yes; fi
+done | head -n1)"
+if [ -z "$NEED_SKILLS" ]; then pass hack_skills "${KANEHACK_VERSION}"; else warn hack_skills "not found or older" "Offered below"; fi
 
 # One unauthenticated request: 401 means the API is up and wants a token.
 if have curl; then
-  CODE="$(curl -sL -o /dev/null -w '%{http_code}' --max-time 10 "${SITE}/api/v1/kane/runs" || echo 000)"
-  case "$CODE" in 401|200|403) pass api "${SITE} (HTTP ${CODE})" ;; *) fail api "HTTP ${CODE}" "Check your network; the web app is ${SITE}" ;; esac
+  CODE="$(curl -sL -o /dev/null -w '%{http_code}' --max-time 10 "${SITE}/api/v1/kane/runs" || true)"
+  case "$CODE" in 401|200|403) pass api "${SITE} (HTTP ${CODE})" ;; *) fail api "HTTP ${CODE:-000}" "Check your network; the web app is ${SITE}" ;; esac
 else warn api "curl missing" "Install curl"; fi
 
 echo
+# ── decide what to install, download and verify everything, then install ──
+WANT_KH=""; WANT_SKILLS=""; KH_HAVE=""
 if [ -x "${PREFIX}/bin/kanehack" ] && "${PREFIX}/bin/kanehack" version 2>/dev/null | grep -qx "$KANEHACK_VERSION"; then
+  KH_HAVE=1
   pass kanehack "${KANEHACK_VERSION} already installed in ${PREFIX}"
 elif ! have node || ! have npm; then
-  warn kanehack "not installed" "Install Node first, then re-run this script"
-elif ask "Install the kanehack helper ${KANEHACK_VERSION} into ${PREFIX} (no sudo)?"; then
-  TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
-  TGZ="${TMP}/kanehack-${KANEHACK_VERSION}.tgz"
-  curl -fsSL --max-time 60 -o "$TGZ" "${SITE}/kanehack-${KANEHACK_VERSION}.tgz"
-  if have shasum; then GOT="$(shasum -a 256 "$TGZ" | cut -d' ' -f1)"; else GOT="$(sha256sum "$TGZ" | cut -d' ' -f1)"; fi
-  if [ "$GOT" != "$KANEHACK_SHA256" ]; then
-    fail kanehack "checksum mismatch" "Don't use this download; tell the help desk (got ${GOT})"
-    exit 1
-  fi
-  mkdir -p "${PREFIX}/cli" "${PREFIX}/bin"
-  npm install --silent --no-audit --no-fund --prefix "${PREFIX}/cli" "$TGZ" >/dev/null
-  ln -sf "${PREFIX}/cli/node_modules/kanehack/bin/kanehack.mjs" "${PREFIX}/bin/kanehack"
-  pass kanehack "${KANEHACK_VERSION} → ${PREFIX}/bin/kanehack (sha256 verified)"
+  warn kanehack "not installed" "Install Node (with npm) first, then re-run this script"
+elif [ -x "${PREFIX}/bin/kanehack" ] && ask "Upgrade the kanehack helper in ${PREFIX} to ${KANEHACK_VERSION} (no sudo)?"; then
+  WANT_KH=1
+elif [ ! -x "${PREFIX}/bin/kanehack" ] && ask "Install the kanehack helper ${KANEHACK_VERSION} into ${PREFIX} (no sudo)?"; then
+  WANT_KH=1
 else
   warn kanehack "skipped" "Re-run this script when you're ready"
 fi
 
-if [ -n "$NEED_SKILLS" ] && have curl && ask "Install the 12 hack-* skills into ${SKILL_DIRS}?"; then
-  STMP="$(mktemp -d)"
-  STGZ="${STMP}/hack-skills-${KANEHACK_VERSION}.tgz"
-  curl -fsSL --max-time 60 -o "$STGZ" "${SITE}/hack-skills-${KANEHACK_VERSION}.tgz"
-  if have shasum; then GOT="$(shasum -a 256 "$STGZ" | cut -d' ' -f1)"; else GOT="$(sha256sum "$STGZ" | cut -d' ' -f1)"; fi
-  if [ "$GOT" != "$SKILLS_SHA256" ]; then
-    fail hack_skills "checksum mismatch" "Don't use this download; tell the help desk (got ${GOT})"
-  else
+if [ -n "$NEED_SKILLS" ]; then
+  if [ -n "$NO_SKILLS" ]; then warn hack_skills "skipped (--no-skills)" "Re-run without --no-skills to add them"
+  elif ! have curl; then warn hack_skills "skipped" "Install curl, then re-run"
+  elif ask "Install the 12 hack-* skills into ${SKILL_DIRS}?"; then WANT_SKILLS=1
+  else warn hack_skills "skipped" "Re-run this script when you're ready"; fi
+fi
+
+TMP=""
+if [ -n "$WANT_KH" ] || [ -n "$WANT_SKILLS" ]; then
+  TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
+  BAD=""
+  if [ -n "$WANT_KH" ]; then
+    TGZ="${TMP}/kanehack-${KANEHACK_VERSION}.tgz"
+    if ! curl -fsSL --max-time 60 -o "$TGZ" "${SITE}/kanehack-${KANEHACK_VERSION}.tgz"; then fail kanehack "download failed" "Check your network and re-run (${SITE}/kanehack-${KANEHACK_VERSION}.tgz)"; BAD=1
+    else
+      GOT="$(sha256 "$TGZ")"
+      if [ "$GOT" != "$KANEHACK_SHA256" ]; then fail kanehack "checksum mismatch" "Don't use this download; tell the help desk (got ${GOT})"; BAD=1; fi
+    fi
+  fi
+  if [ -n "$WANT_SKILLS" ]; then
+    STGZ="${TMP}/hack-skills-${KANEHACK_VERSION}.tgz"
+    if ! curl -fsSL --max-time 60 -o "$STGZ" "${SITE}/hack-skills-${KANEHACK_VERSION}.tgz"; then fail hack_skills "download failed" "Check your network and re-run"; BAD=1
+    else
+      GOT="$(sha256 "$STGZ")"
+      if [ "$GOT" != "$SKILLS_SHA256" ]; then fail hack_skills "checksum mismatch" "Don't use this download; tell the help desk (got ${GOT})"; BAD=1; fi
+    fi
+  fi
+  if [ -n "$BAD" ]; then
+    echo "${R}Nothing was installed.${N}"
+    exit 1
+  fi
+  if [ -n "$WANT_KH" ]; then
+    mkdir -p "${PREFIX}/cli" "${PREFIX}/bin"
+    if ! npm install --silent --no-audit --no-fund --prefix "${PREFIX}/cli" "$TGZ" >"${TMP}/npm.log" 2>&1; then
+      cat "${TMP}/npm.log" >&2
+      fail kanehack "npm install failed" "See the npm output above, or ask at the help desk"
+      exit 1
+    fi
+    ln -sf "${PREFIX}/cli/node_modules/kanehack/bin/kanehack.mjs" "${PREFIX}/bin/kanehack"
+    chmod +x "${PREFIX}/cli/node_modules/kanehack/bin/kanehack.mjs" 2>/dev/null || true
+    KH_HAVE=1
+    pass kanehack "${KANEHACK_VERSION} → ${PREFIX}/bin/kanehack (sha256 verified)"
+  fi
+  if [ -n "$WANT_SKILLS" ]; then
     # Only the hack-* folders are written; your other skills are left alone.
-    for d in $SKILL_DIRS; do mkdir -p "$d" && tar -xzf "$STGZ" -C "$d"; done
+    if ! skill_dirs | while IFS= read -r d; do
+      mkdir -p "$d" && tar -xzf "$STGZ" -C "$d" && echo "$KANEHACK_VERSION" > "${d}/hack-onboard/.bundle-version" || exit 1
+    done; then
+      fail hack_skills "couldn't unpack" "Check that your skill folders are writable"
+      exit 1
+    fi
     pass hack_skills "12 skills → ${SKILL_DIRS} (sha256 verified). Start a new agent session to load them."
   fi
-  rm -rf "$STMP"
-elif [ -n "$NEED_SKILLS" ]; then
-  warn hack_skills "skipped" "Re-run this script when you're ready"
+fi
+
+# Point kanehack at this server when it isn't the default one.
+if [ -n "$KH_HAVE" ] && [ "$SITE" != "$DEFAULT_SITE" ]; then
+  KANEHACK_CFG_API="$SITE" node -e '
+    const fs = require("fs"), p = require("path").join(require("os").homedir(), ".kanehack", "config.json");
+    let c = {}; try { c = JSON.parse(fs.readFileSync(p, "utf8")); } catch {}
+    if (c.api !== process.env.KANEHACK_CFG_API) {
+      c.api = process.env.KANEHACK_CFG_API;
+      fs.writeFileSync(p, JSON.stringify(c, null, 2), { mode: 0o600 });
+      fs.chmodSync(p, 0o600);
+    }' && pass server "kanehack will talk to ${SITE}"
 fi
 
 echo
-# kanehack lives in ~/.kanehack/bin. If that isn't on PATH, offer to add it (asked, never silent),
-# and print the next steps with the full path so they work in this terminal right now.
-KH="kanehack"
-if [ -x "${PREFIX}/bin/kanehack" ]; then
-  case ":${PATH}:" in
-    *":${PREFIX}/bin:"*) ;;
-    *)
-      KH="${PREFIX}/bin/kanehack"
-      case "${SHELL##*/}" in
-        zsh) RC="${HOME}/.zshrc" ;;
-        bash) if [ "$OS" = Darwin ]; then RC="${HOME}/.bash_profile"; else RC="${HOME}/.bashrc"; fi ;;
-        *) RC="" ;;
-      esac
-      LINE='export PATH="$HOME/.kanehack/bin:$PATH"  # kanehack'
-      if [ -n "$RC" ] && grep -qF '.kanehack/bin' "$RC" 2>/dev/null; then
-        echo "${D}${RC} already adds kanehack to PATH: open a new terminal to pick it up.${N}"
-      elif [ -n "$RC" ] && ask "Add ~/.kanehack/bin to your PATH in ${RC}?"; then
-        printf '\n%s\n' "$LINE" >> "$RC"
-        pass path "added to ${RC}. Open a new terminal, or run: export PATH=\"\$HOME/.kanehack/bin:\$PATH\""
+# ── make `kanehack` a command in this terminal and new ones ──
+# curl | sh can't change your shell's PATH, so link into a folder that is already on PATH
+# and writable by you. Never sudo, never replace a different kanehack.
+KH="${PREFIX}/bin/kanehack"
+on_path() { case ":${PATH}:" in *":$1:"*) return 0 ;; *) return 1 ;; esac; }
+is_ours() {
+  # $1 resolves to our install: it's ~/.kanehack/bin/kanehack, or a link to it (or to its target).
+  [ "$1" = "${PREFIX}/bin/kanehack" ] && return 0
+  t="$(readlink "$1" 2>/dev/null || true)"
+  [ "$t" = "${PREFIX}/bin/kanehack" ] || [ "$t" = "${PREFIX}/cli/node_modules/kanehack/bin/kanehack.mjs" ]
+}
+if [ -n "$KH_HAVE" ] && [ -x "${PREFIX}/bin/kanehack" ]; then
+  FOUND="$(command -v kanehack 2>/dev/null || true)"
+  LINKED=""
+  if [ -n "$FOUND" ] && is_ours "$FOUND"; then
+    KH="kanehack"; LINKED=1
+    pass command "kanehack → ${FOUND}"
+  elif [ -n "$NO_PATH" ]; then
+    echo "${D}--no-path: kanehack is not linked; use the full path below.${N}"
+  elif [ -n "$FOUND" ]; then
+    warn command "another kanehack is on PATH" "${FOUND} isn't this install; left alone. Use the full path below, or remove it"
+  else
+    LINK_DIR=""
+    NPM_BIN=""
+    if have npm; then NPM_BIN="$(npm prefix -g 2>/dev/null || true)"; [ -n "$NPM_BIN" ] && NPM_BIN="${NPM_BIN%/}/bin"; fi
+    for d in "$NPM_BIN" "${HOME}/.local/bin" "${HOME}/bin"; do
+      if [ -n "$d" ] && [ -d "$d" ] && [ -w "$d" ] && on_path "$d" && [ ! -e "${d}/kanehack" ]; then LINK_DIR="$d"; break; fi
+    done
+    if [ -n "$LINK_DIR" ] && ask "Make \`kanehack\` a command (link into ${LINK_DIR})?"; then
+      if ln -s "${PREFIX}/bin/kanehack" "${LINK_DIR}/kanehack" 2>/dev/null; then
+        KH="kanehack"; LINKED=1
+        pass command "kanehack → ${LINK_DIR}/kanehack (works in this terminal now)"
       else
-        echo "${Y}kanehack isn't on your PATH.${N} Use the full path below, or run: export PATH=\"\$HOME/.kanehack/bin:\$PATH\""
+        warn command "couldn't link into ${LINK_DIR}" "Use the full path below"
       fi
-      ;;
-  esac
+    elif [ -z "$LINK_DIR" ]; then
+      echo "${D}No folder on your PATH is writable without sudo (tried npm's global bin, ~/.local/bin, ~/bin).${N}"
+    fi
+  fi
+  # Not a command yet: offer the profile line for new terminals (asked, never silent).
+  if [ -z "$LINKED" ] && [ -z "$NO_PATH" ] && ! on_path "${PREFIX}/bin"; then
+    SH_NAME="${SHELL:-}"; SH_NAME="${SH_NAME##*/}"
+    case "$SH_NAME" in
+      zsh) RC="${HOME}/.zshrc" ;;
+      bash) if [ "$OS" = Darwin ]; then RC="${HOME}/.bash_profile"; else RC="${HOME}/.bashrc"; fi ;;
+      *) RC="" ;;
+    esac
+    LINE='export PATH="$HOME/.kanehack/bin:$PATH"  # kanehack'
+    if [ -n "$RC" ] && grep -qF '.kanehack/bin' "$RC" 2>/dev/null; then
+      echo "${D}${RC} already adds kanehack to PATH: new terminals have it.${N}"
+    elif [ -n "$RC" ] && ask "Add ~/.kanehack/bin to your PATH in ${RC}?"; then
+      printf '\n%s\n' "$LINE" >> "$RC"
+      pass path "added to ${RC} for new terminals. In this one: export PATH=\"\$HOME/.kanehack/bin:\$PATH\""
+    elif [ "$SH_NAME" = fish ]; then
+      echo "${Y}kanehack isn't on your PATH.${N} For fish, run once: fish_add_path ~/.kanehack/bin"
+    else
+      echo "${Y}kanehack isn't on your PATH.${N} Use the full path below, or run: export PATH=\"\$HOME/.kanehack/bin:\$PATH\""
+    fi
+  fi
 fi
 
 echo
 echo "Next:"
 echo "  1. ${KH} pair        link this machine to your passport"
+echo "     (AI agent with no terminal: ${KH} pair --start, approve the code in your browser, then ${KH} pair --wait)"
 echo "  2. ${KH} doctor      re-check your setup"
 echo "  3. ${KH} report -- kane-cli run \"Open ${SITE} and find the schedule\" --agent"
 echo "     (your first Kane run, sent to your team's Proof tab)"
 echo "Web: ${SITE}/passport"
+if [ "$NO_TTY_SKIPS" -gt 0 ]; then
+  SITE_ARG=""; [ "$SITE" != "$DEFAULT_SITE" ] && SITE_ARG=" --site ${SITE}"
+  echo
+  echo "${Y}There was no terminal to ask, so ${NO_TTY_SKIPS} install step(s) were skipped.${N} To install without prompts, run:"
+  echo "  curl -fsSL ${SITE}/install.sh | sh -s -- --yes${SITE_ARG}"
+fi
 [ "$FAILED" -eq 0 ] || echo "${Y}Some checks failed. Fix them with the commands above, or ask at the help desk.${N}"
 exit 0
