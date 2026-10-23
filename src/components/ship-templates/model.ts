@@ -104,7 +104,8 @@ export const storySchema = z
       .object({
         github: optHttps,
         demo: optHttps,
-        repo_commit: z.string().trim().max(200).optional().default(""),
+        // A commit link is rendered as a public link, so it must be https like the others.
+        repo_commit: optHttps,
         ship_page: z.string().trim().max(300).optional().default(""),
       })
       .strict(),
