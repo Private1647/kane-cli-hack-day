@@ -1,432 +1,194 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Suspense, type ReactNode } from "react";
-import Flip from "@/components/ui/Flip";
-import QR from "@/components/ui/QR";
-import { Eyebrow } from "@/components/ui/Section";
+import { Suspense } from "react";
+import { Avatar } from "@/components/Account";
+import Button from "@/components/ui/Button";
+import PageHeader from "@/components/ui/PageHeader";
 import StatusPill from "@/components/ui/StatusPill";
-import { formatEventTime, getEvent } from "@/lib/event";
-import { getPersonalMember, memberActor } from "@/server/auth";
-import { siteUrl } from "@/server/core";
-import { githubEnabled, listBearerTokens } from "@/server/pairing";
-import { CONSENT_CATEGORIES, CONSENT_COPY, getBadgeToken, getPassport, toPublicPassport, type PrivatePassport } from "@/server/passport";
+import { getPersonalMember } from "@/server/auth";
+import { avatarSrc, avatarVersion } from "@/server/avatar";
+import { flowState } from "@/server/flow";
+import { listBearerTokens } from "@/server/pairing";
+import { getPassport } from "@/server/passport";
 import { revokeToken, signOut } from "./actions";
-import { LoginCodeButton, PasswordForm, ProfileForm, RotateBadgeButton } from "./forms";
-import PersonalLoginForm from "./login/LoginForm";
-import NextMissionCard from "./NextMissionCard";
-import { BackSection, Chips, PassportBack, PassportFront, type CardFace } from "./PassportCard";
+import { LoginCodeButton, PasswordForm, RemovePhotoButton } from "./forms";
 
-export const metadata: Metadata = { title: "Passport", robots: { index: false } };
+export const metadata: Metadata = { title: "Your profile", robots: { index: false } };
 
-// The Hacker Passport (T-PASS-01..04): the card on a plinth on the left, the
-// mission console on the right, then settings. Everything comes from the
-// private DTO; the badge QR holds only a revocable signed token.
+// The lean profile page of the event-day flow: who you are (photo, name,
+// skills), your team, where you are in the flow, and this device's sign-in
+// and paired machines. Editing goes back through the /register steps.
 
-export default function PassportPage({ searchParams }: PageProps<"/passport">) {
+export default function PassportPage() {
   return (
     <main>
-      <Suspense fallback={<Loading />}>
-        <Body searchParams={searchParams} />
-      </Suspense>
+      <PageHeader eyebrow="Profile" dim="This is you," bright="At the event." />
+      <section className="py-12 sm:py-16">
+        <div className="container-page">
+          <Suspense fallback={<p className="font-plex text-sm text-lightgray">Loading your profile…</p>}>
+            <Body />
+          </Suspense>
+        </div>
+      </section>
     </main>
   );
 }
 
-function Loading() {
-  return (
-    <div className="container-page py-24">
-      <p className="font-plex text-sm text-lightgray">Loading your passport…</p>
-    </div>
-  );
-}
+const eyebrow = "font-pixel text-[10px] uppercase tracking-[0.2em] text-lightgray";
 
-const GITHUB_FLASH: Record<string, { tone: "ok" | "warn"; text: string }> = {
-  linked: { tone: "ok", text: "GitHub linked and verified." },
-  failed: { tone: "warn", text: "GitHub didn’t confirm the link. Try again in a minute." },
-  taken: { tone: "warn", text: "That GitHub account is already linked to another passport." },
-  disabled: { tone: "warn", text: "GitHub linking isn’t switched on yet. Type your username instead." },
-  cancelled: { tone: "warn", text: "GitHub linking was cancelled." },
-};
-
-async function Body({ searchParams }: Pick<PageProps<"/passport">, "searchParams">) {
+async function Body() {
   const member = await getPersonalMember();
-  if (!member) return <SignedOut />;
-  const sp = await searchParams;
-  const [p, badge, tokens, ev] = await Promise.all([getPassport(member.id), getBadgeToken(member.id, memberActor(member)), listBearerTokens(member.id), getEvent()]);
-  const pub = toPublicPassport(p);
-  const flash = typeof sp.github === "string" ? GITHUB_FLASH[sp.github] : undefined;
-
-  const face: CardFace = {
-    short_name: p.member.short_name,
-    role_tag: pub.role_tag,
-    handle: p.member.github_handle ? `@${p.member.github_handle}` : p.member.x_handle ? `@${p.member.x_handle}` : null,
-    edition: p.edition,
-    // Private view: you always see your own portrait, whatever you publish.
-    portrait_src: p.portrait?.src ?? null,
-    activated: p.activation?.status === "active",
-    kane_verified: !!p.activation?.kane_verified,
-    team_label: p.team ? (p.team.is_solo ? "Solo builder" : `Team ${p.team.name}`) : "Looking for team",
-    receipt_code: p.activation?.receipt_code ?? null,
-    public_code: p.member.public_code,
-  };
-
-  return (
-    <>
-      <section className="border-b border-dashed border-hairline py-12 sm:py-16">
-        <div className="container-page grid items-start gap-10 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:gap-14">
-          {/* Left: the card on its plinth */}
-          <div
-            className="brackets border border-hairline p-5 sm:p-8"
-            style={{ backgroundImage: "radial-gradient(var(--hairline) 1px, transparent 1px)", backgroundSize: "14px 14px" }}
-          >
-            <div className="mx-auto max-w-[22rem]">
-              <Flip
-                label="Flip passport"
-                front={<PassportFront face={face} qr={<QR value={siteUrl(`/passport/b/${badge.token}`)} size={76} label="QR code: your badge (revocable)" />} />}
-                back={<Back p={p} />}
-              />
-            </div>
-          </div>
-
-          {/* Right: mission console */}
-          <div className="min-w-0 space-y-8">
-            <div>
-              <Eyebrow>
-                <Link href="/" className="hover:text-bright">
-                  Hack Day
-                </Link>{" "}
-                / Passport
-              </Eyebrow>
-              <h1 className="mt-4 font-display text-4xl leading-[1.05] font-semibold text-bright sm:text-5xl">
-                {p.member.short_name}
-                <span className="font-dots text-lime">.</span>
-              </h1>
-              <p className="mt-3 font-plex text-sm text-lightgray">
-                {p.member.public_code} · {face.team_label}
-                {p.member.checked_in_at ? ` · checked in ${formatEventTime(p.member.checked_in_at, ev)}` : " · not checked in yet"}
-              </p>
-            </div>
-
-            {flash && (
-              <p role="status" className={`border-l-2 pl-3 font-plex text-sm ${flash.tone === "ok" ? "border-hairline text-bright" : "border-warning text-warning"}`}>
-                {flash.text}
-              </p>
-            )}
-
-            <StageTrack stage={p.stage} />
-            <NextMissionCard mission={p.mission} />
-            <Actions p={p} />
-          </div>
-        </div>
-      </section>
-
-      <section className="py-12 sm:py-16">
-        <div className="container-page grid gap-6 lg:grid-cols-2">
-          <Panel title="Activation" id="activation">
-            <ActivationPanel p={p} ev={ev} />
-          </Panel>
-          <Panel title="Kane readiness" id="readiness">
-            {p.readiness ? (
-              <p className="font-plex text-sm text-bright">
-                Last report {formatEventTime(p.readiness.at, ev)}: {p.readiness.passed} passing, {p.readiness.failed} failing.{" "}
-                <span className="text-lightgray">Reported by your machine, not verified by us.</span>
-              </p>
-            ) : (
-              <p className="font-plex text-sm text-lightgray">No readiness report yet.</p>
-            )}
-            <Link href="/readiness" className="mt-4 inline-flex min-h-11 items-center font-plex text-sm text-bright underline underline-offset-4 hover:text-lime">
-              Open the readiness doctor →
-            </Link>
-          </Panel>
-
-          <Panel title="Profile and privacy" id="privacy" wide>
-            <div className="mb-6 flex flex-wrap items-center gap-3 font-plex text-sm">
-              {p.member.github_verified ? (
-                <StatusPill tone="verified">Verified · GitHub @{p.member.github_handle}</StatusPill>
-              ) : p.member.github_handle ? (
-                <StatusPill tone="unverified">GitHub @{p.member.github_handle} · unverified</StatusPill>
-              ) : null}
-              {githubEnabled() && !p.member.github_verified && (
-                <a href="/api/v1/auth/github/start" className="inline-flex min-h-11 items-center text-bright underline underline-offset-4 hover:text-lime">
-                  Verify with GitHub →
-                </a>
-              )}
-            </div>
-            <ProfileForm
-              defaults={{
-                display_name: p.member.display_name ?? p.member.name,
-                github_handle: p.member.github_handle ?? "",
-                x_handle: p.member.x_handle ?? "",
-                skills: p.member.skills.join(", "),
-                interests: p.member.interests.join(", "),
-              }}
-              consents={CONSENT_CATEGORIES.map((c) => ({ name: c, ...CONSENT_COPY[c], on: p.consents[c] === true }))}
-            />
-          </Panel>
-
-          <Panel title="Badge" id="badge">
-            <p className="font-plex text-sm text-lightgray">
-              Your badge QR holds a signed token, not your details. Staff use your <span className="text-bright">{p.member.public_code}</span> code if the QR won’t scan.
-            </p>
-            <div className="mt-4 flex flex-wrap gap-3">
-              <Link href="/passport/badge" className="inline-flex min-h-11 items-center bg-bright px-4 font-plex text-sm text-ink transition-colors hover:bg-lime">
-                Print my badge
-              </Link>
-            </div>
-            <div className="mt-4">
-              <RotateBadgeButton />
-            </div>
-          </Panel>
-
-          <Panel title="Sign-in and devices" id="devices">
-            <div className="space-y-6">
-              <p className="font-plex text-sm text-lightgray">
-                Sign in on your own with your email and your team password{p.member.has_password ? " or your personal password" : ""}. Signed in as {p.member.email_hint}.
-              </p>
-              <PasswordForm />
-              <LoginCodeButton />
-              <div>
-                <p className="font-pixel text-[10px] uppercase tracking-[0.2em] text-lightgray">Paired devices (kanehack, Codex)</p>
-                <p className="mt-2 font-plex text-sm text-lightgray">
-                  Your terminal showed a pairing code?{" "}
-                  <Link href="/pair" className="text-bright underline underline-offset-4 hover:text-lime">
-                    Enter it to pair a device →
-                  </Link>
-                </p>
-                <p className="mt-1 font-plex text-sm text-lightgray">
-                  New to this?{" "}
-                  <Link href="/setup" className="text-bright underline underline-offset-4 hover:text-lime">
-                    Set up your agent: install, pair, connect →
-                  </Link>
-                </p>
-                {tokens.length ? (
-                  <ul className="mt-2 divide-y divide-dashed divide-hairline border-y border-dashed border-hairline">
-                    {tokens.map((t) => (
-                      <li key={t.id} className="flex flex-wrap items-center justify-between gap-3 py-2 font-plex text-sm">
-                        <span className="text-bright">
-                          {t.label ?? "kanehack"} <span className="text-xs text-lightgray">· last used {t.last_used_at ? formatEventTime(t.last_used_at, ev) : "never"}</span>
-                        </span>
-                        <form action={revokeToken}>
-                          <input type="hidden" name="id" value={t.id} />
-                          <button className="min-h-11 px-2 text-xs text-lightgray underline underline-offset-4 hover:text-danger">Revoke</button>
-                        </form>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="mt-2 font-plex text-sm text-lightgray">
-                    None. Run <code className="text-bright">kanehack pair</code> and approve the code at{" "}
-                    <Link href="/pair" className="text-bright underline underline-offset-4 hover:text-lime">
-                      /pair
-                    </Link>
-                    .
-                  </p>
-                )}
-              </div>
-              <form action={signOut}>
-                <button className="min-h-11 border border-hairline px-4 font-plex text-sm text-bright transition-colors hover:border-lime hover:text-lime">Sign out</button>
-              </form>
-            </div>
-          </Panel>
-        </div>
-      </section>
-    </>
-  );
-}
-
-function SignedOut() {
-  return (
-    <section className="py-16 sm:py-24">
-      <div className="container-page grid gap-12 lg:grid-cols-2">
-        <div>
-          <Eyebrow>Hack Day / Passport</Eyebrow>
-          <h1 className="mt-4 font-display text-4xl font-semibold text-bright sm:text-5xl">
-            Your Hacker Passport<span className="font-dots text-lime">.</span>
-          </h1>
-          <p className="mt-4 max-w-md font-plex text-sm leading-relaxed text-lightgray">
-            Your event identity and your next step: team, idea, Kane proof, help and submission in one place. Sign in with the email you registered with and your team password.
-          </p>
-          <ul className="mt-8 space-y-3 font-plex text-sm">
-            <li>
-              <Link href="/activate" className="inline-flex min-h-11 items-center text-bright underline decoration-hairline underline-offset-4 hover:text-lime">
-                Have an activation code from the desk? Activate →
-              </Link>
-            </li>
-            <li>
-              <Link href="/register" className="inline-flex min-h-11 items-center text-bright underline decoration-hairline underline-offset-4 hover:text-lime">
-                Not registered yet? Register →
-              </Link>
-            </li>
-          </ul>
-        </div>
-        <div className="brackets border border-hairline bg-surface p-5 sm:p-8">
-          <h2 className="font-display text-2xl font-semibold text-bright">Sign in</h2>
-          <div className="mt-6">
-            <PersonalLoginForm next="/passport" />
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function StageTrack({ stage }: { stage: PrivatePassport["stage"] }) {
-  const stages = [
-    { id: "solo", label: "Solo" },
-    { id: "member", label: "On a team" },
-    { id: "shipped", label: "Shipped" },
-  ] as const;
-  return (
-    <div>
-      <p className="mb-2 font-pixel text-[10px] uppercase tracking-[0.2em] text-lightgray">Your stage</p>
-      <ol className="inline-flex flex-wrap border border-hairline bg-surface-2" aria-label="Your stage">
-        {stages.map((s) => {
-          const on = s.id === stage;
-          return (
-            <li
-              key={s.id}
-              aria-current={on ? "step" : undefined}
-              className={`flex min-h-11 items-center px-4 font-plex text-sm ${on ? "bg-lime-deep text-lime outline outline-1 -outline-offset-1 outline-lime" : "text-lightgray"}`}
-            >
-              {s.label}
-              {on && <span className="sr-only"> (current)</span>}
-            </li>
-          );
-        })}
-      </ol>
-    </div>
-  );
-}
-
-function Actions({ p }: { p: PrivatePassport }) {
-  const slug = p.team?.slug;
-  const items = [
-    !p.team && { id: "join_team", label: "Join team", href: "/team/join" },
-    !p.team && { id: "create_team", label: "Create team", href: "/team/new" },
-    (!p.team || p.team.size < 5) && { id: "find_teammates", label: "Find teammates", href: "/match" },
-    { id: "readiness", label: "Check Kane readiness", href: "/readiness" },
-    slug && { id: "validate_idea", label: "Validate idea", href: `/t/${slug}/idea` },
-    { id: "ask_mentor", label: "Ask mentor", href: slug ? `/t/${slug}/help` : "/help" },
-    slug && { id: "open_project", label: "Open project", href: `/t/${slug}` },
-    p.help && { id: "show_ticket", label: `Show ticket ${p.help.code}`, href: `/help/${p.help.code}` },
-  ].filter(Boolean) as { id: string; label: string; href: string }[];
-  return (
-    <nav aria-label="Passport actions">
-      <p className="mb-2 font-pixel text-[10px] uppercase tracking-[0.2em] text-lightgray">Actions</p>
-      <ul className="grid gap-2 sm:grid-cols-2">
-        {items.map((a) => (
-          <li key={a.id}>
-            <Link
-              href={a.href}
-              className="flex min-h-11 items-center justify-between gap-2 border border-hairline px-4 font-plex text-sm text-bright transition-colors hover:border-lime hover:text-lime"
-            >
-              {a.label} <span aria-hidden="true">→</span>
-            </Link>
-          </li>
-        ))}
-      </ul>
-    </nav>
-  );
-}
-
-function Back({ p }: { p: PrivatePassport }) {
-  const c = p.consents;
-  return (
-    <PassportBack>
-      <BackSection title="Skills">
-        <Chips items={p.member.skills} empty="None yet" />
-      </BackSection>
-      <BackSection title="Focus">
-        <Chips items={p.member.interests} empty="None yet" />
-      </BackSection>
-      <BackSection title="Team">
-        {p.team ? (p.team.is_solo ? "Solo builder" : `${p.team.name} · ${p.team.size} builders · ${p.team.role}`) : "Looking for team"}
-      </BackSection>
-      <BackSection title="Next">{p.mission.title}</BackSection>
-      <BackSection title="Milestones">
-        {p.milestones.length ? (
-          <ul className="space-y-0.5">
-            {p.milestones.map((m, i) => (
-              <li key={i}>
-                {m.confidence === "verified" ? "✓ " : "○ "}
-                {m.title}
-                {m.confidence !== "verified" && <span className="text-ink/60"> (unverified)</span>}
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <span className="text-ink/60">None approved yet</span>
-        )}
-      </BackSection>
-      <BackSection title="Help">{p.help ? `${p.help.code} · ${p.help.status.replace("_", " ")}` : "No open ticket"}</BackSection>
-      <BackSection title="Sharing">
-        <ul className="grid grid-cols-2 gap-x-2">
-          {CONSENT_CATEGORIES.map((k) => (
-            <li key={k} className="truncate">
-              {c[k] ? "● " : "○ "}
-              {k.replace(/_/g, " ")}
-              <span className="sr-only">{c[k] ? " on" : " off"}</span>
-            </li>
-          ))}
-        </ul>
-      </BackSection>
-      <BackSection title="Links">
-        {[p.member.github_handle && c.teammate_discovery ? `github.com/${p.member.github_handle}` : null, p.member.x_handle && c.social_mention ? `x.com/${p.member.x_handle}` : null]
-          .filter(Boolean)
-          .join(" · ") || <span className="text-ink/60">Not shared</span>}
-      </BackSection>
-    </PassportBack>
-  );
-}
-
-function Panel({ title, id, wide, children }: { title: string; id: string; wide?: boolean; children: ReactNode }) {
-  return (
-    <section id={id} aria-labelledby={`${id}-h`} className={`border border-hairline bg-surface p-5 sm:p-6 ${wide ? "lg:col-span-2" : ""}`}>
-      <h2 id={`${id}-h`} className="mb-4 font-pixel text-[10px] uppercase tracking-[0.2em] text-lightgray">
-        {title}
-      </h2>
-      {children}
-    </section>
-  );
-}
-
-function ActivationPanel({ p, ev }: { p: PrivatePassport; ev: Awaited<ReturnType<typeof getEvent>> }) {
-  const a = p.activation;
-  if (!a || a.status !== "active") {
+  if (!member) {
     return (
-      <div className="space-y-4">
-        <p className="flex flex-wrap items-center gap-3 font-plex text-sm text-bright">
-          <StatusPill tone={a ? "pending" : "unverified"}>{a ? a.status.replace(/_/g, " ") : "Not started"}</StatusPill>
-          {a ? "Pick up where you left off." : "Two minutes: confirm your registration and choose what you share."}
-        </p>
-        <Link href="/activate" className="inline-flex min-h-11 items-center bg-lime px-4 font-plex text-sm text-ink transition-colors hover:bg-bright">
-          {a ? "Resume activation →" : "Start activation →"}
-        </Link>
+      <div className="max-w-xl space-y-4 font-plex text-sm text-lightgray">
+        <p>Sign in to see your profile.</p>
+        <div className="flex flex-wrap gap-3">
+          <Button href="/passport/login?next=/passport" className="min-h-11">
+            Sign in →
+          </Button>
+          <Button href="/register" variant="secondary" className="min-h-11">
+            Start here
+          </Button>
+        </div>
       </div>
     );
   }
+  const [p, tokens, v, state] = await Promise.all([getPassport(member.id), listBearerTokens(member.id), avatarVersion(member.id), flowState(member.id)]);
+  const name = p.member.display_name ?? p.member.name;
+  const hasPhoto = !!v && p.consents.selfie_storage !== false;
+
   return (
-    <dl className="grid gap-3 font-plex text-sm sm:grid-cols-2">
-      <div>
-        <dt className="font-pixel text-[10px] uppercase tracking-[0.2em] text-lightgray">Receipt</dt>
-        <dd className="mt-1 font-dots text-2xl text-bright">{a.receipt_code}</dd>
-      </div>
-      <div>
-        <dt className="font-pixel text-[10px] uppercase tracking-[0.2em] text-lightgray">Server time</dt>
-        <dd className="mt-1 text-bright">{a.receipt_at ? formatEventTime(a.receipt_at, ev) : "—"}</dd>
-      </div>
-      <div className="sm:col-span-2">
-        <dt className="font-pixel text-[10px] uppercase tracking-[0.2em] text-lightgray">Kane browser check</dt>
-        <dd className="mt-1">
-          {a.kane_verified ? (
-            <StatusPill tone="verified">Verified · run {a.kane_run_id}</StatusPill>
-          ) : a.kane_run_id ? (
-            <StatusPill tone="unverified">Reported · run {a.kane_run_id} · unverified</StatusPill>
+    <div className="grid gap-12 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
+      <div className="space-y-10">
+        <div className="brackets flex flex-wrap items-center gap-6 border border-hairline p-5 sm:p-6">
+          <Avatar name={name} src={hasPhoto ? avatarSrc(member.id, v) : null} size={96} />
+          <div className="min-w-0 space-y-1">
+            <p className="font-display text-3xl text-bright">{name}</p>
+            <p className="font-plex text-xs text-lightgray">
+              {p.member.email_hint}
+              {p.member.public_code ? ` · badge ${p.member.public_code}` : ""}
+              {p.member.checked_in_at ? " · checked in" : ""}
+            </p>
+            {(p.member.github_handle || p.member.x_handle) && (
+              <p className="font-plex text-xs text-lightgray">
+                {[p.member.github_handle && `GitHub @${p.member.github_handle}`, p.member.x_handle && `X @${p.member.x_handle.replace(/^@/, "")}`].filter(Boolean).join(" · ")}
+              </p>
+            )}
+          </div>
+        </div>
+
+        <div className="grid gap-6 sm:grid-cols-2">
+          <TagList title="Skills" items={p.member.skills} />
+          <TagList title="Interests" items={p.member.interests} />
+        </div>
+
+        <div className="flex flex-wrap gap-3">
+          <Button href="/register?edit=profile" variant="secondary" className="min-h-11">
+            Edit profile
+          </Button>
+          <Button href="/register?edit=photo" variant="secondary" className="min-h-11">
+            {hasPhoto ? "Retake photo" : "Add a photo"}
+          </Button>
+          {hasPhoto && <RemovePhotoButton />}
+        </div>
+
+        <div className="border-t border-dashed border-hairline pt-6">
+          <p className={eyebrow}>Team</p>
+          {p.team ? (
+            <div className="mt-3 flex flex-wrap items-center gap-4">
+              <p className="font-display text-2xl text-bright">{p.team.name}</p>
+              <span className="font-plex text-xs text-lightgray">
+                {p.team.size} {p.team.size === 1 ? "person" : "people"}
+                {p.team.role === "captain" ? " · you're captain" : ""}
+              </span>
+              <Link href={`/t/${p.team.slug}`} className="font-plex text-sm text-bright underline underline-offset-4 hover:text-lime">
+                Team hub →
+              </Link>
+            </div>
           ) : (
-            <span className="text-lightgray">Not run (optional)</span>
+            <p className="mt-3 font-plex text-sm text-lightgray">
+              No team yet.{" "}
+              <Link href={state.next} className="text-bright underline underline-offset-4 hover:text-lime">
+                Continue →
+              </Link>
+            </p>
           )}
-        </dd>
+          {state.stage !== "hub" && (
+            <div className="mt-5">
+              <Button href={state.next} className="min-h-11">
+                Continue where you left off →
+              </Button>
+            </div>
+          )}
+        </div>
       </div>
-    </dl>
+
+      <aside className="space-y-10">
+        <div className="space-y-4">
+          <p className={eyebrow}>Paired devices</p>
+          {tokens.length === 0 ? (
+            <p className="font-plex text-sm text-lightgray">No machine paired yet.</p>
+          ) : (
+            <ul className="border-t border-dashed border-hairline">
+              {tokens.map((t) => (
+                <li key={t.id} className="flex flex-wrap items-center justify-between gap-3 border-b border-dashed border-hairline py-2.5 font-plex text-sm">
+                  <span className="text-bright">
+                    {t.label ?? "kanehack"}
+                    <span className="block text-xs text-lightgray">
+                      paired {t.created_at.toLocaleDateString()} {t.last_used_at ? `· last used ${t.last_used_at.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : ""}
+                    </span>
+                  </span>
+                  <form action={revokeToken}>
+                    <input type="hidden" name="id" value={t.id} />
+                    <button type="submit" className="min-h-11 border border-hairline px-3 font-plex text-xs text-bright hover:border-danger hover:text-danger">
+                      Revoke
+                    </button>
+                  </form>
+                </li>
+              ))}
+            </ul>
+          )}
+          <div className="flex flex-wrap items-center gap-3">
+            {tokens.length > 0 ? <StatusPill tone="neutral">{tokens.length} paired</StatusPill> : <StatusPill tone="pending">Not paired</StatusPill>}
+            <Link href="/pair" className="font-plex text-sm text-bright underline underline-offset-4 hover:text-lime">
+              Approve a pairing code →
+            </Link>
+            <Link href="/setup" className="font-plex text-sm text-lightgray underline underline-offset-4 hover:text-lime">
+              Set up Codex
+            </Link>
+          </div>
+        </div>
+
+        <div className="space-y-4 border-t border-dashed border-hairline pt-6">
+          <p className={eyebrow}>Sign-in</p>
+          <PasswordForm />
+          <LoginCodeButton />
+          <form action={signOut}>
+            <button type="submit" className="min-h-11 border border-hairline px-4 font-plex text-sm text-bright transition-colors hover:border-lime hover:text-lime">
+              Sign out
+            </button>
+          </form>
+        </div>
+      </aside>
+    </div>
+  );
+}
+
+function TagList({ title, items }: { title: string; items: string[] }) {
+  return (
+    <div>
+      <p className={eyebrow}>{title}</p>
+      {items.length ? (
+        <ul className="mt-3 flex flex-wrap gap-1.5">
+          {items.map((s) => (
+            <li key={s} className="border border-hairline px-2 py-0.5 font-plex text-xs text-bright">
+              {s}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-3 font-plex text-sm text-lightgray">None added.</p>
+      )}
+    </div>
   );
 }

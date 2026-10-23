@@ -4,7 +4,7 @@ import { useActionState, useState } from "react";
 import { FormError, Label, SubmitButton, inputCls } from "@/components/forms/fields";
 import { personalLogin, type PersonalLoginState } from "./actions";
 
-export default function PersonalLoginForm({ next, initialMode = "password" }: { next: string; initialMode?: "password" | "code" }) {
+export default function PersonalLoginForm({ next, initialMode = "password", initialCode = "" }: { next: string; initialMode?: "password" | "code"; initialCode?: string }) {
   const [state, action] = useActionState<PersonalLoginState, FormData>(personalLogin, null);
   const [mode, setMode] = useState<"password" | "code">(initialMode);
   // Controlled, so a wrong password doesn't also wipe the email (React resets forms after an action).
@@ -18,7 +18,7 @@ export default function PersonalLoginForm({ next, initialMode = "password" }: { 
       </div>
       {mode === "password" ? (
         <div>
-          <Label htmlFor="pl-password" hint="Your team’s, or your own">
+          <Label htmlFor="pl-password" hint="The one you chose when you registered">
             Password
           </Label>
           <input id="pl-password" name="password" type="password" required autoComplete="current-password" className={inputCls} />
@@ -28,13 +28,13 @@ export default function PersonalLoginForm({ next, initialMode = "password" }: { 
           <Label htmlFor="pl-code" hint="From the desk or your other device">
             One-time code
           </Label>
-          <input id="pl-code" name="code" required autoComplete="one-time-code" placeholder="XXXX-XXXX" className={`${inputCls} uppercase tracking-[0.2em]`} />
+          <input id="pl-code" name="code" required defaultValue={initialCode} autoComplete="one-time-code" placeholder="XXXX-XXXX" className={`${inputCls} uppercase tracking-[0.2em]`} />
         </div>
       )}
       <FormError message={state?.error} />
       <div className="flex flex-wrap items-center gap-4">
         <SubmitButton pending="Checking…" className="min-h-11">
-          Open my passport →
+          Sign in →
         </SubmitButton>
         <button
           type="button"

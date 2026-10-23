@@ -1,41 +1,68 @@
 import Link from "next/link";
-import { hubPath } from "@/lib/hub";
-import { getTeamSession } from "@/lib/session";
-import { getTeamById } from "@/lib/teams";
+import { getMemberSession } from "@/lib/session";
+import { getMemberById } from "@/server/auth";
+import { avatarSrc, avatarVersion } from "@/server/avatar";
+import { flowState } from "@/server/flow";
 
-// Navbar's right-hand side: Log in / Register, or a way back to your team hub.
+// Navbar's right-hand side: Sign in / Start here, or (signed in as yourself)
+// a "continue" link to wherever you are in the flow and your avatar (the
+// photo from /register, else your initials), which opens your profile.
 // Reads the session cookie, so it streams in behind a Suspense boundary.
 export default async function Account() {
   let session = null;
   try {
-    session = await getTeamSession();
+    session = await getMemberSession();
   } catch {
     // A form posted before hydration re-renders the whole page inside the
     // action, where Next.js 16.4 throws on cookies() here. The page still
     // works, so fall back to the signed-out links for that one response.
   }
-  const team = session ? await getTeamById(session.teamId) : null;
-  return team ? <MyTeam name={team.name} href={hubPath(team.slug)} /> : <SignedOut />;
-}
-
-export function SignedOut() {
+  const member = session?.personal ? await getMemberById(session.memberId) : null;
+  if (!member) return <SignedOut />;
+  const [v, state] = await Promise.all([avatarVersion(member.id), flowState(member.id)]);
+  const name = member.display_name ?? member.name;
   return (
     <span className="flex items-center gap-4">
-      <Link href="/login" className="font-plex text-sm text-bright transition-colors hover:text-lime">
-        Log in
+      <Link href={state.next} className="bg-bright px-3 py-1.5 font-plex text-sm text-ink transition-colors hover:bg-lime">
+        {state.stage === "hub" ? "My team" : "Continue →"}
       </Link>
-      <Link href="/register" className="bg-bright px-3 py-1.5 font-plex text-sm text-ink transition-colors hover:bg-lime">
-        Register
+      <Link href="/passport" aria-label={`Your profile (${name})`} title={name} className="block shrink-0" data-avatar={v ? "photo" : "monogram"}>
+        <Avatar name={name} src={v ? avatarSrc(member.id, v) : null} size={36} />
       </Link>
     </span>
   );
 }
 
-function MyTeam({ name, href }: { name: string; href: string }) {
+export function SignedOut() {
   return (
-    <Link href={href} className="flex max-w-[16rem] items-center gap-2 bg-bright px-3 py-1.5 font-plex text-sm text-ink transition-colors hover:bg-lime">
-      <span className="shrink-0">My team</span>
-      <span className="truncate text-ink/60">· {name}</span>
-    </Link>
+    <span className="flex items-center gap-4">
+      <Link href="/passport/login" className="font-plex text-sm text-bright transition-colors hover:text-lime">
+        Sign in
+      </Link>
+      <Link href="/register" className="bg-bright px-3 py-1.5 font-plex text-sm text-ink transition-colors hover:bg-lime">
+        Start here
+      </Link>
+    </span>
+  );
+}
+
+const initials = (name: string) =>
+  name
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((p) => p[0]?.toUpperCase() ?? "")
+    .join("") || "?";
+
+/** A round photo, or the person's initials on a hairline circle. */
+export function Avatar({ name, src, size = 36 }: { name: string; src: string | null; size?: number }) {
+  if (src) {
+    // eslint-disable-next-line @next/next/no-img-element -- private, cookie-gated image; not for the optimizer
+    return <img src={src} alt="" width={size} height={size} style={{ width: size, height: size }} className="rounded-full border border-hairline object-cover" />;
+  }
+  return (
+    <span aria-hidden="true" style={{ width: size, height: size }} className="inline-flex items-center justify-center rounded-full border border-lime bg-lime-deep font-pixel text-[11px] text-lime">
+      {initials(name)}
+    </span>
   );
 }

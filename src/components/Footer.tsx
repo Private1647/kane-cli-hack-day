@@ -2,8 +2,7 @@ import Link from "next/link";
 import { event } from "@/data/hackday";
 
 // Link columns over a giant dot-matrix wordmark, as in gradium.ai's footer.
-// Public links go to the home page; team links go through /resources, /submit
-// and friends, which send you to your hub (or to log in first).
+// Public links go to the home page; /me resumes a signed-in participant's flow.
 const columns = [
   {
     title: "The day",
@@ -16,20 +15,20 @@ const columns = [
     ],
   },
   {
-    title: "Your team",
+    title: "Your day",
     links: [
-      { href: "/register", label: "Register" },
-      { href: "/login", label: "Log in" },
-      { href: "/me", label: "Team hub" },
-      { href: "/setup", label: "Set up your agent" },
+      { href: "/register", label: "Start here" },
+      { href: "/passport/login", label: "Sign in" },
+      { href: "/me", label: "Continue where you left off" },
+      { href: "/setup", label: "Set up Codex" },
     ],
   },
   {
-    title: "In the hub",
+    title: "During the event",
     links: [
-      { href: "/resources", label: "Resources" },
-      { href: "/submit", label: "Submit" },
-      { href: "/content-hour", label: "Content hour" },
+      { href: "/match", label: "Matchmaking" },
+      { href: "/help", label: "Help" },
+      { href: "/live", label: "Live" },
       { href: "/judging", label: "Judging" },
     ],
   },

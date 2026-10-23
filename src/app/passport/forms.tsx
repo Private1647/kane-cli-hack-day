@@ -2,7 +2,7 @@
 
 import { useActionState, useState, useTransition } from "react";
 import { FormError, Label, SubmitButton, Toggle, inputCls } from "@/components/forms/fields";
-import { newLoginCode, rotateBadge, saveProfile, setPassword, type FormState } from "./actions";
+import { newLoginCode, removePhoto, rotateBadge, saveProfile, setPassword, type FormState } from "./actions";
 
 function Ok({ text }: { text?: string }) {
   if (!text) return null;
@@ -108,6 +108,25 @@ export function LoginCodeButton() {
           <span className="block text-xs text-lightgray">Use it once at /passport/login within 24 hours. Making a new one cancels this one.</span>
         </p>
       )}
+      <FormError message={state?.error} />
+    </div>
+  );
+}
+
+export function RemovePhotoButton() {
+  const [state, setState] = useState<FormState>(null);
+  const [pending, start] = useTransition();
+  return (
+    <div className="space-y-2">
+      <button
+        type="button"
+        disabled={pending}
+        onClick={() => start(async () => setState(await removePhoto()))}
+        className="inline-flex min-h-11 items-center border border-hairline px-4 font-plex text-sm text-bright transition-colors hover:border-danger hover:text-danger disabled:opacity-60"
+      >
+        {pending ? "Removing…" : "Remove photo"}
+      </button>
+      <Ok text={state?.ok} />
       <FormError message={state?.error} />
     </div>
   );

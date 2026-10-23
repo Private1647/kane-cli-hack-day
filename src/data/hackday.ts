@@ -15,8 +15,8 @@ export const event = {
 };
 
 export const ctas = {
-  register: { label: "Register your team", href: "/register" },
-  login: { label: "Log in", href: "/login" },
+  register: { label: "Checked in? Start here →", href: "/register" },
+  login: { label: "Sign in", href: "/passport/login" },
 } satisfies Record<string, Link>;
 
 // ── Do this first ────────────────────────────────────────────────────────────

@@ -434,8 +434,8 @@ export function missionFor(state: ParticipantState, p: Pick<PrivatePassport, "te
         body: "Teams of up to four. Join one with an invite, start your own, or browse builders looking for a team.",
         action: { id: "find_teammates", label: "Find teammates", href: "/match" },
         secondary: [
-          { id: "create_team", label: "Create team", href: "/team/new" },
-          { id: "join_team", label: "Join team", href: "/team/join" },
+          { id: "create_team", label: "Create team", href: "/team" },
+          { id: "join_team", label: "Join team", href: "/team" },
         ],
       };
     case "needs_idea":
@@ -643,7 +643,7 @@ export const READINESS_CHECKS: ReadinessCheckDef[] = [
   { id: "codex", label: "Codex", command: "codex --version", tier: "agent", fix: "Install the Codex CLI with `npm i -g @openai/codex`, or use Codex in the ChatGPT desktop app." },
   { id: "kane_version", label: "Kane CLI installed", command: "kane-cli --version", tier: "kane", fix: "`npm install -g @testmuai/kane-cli`, then open a new terminal and re-run `kane-cli --version`." },
   { id: "kane_whoami", label: "Kane CLI signed in", command: "kane-cli whoami", tier: "kane", fix: "Run `kane-cli login --oauth` and finish the sign-in in the browser, then re-run `kane-cli whoami`." },
-  { id: "kane_skill", label: "Official Kane skill installed", command: "kane-cli install codex", tier: "agent", fix: "Run `kane-cli install codex` (or `kane-cli install claude`) so your agent knows how to call Kane." },
+  { id: "kane_skill", label: "Official Kane skill installed", command: "kane-cli install codex", tier: "agent", fix: "Run `kane-cli install codex` so Codex knows how to call Kane." },
   { id: "plugin_discovery", label: "Event skills found in a fresh session", tier: "agent", fix: "Open a new agent session and ask it to run hack-doctor. If it can’t find it, copy the event skills into .agents/skills in your repo." },
   { id: "api_reachability", label: "Event API reachable", tier: "core", fix: "Check your network or VPN, then open https://kaneclihack.sh/api/v1/readiness in a browser. Venue Wi-Fi details are on the help desk sign." },
   { id: "browser_test", label: "Kane browser test", command: 'kane-cli run "Open https://kaneclihack.sh and check the page title mentions Kane" --agent', tier: "kane", fix: "Make sure Chrome is installed and Kane is signed in, then run the browser test again. Ask a mentor if it still fails." },

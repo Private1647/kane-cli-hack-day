@@ -68,7 +68,18 @@ export async function revokeToken(form: FormData) {
   refresh();
 }
 
+/** Remove the profile photo: records selfie_storage = off, which also deletes the stored file. */
+export async function removePhoto(): Promise<FormState> {
+  const r = await runAction(async () => {
+    const member = await requirePersonalMember();
+    return updateProfile(member, memberActor(member), { consents: { selfie_storage: false } }, "web");
+  });
+  if (!r.ok) return msg(r.error);
+  refresh();
+  return { ok: "Photo removed. Your initials show instead." };
+}
+
 export async function signOut() {
   await Promise.all([memberLogout(), clearTeamSession()]);
-  redirect("/passport/login");
+  redirect("/");
 }

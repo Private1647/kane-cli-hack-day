@@ -9,6 +9,15 @@ const nextConfig: NextConfig = {
     return [
       { source: "/admin", destination: "/ops", permanent: true },
       { source: "/admin/:path*", destination: "/ops/:path*", permanent: true },
+      // event-day-flow: pages folded into the new participant flow (temporary, so they can come back).
+      { source: "/login", destination: "/passport/login", permanent: false },
+      { source: "/team/new", destination: "/team", permanent: false },
+      { source: "/team/join", destination: "/team", permanent: false },
+      { source: "/team/:slug/manage", destination: "/team", permanent: false },
+      { source: "/activate/phone", destination: "/register", permanent: false },
+      { source: "/docs", destination: "/setup", permanent: false },
+      { source: "/resources", destination: "/me", permanent: false },
+      { source: "/content-hour", destination: "/me", permanent: false },
     ];
   },
   // Security headers (T-SEC-01). CSP keeps 'unsafe-inline' for scripts because
