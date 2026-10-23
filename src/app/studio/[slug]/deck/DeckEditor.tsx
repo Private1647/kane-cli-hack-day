@@ -49,6 +49,7 @@ export default function DeckEditor({
   const [version, setVersion] = useState(initialVersion);
   const [sel, setSel] = useState(0);
   const [dirty, setDirty] = useState(false);
+  const [confirmReset, setConfirmReset] = useState(false);
   const [reason, setReason] = useState("edit");
   const [msg, setMsg] = useState<Msg>(null);
   const [pubMsg, setPubMsg] = useState<Msg>(null);
@@ -260,21 +261,37 @@ export default function DeckEditor({
 
         <Panel eyebrow="Files" title="Reset, import, export">
           <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                if (window.confirm("Replace the editor with the default five slides generated from your story? Saved versions are kept.")) {
-                  setDeck(structuredClone(defaultDeck));
-                  setSel(0);
-                  setDirty(true);
-                  setReason("reset");
-                  setMsg({ ok: true, message: "Reset to the default deck. Save to keep it." });
-                }
-              }}
-              className="inline-flex min-h-11 items-center border border-hairline px-4 font-plex text-sm text-bright hover:border-lime hover:text-lime"
-            >
-              Reset to default
-            </button>
+            {confirmReset ? (
+              <span role="alertdialog" aria-label="Reset the deck?" className="flex flex-wrap items-center gap-2 border border-warning p-2">
+                <span className="font-plex text-xs text-warning">Replace the editor with the default five slides from your story? Saved versions are kept.</span>
+                <button
+                  type="button"
+                  autoFocus
+                  onClick={() => {
+                    setDeck(structuredClone(defaultDeck));
+                    setSel(0);
+                    setDirty(true);
+                    setReason("reset");
+                    setConfirmReset(false);
+                    setMsg({ ok: true, message: "Reset to the default deck. Save to keep it." });
+                  }}
+                  className="inline-flex min-h-11 items-center bg-bright px-4 font-plex text-sm text-ink hover:bg-lime"
+                >
+                  Yes, reset
+                </button>
+                <button type="button" onClick={() => setConfirmReset(false)} className="inline-flex min-h-11 items-center px-4 font-plex text-sm text-lightgray hover:text-bright">
+                  Cancel
+                </button>
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setConfirmReset(true)}
+                className="inline-flex min-h-11 items-center border border-hairline px-4 font-plex text-sm text-bright hover:border-lime hover:text-lime"
+              >
+                Reset to default
+              </button>
+            )}
             <button type="button" onClick={() => fileRef.current?.click()} className="inline-flex min-h-11 items-center border border-hairline px-4 font-plex text-sm text-bright hover:border-lime hover:text-lime">
               Import deck.json
             </button>

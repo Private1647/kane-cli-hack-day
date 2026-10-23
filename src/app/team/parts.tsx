@@ -219,19 +219,26 @@ export function SettingsForm({
 export function RosterButtons({ slug, memberId, name }: { slug: string; memberId: number; name: string }) {
   const [rm, rmAction] = useActionState<TeamFormState, FormData>(removeMemberAction.bind(null, slug, memberId), null);
   const [cap, capAction] = useActionState<TeamFormState, FormData>(transferCaptainAction.bind(null, slug, memberId), null);
+  // An in-page confirm step rather than window.confirm(), so it can't be skipped silently.
+  const [asking, setAsking] = useState(false);
   return (
     <div className="flex flex-wrap items-center gap-2">
       <form action={capAction}>
         <PendingButton className={smallBtn}>Make captain</PendingButton>
       </form>
-      <form
-        action={rmAction}
-        onSubmit={(e) => {
-          if (!window.confirm(`Remove ${name} from the team?`)) e.preventDefault();
-        }}
-      >
-        <PendingButton className={dangerBtn}>Remove</PendingButton>
-      </form>
+      {asking ? (
+        <form action={rmAction} role="alertdialog" aria-label={`Remove ${name}?`} className="flex flex-wrap items-center gap-2">
+          <span className="font-plex text-xs text-warning">Remove {name} from the team?</span>
+          <PendingButton className={dangerBtn}>Yes, remove</PendingButton>
+          <button type="button" onClick={() => setAsking(false)} className={smallBtn}>
+            Cancel
+          </button>
+        </form>
+      ) : (
+        <button type="button" onClick={() => setAsking(true)} className={dangerBtn}>
+          Remove
+        </button>
+      )}
       <div className="basis-full">
         <ActionNote state={rm?.ok ? null : rm} />
         <ActionNote state={cap?.ok ? null : cap} />

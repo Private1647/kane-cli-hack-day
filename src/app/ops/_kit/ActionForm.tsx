@@ -41,39 +41,72 @@ export default function ActionForm({
   // A new key after each successful submit; a retry of a failed one reuses it.
   const [key, setKey] = useState(newKey);
   const [lastOk, setLastOk] = useState<OpsState>(null);
+  // Confirmation is an in-page step, not window.confirm(): it is visible, keyboard
+  // reachable and announced, and a browser that dismisses native dialogs can't skip it.
+  const [asking, setAsking] = useState(false);
+  const [lastState, setLastState] = useState<OpsState>(null);
+  if (state !== lastState) {
+    setLastState(state);
+    setAsking(false);
+  }
   if (state && state !== lastOk && state.ok) {
     setLastOk(state);
     setKey(newKey());
   }
   return (
-    <form
-      action={formAction}
-      className={`space-y-4 ${className}`}
-      onSubmit={(e) => {
-        if (confirm && !window.confirm(confirm)) e.preventDefault();
-      }}
-    >
+    <form action={formAction} className={`space-y-4 ${className}`}>
       <input type="hidden" name="idempotency_key" value={key} />
       {typeof children === "function" ? children(state) : children}
-      <div className="flex flex-wrap items-center gap-3">
-        <Submit variant={variant} pending={pending}>
-          {submit}
-        </Submit>
-      </div>
+      {confirm && asking ? (
+        <div role="alertdialog" aria-live="assertive" aria-label="Confirm this change" className="space-y-3 border border-warning p-3">
+          <p className="font-plex text-sm text-warning">
+            <span aria-hidden="true">◷ </span>
+            {confirm}
+          </p>
+          <div className="flex flex-wrap items-center gap-3">
+            <Submit variant={variant} pending={pending} autoFocus>
+              Yes, confirm
+            </Submit>
+            <button type="button" onClick={() => setAsking(false)} className="inline-flex min-h-11 items-center justify-center px-4 py-2 font-plex text-sm text-lightgray hover:text-bright">
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="flex flex-wrap items-center gap-3">
+          {confirm ? (
+            <button
+              type="button"
+              onClick={(e) => {
+                // Run the browser's own field validation before asking.
+                if (e.currentTarget.form?.reportValidity()) setAsking(true);
+              }}
+              className={`inline-flex min-h-11 items-center justify-center gap-2 px-4 py-2 font-plex text-sm transition-colors ${variantCls[variant]}`}
+            >
+              {submit}
+            </button>
+          ) : (
+            <Submit variant={variant} pending={pending}>
+              {submit}
+            </Submit>
+          )}
+        </div>
+      )}
       <Result state={state} render={render} />
     </form>
   );
 }
 
-function Submit({ children, pending, variant }: { children: ReactNode; pending: ReactNode; variant: "primary" | "secondary" | "danger" }) {
+const variantCls = {
+  primary: "bg-bright text-ink hover:bg-lime",
+  secondary: "border border-hairline text-bright hover:border-lime hover:text-lime",
+  danger: "border border-danger text-danger hover:bg-danger-deep",
+};
+
+function Submit({ children, pending, variant, autoFocus }: { children: ReactNode; pending: ReactNode; variant: "primary" | "secondary" | "danger"; autoFocus?: boolean }) {
   const { pending: busy } = useFormStatus();
-  const cls = {
-    primary: "bg-bright text-ink hover:bg-lime",
-    secondary: "border border-hairline text-bright hover:border-lime hover:text-lime",
-    danger: "border border-danger text-danger hover:bg-danger-deep",
-  }[variant];
   return (
-    <button type="submit" disabled={busy} className={`inline-flex min-h-11 items-center justify-center gap-2 px-4 py-2 font-plex text-sm transition-colors disabled:cursor-wait disabled:opacity-60 ${cls}`}>
+    <button type="submit" disabled={busy} autoFocus={autoFocus} className={`inline-flex min-h-11 items-center justify-center gap-2 px-4 py-2 font-plex text-sm transition-colors disabled:cursor-wait disabled:opacity-60 ${variantCls[variant]}`}>
       {busy ? pending : children}
     </button>
   );
