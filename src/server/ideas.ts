@@ -452,7 +452,7 @@ export function ruleAssessment(input: IdeaInput): Omit<Assessment, "assessed_at"
       evidence = strong ?? `Project type: ${PROJECT_TYPE_LABEL[input.project_type]}`;
     }
     if (c.id === "feasible_demo" && !strong) {
-      status = tooShort ? "missing" : input.description.length > 2500 ? "partial" : "partial";
+      status = tooShort ? "missing" : "partial";
       evidence = tooShort ? "Too little detail to judge scope" : "No MVP or demo scope stated";
     }
     return { id: c.id, label: c.label, status, evidence };
