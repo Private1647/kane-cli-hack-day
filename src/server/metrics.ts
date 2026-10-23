@@ -445,17 +445,22 @@ async function projectFeed(db: Q, e: HackEvent) {
      on conflict do nothing`,
     [e.id, demo],
   );
-  // 3. Closed loops: a confirmed defect reverified on a corrected commit.
+  // 3. Closed loops: the same rule as fixed_and_reverified (a later verified
+  //    passing run on a different commit than the one that detected it).
   await db.query(
-    `insert into live_feed (event_id, team_id, kind, status, title, detail, href, source_key, is_demo, occurred_at)
+    `with ${VALID_RUNS}
+     insert into live_feed (event_id, team_id, kind, status, title, detail, href, source_key, is_demo, occurred_at)
      select $1, p.team_id, 'defect_reverified', 'proof',
             left(p.name || ' closed a verification loop', 160),
             'Earlier failure fixed and reverified against a new revision',
-            '/ship/' || p.slug, 'reverified:' || d.id, $2, max(v.created_at)
+            '/ship/' || p.slug, 'reverified:' || d.id, $2, min(fix.done_at)
        from defects d
        join projects p on p.id = d.project_id and p.event_id = $1 and p.showcase_state = 'public'
+       join valid_runs src on src.id = d.source_run_id
        join defect_verifications v on v.defect_id = d.id and v.result = 'passed'
-      where d.status in ('fixed', 'reverified') and d.confirmed_at is not null and d.failure_class = 'product'
+       join valid_runs fix on fix.id = v.run_id and fix.status = 'passed' and fix.verified and fix.commit_sha is not null
+                           and fix.done_at > src.done_at and fix.commit_sha is distinct from src.commit_sha
+      where d.status in ('confirmed', 'fixed', 'reverified') and d.confirmed_at is not null and d.failure_class = 'product'
       group by p.team_id, p.name, p.slug, d.id
      on conflict do nothing`,
     [e.id, demo],
@@ -847,7 +852,8 @@ export async function getLiveSnapshot(opts: { ops?: boolean } = {}): Promise<Liv
       fallback: e.fallback,
     },
     metrics: m?.metrics ?? {},
-    banners,
+    // One banner per system: the freshness banner (first) wins over integration_state.
+    banners: banners.filter((b, i) => banners.findIndex((x) => x.system === b.system) === i),
     announcements: announcements.map((a) => ({ id: a.id, title: a.title, body: a.body, href: a.href, at: new Date(a.send_at).toISOString() })),
     feed,
     feed_cursor: feed.reduce((mx, f) => Math.max(mx, f.id), 0),

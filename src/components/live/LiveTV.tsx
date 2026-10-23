@@ -100,7 +100,9 @@ export default function LiveTV({
 
   const local = useSyncExternalStore(subscribeSecond, getSecond, getNull);
   const reduced = useSyncExternalStore(subscribeMotion, getReduced, getReducedServer);
-  const serverMs = local == null ? null : local + (offset ?? 0);
+  // Before hydration (and on the server) use the snapshot's own server time, so
+  // the first frame already shows the official clock instead of a dash.
+  const serverMs: number | null = local == null ? new Date(snap.server_time).getTime() : local + (offset ?? 0);
 
   const base = ops ? "?ops=1" : "";
   const accept = useCallback((s: LiveSnapshot) => {
@@ -278,9 +280,9 @@ export default function LiveTV({
         {(held || snap.banners.length > 0) && (
           <div className="flex flex-col gap-2">
             {held && (
-              <DegradedServiceAlert state={freshness as "delayed" | "stale" | "offline"} system="Live board" manualRoute="/help" manualLabel="Help desk still works">
+              <DegradedServiceAlert state={freshness as "delayed" | "stale" | "offline"} system="Live board">
                 Showing the last values received
-                {lastOk != null ? ` at ${clockFmt.format(lastOk + (offset ?? 0))}` : snap.as_of ? ` at ${clockFmt.format(new Date(snap.as_of))}` : ""}. Numbers are held, not reset.
+                {lastOk != null ? ` at ${clockFmt.format(lastOk + (offset ?? 0))}` : snap.as_of ? ` at ${clockFmt.format(new Date(snap.as_of))}` : ""}. Numbers are held, not reset. Check-in, help and submission still work.
               </DegradedServiceAlert>
             )}
             {snap.banners.slice(0, ops ? 6 : 2).map((b) => (
@@ -372,7 +374,7 @@ export default function LiveTV({
             {copy.name} / Mission Control
           </span>
           <span>
-            Last updated <FreshnessStamp asOf={snap.as_of} state={freshness} source="verified aggregation" />
+            Last <FreshnessStamp asOf={snap.as_of} state={freshness} source="verified aggregation" />
           </span>
           <span role="status">
             {conn === "streaming" ? "Live stream" : conn === "polling" ? "Polling every 15s" : conn === "reconnecting" ? "Reconnecting…" : "Connecting…"}

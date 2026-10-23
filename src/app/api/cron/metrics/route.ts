@@ -7,7 +7,6 @@ import { runProjectionJob } from "@/server/metrics";
 // when the projection is older than 45s, so a late cron only shows as DELAYED.
 // Auth: `Authorization: Bearer $CRON_SECRET` (Vercel sends it automatically).
 
-export const runtime = "nodejs";
 export const maxDuration = 60;
 
 function authorized(req: Request) {

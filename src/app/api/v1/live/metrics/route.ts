@@ -11,7 +11,6 @@ import { METRIC_DEFINITION_VERSION } from "@/components/live/definitions";
 // Unknown values are null (render "—"), never 0. On an outage the projection
 // keeps its last values and as_of, and freshness_state says delayed/stale/offline.
 
-export const runtime = "nodejs";
 
 export async function GET(req: Request) {
   return envelopeResponse(async () => {

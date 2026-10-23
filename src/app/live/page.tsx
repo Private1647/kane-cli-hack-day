@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { connection } from "next/server";
 import { Suspense } from "react";
 import QR from "@/components/ui/QR";
 import LiveTV from "@/components/live/LiveTV";
@@ -37,6 +38,7 @@ function Loading() {
 }
 
 async function LiveView({ searchParams }: { searchParams: PageProps<"/live">["searchParams"] }) {
+  await connection(); // live data, every request
   const sp = await searchParams;
   const wantsOps = sp.ops === "1";
 

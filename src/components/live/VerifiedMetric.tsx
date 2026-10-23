@@ -19,7 +19,7 @@ export function breakdownLine(v: MetricValue | undefined | null): string | null 
         .filter(Boolean)
         .join(" · ");
     case "participants_checked_in":
-      return b.walk_ins ? `${n(b.walk_ins)} walk-ins` : null;
+      return b.walk_ins ? `${n(b.walk_ins)} walk-in${b.walk_ins === 1 ? "" : "s"}` : null;
     case "test_members_executed":
       return b.unique_definitions != null ? `${n(b.unique_definitions)} unique tests` : null;
     case "bugs_detected":
@@ -50,6 +50,8 @@ export default function VerifiedMetric({
 }) {
   const def = METRICS[name];
   const shown = displayValue(value);
+  // Held if the whole board is behind, or this one metric couldn't be refreshed.
+  held = held || (value != null && value.as_of != null && value.freshness !== "fresh");
   const denom = shown != null && value?.denominator != null ? value.denominator : null;
   const split = breakdownLine(value);
   const numCls =
@@ -69,7 +71,8 @@ export default function VerifiedMetric({
         {split && <span className="block text-bright/80">{split}</span>}
       </p>
       <div className="mt-auto flex flex-wrap items-center gap-2">
-        {shown != null && def.trust === "verified" && <StatusPill tone="verified">Verified</StatusPill>}
+        {/* Teal only when there is something evidence-backed to show; a verified zero is just a zero. */}
+        {shown != null && def.trust === "verified" && (value?.value ?? 0) > 0 && <StatusPill tone="verified">Verified</StatusPill>}
         {shown != null && def.trust === "suspected" && <StatusPill tone="suspected">Suspected</StatusPill>}
         {held && shown != null && (
           <span className="font-pixel text-[10px] uppercase tracking-[0.2em] text-warning">

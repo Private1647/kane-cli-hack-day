@@ -13,10 +13,9 @@ import { getLiveSnapshot, readFeed, requireOpsViewer, type LiveSnapshot } from "
 // replay feed items after it, then send a fresh snapshot (reconcile). Each
 // connection lives ~4 minutes, then closes cleanly so a function never runs
 // past maxDuration; the client reconnects with Last-Event-ID automatically.
-// Node runtime (not Edge). Behind the `live_sse` flag: when off, 503 and /live
+// Node runtime (the default; cacheComponents forbids the `runtime` export). Behind the `live_sse` flag: when off, 503 and /live
 // falls back to polling /api/v1/live/metrics?board=1.
 
-export const runtime = "nodejs";
 export const maxDuration = 300;
 
 const TICK_MS = 5_000;
