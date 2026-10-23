@@ -233,6 +233,8 @@ export type PrivatePassport = {
   help: { code: string; status: string } | null;
   submission: { status: string; receipt_code: string | null; finalized_at: Date | null } | null;
   readiness: { at: Date; passed: number; failed: number; warned: number } | null;
+  /** Approved milestones of the team's project, newest first. */
+  milestones: { title: string; confidence: "verified" | "participant_reported" | "inferred" }[];
   stage: "solo" | "member" | "shipped";
   state: ParticipantState;
   mission: Mission;
@@ -298,7 +300,10 @@ export async function getPassport(memberId: number): Promise<PrivatePassport> {
     getEvent(),
   ]);
   const x = extraRows[0];
-  const ship = m.team_id ? (await query<{ slug: string; showcase_state: string }>("select slug, showcase_state from projects where team_id = $1", [m.team_id]))[0] : undefined;
+  const ship = m.team_id ? (await query<{ id: number; slug: string; showcase_state: string }>("select id, slug, showcase_state from projects where team_id = $1", [m.team_id]))[0] : undefined;
+  const milestones = ship
+    ? await query<PrivatePassport["milestones"][number]>("select title, confidence from milestones where project_id = $1 and approved_at is not null order by approved_at desc limit 6", [ship.id])
+    : [];
 
   const shipped = !!sub[0] && ["finalized", "locked", "organizer_exception"].includes(sub[0].status);
   const team = m.team_id && x.team_slug
@@ -341,6 +346,7 @@ export async function getPassport(memberId: number): Promise<PrivatePassport> {
     help: help[0] ?? null,
     submission: sub[0] ?? null,
     readiness: ready[0] ?? null,
+    milestones,
     stage: (shipped ? "shipped" : team && !team.is_solo ? "member" : "solo") as PrivatePassport["stage"],
     edition: EDITION,
     server_time: ev.now,
