@@ -42,6 +42,8 @@ next-env.d.ts
 
 # agent-to-agent channel, local only
 .claude/channel/
+# kane-cli context store: shared through a location, never merged with git
+.context/
 
 # kane-cli variable values: local demo credentials and single-use codes, never committed
 .testmuai/variables/
