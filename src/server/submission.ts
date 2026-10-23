@@ -5,7 +5,7 @@ import { pool, query } from "@/lib/db";
 import { PROGRESS_ITEMS, shippedMinimum } from "@/lib/progress";
 import { logActivity } from "@/lib/teams";
 import { getMember, getStaff, hasRole, memberActor, randomCode, requireTeamMember, staffActor, type MemberRow, type Staff } from "./auth";
-import { AppError, idempotent, parse, sha256, stableStringify, transaction, writeAudit, z, zx, type Receipt } from "./core";
+import { AppError, idempotent, parse, sha256, stableStringify, transaction, writeAudit, z, zx, type Actor, type Receipt } from "./core";
 import {
   CREDIT_CONSENT,
   PROJECT_TYPES,
@@ -462,16 +462,29 @@ const lockedError = (c: { now: Date; locks_at: Date }) =>
 
 // ── Writes: team ────────────────────────────────────────────────────────────
 
-/** Only a member of the team may change its submission (staff never act as a member). */
-async function teamMember(slug: string) {
-  const { team, member } = await requireTeamMember(slug);
-  if (!member) throw new AppError("FORBIDDEN");
-  return { team, member };
+/**
+ * Who is acting. Browser calls resolve the member from cookies. MCP / REST
+ * callers pass `as` with the member behind a bearer token (requireBearer),
+ * and the token's actor is used for audit. Either way, only a current member
+ * of this team may change its submission; staff never act as a member.
+ */
+export type ActingAs = { member: MemberRow; actor?: Actor; source?: "web" | "mcp" };
+
+async function teamMember(slug: string, as?: ActingAs) {
+  if (!as) {
+    const { team, member } = await requireTeamMember(slug);
+    if (!member) throw new AppError("FORBIDDEN");
+    return { team, member, actor: memberActor(member), source: "web" as const };
+  }
+  const [team] = await query<{ id: number; slug: string; name: string }>("select id, slug, name from teams where slug = $1", [slug]);
+  if (!team) throw new AppError("NOT_FOUND");
+  if (as.member.team_id !== team.id) throw new AppError("FORBIDDEN");
+  return { team, member: as.member, actor: as.actor ?? memberActor(as.member), source: as.source ?? "mcp" };
 }
 
 /** Save the draft. Refused after the lock and once finalized. */
-export async function saveDraft(slug: string, input: unknown): Promise<{ data: { submissionId: number }; receipt: Receipt }> {
-  const { team, member } = await teamMember(slug);
+export async function saveDraft(slug: string, input: unknown, as?: ActingAs): Promise<{ data: { submissionId: number }; receipt: Receipt }> {
+  const { team, actor, source } = await teamMember(slug, as);
   const draft = parse(DraftSchema, input);
   const project = await ensureProject(team.id);
 
@@ -500,8 +513,8 @@ export async function saveDraft(slug: string, input: unknown): Promise<{ data: {
       id = Number(current.id);
     } else {
       const { rows } = await tx.query<{ id: number }>(
-        `insert into submissions (project_id, team_id, status, draft, source, supersedes_id) values ($1, $2, 'draft', $3, 'web', $4) returning id`,
-        [project.id, team.id, JSON.stringify(draft), current?.id ?? null],
+        `insert into submissions (project_id, team_id, status, draft, source, supersedes_id) values ($1, $2, 'draft', $3, $4, $5) returning id`,
+        [project.id, team.id, JSON.stringify(draft), source, current?.id ?? null],
       );
       id = Number(rows[0].id);
     }
@@ -510,14 +523,14 @@ export async function saveDraft(slug: string, input: unknown): Promise<{ data: {
         where id = $1`,
       [project.id, draft.project_name, draft.project_type, draft.one_line_pitch, draft.repo_url, draft.demo_url, draft.run_command],
     );
-    await writeAudit(memberActor(member), { action: "submission.save_draft", resourceType: "submission", resourceId: id, before, after: draft }, tx);
+    await writeAudit(actor, { action: "submission.save_draft", resourceType: "submission", resourceId: id, before, after: draft }, tx);
     return { data: { submissionId: id }, receipt: { id: `submission:${id}`, server_time: new Date(clock.now).toISOString() } };
   });
 }
 
 /** Run preflight (optionally asking GitHub about the commit) and store the report. */
-export async function runPreflight(slug: string, opts: { checkGithub?: boolean } = {}) {
-  const { team, member } = await teamMember(slug);
+export async function runPreflight(slug: string, opts: { checkGithub?: boolean } = {}, as?: ActingAs) {
+  const { team, actor } = await teamMember(slug, as);
   const project = await ensureProject(team.id);
   const sub = await currentSubmission(pool, project.id);
   if (!sub || sub.status === "withdrawn") throw new AppError("VALIDATION_FAILED", { userMessage: "Save your draft first." });
@@ -537,7 +550,7 @@ export async function runPreflight(slug: string, opts: { checkGithub?: boolean }
       "update submissions set preflight = $2, status = $3 where id = $1 and status in ('draft','preflighted')",
       [sub.id, JSON.stringify(stored), report.ok ? "preflighted" : "draft"],
     );
-    await writeAudit(memberActor(member), { action: "submission.preflight", resourceType: "submission", resourceId: sub.id, payload: { ok: report.ok, missing: report.missing, github } }, tx);
+    await writeAudit(actor, { action: "submission.preflight", resourceType: "submission", resourceId: sub.id, payload: { ok: report.ok, missing: report.missing, github } }, tx);
     return stored;
   });
 }
@@ -592,8 +605,8 @@ async function newReceiptCode(db: Db) {
  * now(), snapshot → sha256 → HMAC, receipt S-XXXX. Also publishes the
  * showcase story from the same draft, unless the team opted out.
  */
-export async function finalizeSubmission(slug: string, input: unknown): Promise<{ data: FinalizeResult; receipt: Receipt }> {
-  const { team, member } = await teamMember(slug);
+export async function finalizeSubmission(slug: string, input: unknown, as?: ActingAs): Promise<{ data: FinalizeResult; receipt: Receipt }> {
+  const { team, member, actor, source } = await teamMember(slug, as);
   const body = parse(FinalizeInput, input);
   if (body.confirm_phrase.trim().toLowerCase() !== team.name.trim().toLowerCase()) {
     throw new AppError("VALIDATION_FAILED", { userMessage: "Type your team name exactly to confirm.", details: { issues: [{ path: "confirm_phrase", message: "Doesn't match the team name" }] } });
@@ -620,17 +633,16 @@ export async function finalizeSubmission(slug: string, input: unknown): Promise<
       if (!current || current.status === "withdrawn") throw new AppError("VALIDATION_FAILED", { userMessage: "Save your draft before finalizing." });
 
       const draft = normalizeDraft(current.draft);
-      const [runs, members, progress, pins] = await Promise.all([
-        teamRuns(tx, project.id),
-        teamCredits(tx, team.id),
-        progressDone(tx, team.id),
-        rowsOf<{ deck_id: number | null; deck_version: number | null }>(
-          tx,
-          `select d.id as deck_id, d.version as deck_version from deck_versions d
-            where d.project_id = $1 and d.status in ('approved','published') order by d.version desc limit 1`,
-          [project.id],
-        ),
-      ]);
+      // One client, one query at a time (pg queues concurrent ones and warns).
+      const runs = await teamRuns(tx, project.id);
+      const members = await teamCredits(tx, team.id);
+      const progress = await progressDone(tx, team.id);
+      const pins = await rowsOf<{ deck_id: number | null; deck_version: number | null }>(
+        tx,
+        `select d.id as deck_id, d.version as deck_version from deck_versions d
+          where d.project_id = $1 and d.status in ('approved','published') order by d.version desc limit 1`,
+        [project.id],
+      );
       const credited = creditedOf(members);
       const report = preflight(draft, runs, { creditedCount: credited.length, github: current.preflight?.github ?? null });
       if (!report.ok) {
@@ -651,7 +663,7 @@ export async function finalizeSubmission(slug: string, input: unknown): Promise<
       const snapshot = {
         schema: "kane-hack-os.submission@1",
         receipt_code: code,
-        source: "web",
+        source,
         team: { id: Number(team.id), slug: team.slug, name: team.name },
         project: { id: Number(project.id), slug: projectSlug },
         submitted_by: { member_id: Number(member.id), public_code: member.public_code, name: member.display_name || member.name },
@@ -679,9 +691,9 @@ export async function finalizeSubmission(slug: string, input: unknown): Promise<
 
       await tx.query(
         `update submissions set status = 'finalized', receipt_code = $2, finalized_by = $3, finalized_at = $4, immutable_snapshot = $5,
-                snapshot_sha256 = $6, signature = $7, preflight = $8, idempotency_key = $9
+                snapshot_sha256 = $6, signature = $7, preflight = $8, idempotency_key = $9, source = $10
           where id = $1`,
-        [current.id, code, member.id, finalizedAt, JSON.stringify(snapshot), snapshotSha, signature, JSON.stringify(report), body.idempotency_key ?? null],
+        [current.id, code, member.id, finalizedAt, JSON.stringify(snapshot), snapshotSha, signature, JSON.stringify(report), body.idempotency_key ?? null, source],
       );
       await tx.query("update projects set state = 'submitted', showcase_state = $2, updated_at = now() where id = $1", [project.id, nextState]);
       await tx.query(
@@ -689,7 +701,7 @@ export async function finalizeSubmission(slug: string, input: unknown): Promise<
         [JSON.stringify({ receipt_code: code, team_slug: team.slug, project_slug: projectSlug, showcase_state: nextState }), `submission.finalized:${current.id}`],
       );
       await writeAudit(
-        memberActor(member),
+        actor,
         {
           action: "submission.finalize",
           resourceType: "submission",

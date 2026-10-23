@@ -84,9 +84,11 @@ async function SubmitView({ team, me }: HubContext) {
                   <p className="mt-3 font-plex text-sm text-lightgray">Viewing as staff. Only team members can finalize.</p>
                 )}
               </div>
-              <Link href={`/ship/${ctx.project.slug}`} className="inline-flex min-h-11 items-center font-plex text-sm text-bright underline decoration-hairline underline-offset-4 hover:text-lime">
-                Preview your showcase page →
-              </Link>
+              {ctx.submission && ctx.submission.status !== "withdrawn" && (
+                <Link href={`/ship/${ctx.project.slug}`} className="inline-flex min-h-11 items-center font-plex text-sm text-bright underline decoration-hairline underline-offset-4 hover:text-lime">
+                  Preview your showcase page (saved draft) →
+                </Link>
+              )}
             </aside>
           </div>
         </section>
