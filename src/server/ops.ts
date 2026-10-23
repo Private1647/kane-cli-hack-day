@@ -488,7 +488,7 @@ export async function probeIntegrations(actor: Actor): Promise<ProbeResult[]> {
   out.push(
     process.env.SLACK_WEBHOOK_URL
       ? { system: "slack", ok: true, status: "ok", detail: "Webhook configured (delivery health comes from the outbox)" }
-      : { system: "slack", ok: false, status: "down", detail: "SLACK_WEBHOOK_URL not set: web queue only", code: "not_configured" },
+      : { system: "slack", ok: false, status: "degraded", detail: "SLACK_WEBHOOK_URL not set: web queue only", code: "not_configured" },
   );
   out.push(
     process.env.LUMA_WEBHOOK_SECRET
@@ -767,7 +767,7 @@ export async function applyOverride(input: OverrideInput, staff: Staff) {
       after = { exception: "deadline", team: rows[0].slug };
     }
 
-    const body = { kind: input.kind, target: input.target.trim(), resource_id: resourceId, reason: input.reason, witness: input.witness.trim(), incident_ref: input.incidentRef ?? null, by: staff.id, at };
+    const body = { kind: input.kind, target: input.target.trim(), resource_id: resourceId, reason: input.reason, witness: input.witness.trim(), incident_ref: input.incidentRef ?? null, by: staff.id, at: new Date(at).toISOString() };
     const sig = overrideSignature(body);
     return {
       result: { ...receipt(`OVR-${sig.digest.slice(0, 8).toUpperCase()}`, at), digest: sig.digest, signature: sig.signature },

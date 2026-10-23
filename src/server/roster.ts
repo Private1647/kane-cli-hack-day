@@ -361,7 +361,7 @@ export async function commitRosterImport(
     }
     // Unchanged rows still record that this version confirmed them.
     await tx.query(
-      `update roster_guests set source_version = $1, source_hash = $2, checked_in_at = coalesce(checked_in_at, x.checked_in_at), updated_at = now()
+      `update roster_guests set source_version = $1, source_hash = $2, checked_in_at = coalesce(roster_guests.checked_in_at, x.checked_in_at), updated_at = now()
          from (select unnest($3::text[]) as gid, unnest($4::timestamptz[]) as checked_in_at) x
         where roster_guests.event_id = current_event_id() and roster_guests.luma_guest_id = x.gid and roster_guests.source_hash is distinct from $2`,
       [parsed.sourceVersion, parsed.hash, parsed.rows.map((r) => r.lumaGuestId), parsed.rows.map((r) => r.checkedInAt)],
