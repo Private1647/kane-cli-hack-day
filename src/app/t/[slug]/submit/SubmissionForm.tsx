@@ -60,7 +60,7 @@ export default function SubmissionForm({
           </Field>
           <Field id="project_type" label="Project type" error={issueFor("project_type")}>
             {(id) => (
-              <select id={id} name="project_type" defaultValue={draft.project_type} className={inputCls}>
+              <select key={draft.project_type} id={id} name="project_type" defaultValue={draft.project_type} className={inputCls}>
                 {types.map((t) => (
                   <option key={t.value} value={t.value}>
                     {t.label}

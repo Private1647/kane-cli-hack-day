@@ -39,7 +39,7 @@ export function ProfileForm({
       <div className="grid gap-5 sm:grid-cols-2">
         <div>
           <Label htmlFor="p-role">Preferred work</Label>
-          <select id="p-role" name="preferred_work" defaultValue={defaults.preferred_work} className={`${inputCls} min-h-11`}>
+          <select key={defaults.preferred_work} id="p-role" name="preferred_work" defaultValue={defaults.preferred_work} className={`${inputCls} min-h-11`}>
             <option value="">No preference</option>
             {roles.map((r) => (
               <option key={r} value={r}>
@@ -50,7 +50,7 @@ export function ProfileForm({
         </div>
         <div>
           <Label htmlFor="p-avail">Availability</Label>
-          <select id="p-avail" name="availability" defaultValue={defaults.availability} className={`${inputCls} min-h-11`}>
+          <select key={defaults.availability} id="p-avail" name="availability" defaultValue={defaults.availability} className={`${inputCls} min-h-11`}>
             <option value="">Not set</option>
             {availability.map((a) => (
               <option key={a} value={a}>

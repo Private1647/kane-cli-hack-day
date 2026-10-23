@@ -31,7 +31,7 @@ export function IdeaForm({
         </div>
         <div>
           <Label htmlFor="i-type">What you&apos;re making</Label>
-          <select id="i-type" name="project_type" defaultValue={defaults.project_type} className={`${inputCls} min-h-11`}>
+          <select key={defaults.project_type} id="i-type" name="project_type" defaultValue={defaults.project_type} className={`${inputCls} min-h-11`}>
             {types.map((t) => (
               <option key={t.id} value={t.id}>
                 {t.label}
