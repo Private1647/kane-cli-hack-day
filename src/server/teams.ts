@@ -284,7 +284,7 @@ export async function createInvite(who: ActingMember, teamId: number, input: unk
       inviteId: inv.id,
       code,
       expiresAt: inv.expires_at.toISOString(),
-      joinPath: `/team/join?code=${encodeURIComponent(code)}`,
+      joinPath: `/team?code=${encodeURIComponent(code)}`,
       receipt: receiptOf(`INV-${inv.id}`, inv.now),
     };
     return { result: out, resourceId: inv.id, after: { team_id: teamId, hours: data.hours, restricted: invitedId !== null } };
@@ -552,6 +552,95 @@ export async function organizerOverride(staff: Staff, teamId: number, input: unk
       payload: { ...data, reason: undefined },
     };
   });
+}
+
+// ── Matchmaking (event-day flow) ─────────────────────────────────────────────
+
+/**
+ * Add a teamless member to a team after a team member accepted their "ask to
+ * join" request. Same rules as an invite: roster open, below the cap, and the
+ * member isn't on a team already (it never moves anyone off a team).
+ */
+export async function admitToTeam(actor: Actor, teamId: number, memberId: number, via: string) {
+  return withAudit(actor, "team.admit", "team", async (tx) => {
+    const team = await lockTeam(tx, teamId);
+    if (team.locked) throw new AppError("DEADLINE_PASSED", { userMessage: "This team's roster is locked. An organizer has to approve changes now." });
+    if (team.member_count >= team.cap) throw new AppError("TEAM_FULL", { userMessage: `${team.name} already has ${team.member_count} of ${team.cap}.` });
+    const { rows: cur } = await tx.query("select 1 from team_memberships where member_id = $1 and left_at is null for update", [memberId]);
+    if (cur[0]) throw new AppError("CONFLICT", { userMessage: "They're already on a team." });
+    await tx.query("insert into team_memberships (team_id, member_id, role) values ($1, $2, 'member')", [teamId, memberId]);
+    await tx.query("update members set team_id = $2 where id = $1", [memberId, teamId]);
+    await tx.query(
+      `update teams set is_solo = false, state = case when state = 'recruiting' then 'formed' else state end,
+              recruiting_open = recruiting_open and $2::boolean where id = $1`,
+      [teamId, team.member_count + 1 < team.cap],
+    );
+    await tx.query("insert into activity (team_id, member_id, action) values ($1, $2, 'Joined the team')", [teamId, memberId]);
+    const now = await txNow(tx);
+    return { result: { teamId, slug: team.slug, receipt: receiptOf(`T-${teamId}`, now) }, resourceId: teamId, payload: { member_id: memberId, via } };
+  });
+}
+
+export const formTeamSchema = z.object({
+  member_ids: z
+    .union([zx.id, z.array(zx.id)])
+    .transform((v) => [...new Set(Array.isArray(v) ? v : [v])])
+    .refine((v) => v.length >= 2 && v.length <= TEAM_SIZE_CAP, `Pick 2 to ${TEAM_SIZE_CAP} people.`),
+  name: zx.text(60),
+  track: z.string().trim().refine((s) => challenge.tracks.includes(s), "Pick a track."),
+  reason: zx.optText(500),
+  idempotency_key: zx.idempotencyKey,
+});
+
+/**
+ * Organizer forms a team from people still in the matchmaking pool (at the
+ * cut-off). The first person picked is captain. Everyone must be teamless;
+ * the pool trigger takes them out of the pool. Audited with the names' ids.
+ */
+export async function formTeamFromPool(staff: Staff, input: unknown) {
+  if (staff.role !== "organizer" && staff.role !== "admin") throw new AppError("FORBIDDEN");
+  const data = parse(formTeamSchema, input);
+  const slug = slugify(data.name);
+  if (!slug) throw new AppError("VALIDATION_FAILED", { userMessage: "Use letters or numbers in the team name." });
+  const passwordHash = await hashPassword(randomBytes(24).toString("base64url"));
+  const { result } = await idempotent(data.idempotency_key, `team.form_from_pool:staff:${staff.id ?? "admin"}`, () =>
+    withAudit(staffActor(staff), "team.form_from_pool", "team", async (tx) => {
+      const { rows: people } = await tx.query<{ id: number; name: string }>(
+        "select id, name from members where id = any($1::bigint[]) and deleted_at is null order by array_position($1::bigint[], id) for update",
+        [data.member_ids],
+      );
+      if (people.length !== data.member_ids.length) throw new AppError("NOT_FOUND", { userMessage: "One of those people no longer exists." });
+      const { rows: busy } = await tx.query<{ name: string }>(
+        "select m.name from team_memberships tm join members m on m.id = tm.member_id where tm.member_id = any($1::bigint[]) and tm.left_at is null",
+        [data.member_ids],
+      );
+      if (busy.length) throw new AppError("CONFLICT", { userMessage: `Already on a team: ${busy.map((b) => b.name).join(", ")}. Reload the pool.` });
+      const { rows: taken } = await tx.query("select 1 from teams where slug = $1 union all select 1 from projects where slug = $1", [slug]);
+      if (taken.length) throw new AppError("CONFLICT", { userMessage: "That team name is taken. Try another." });
+      const captain = people[0].id;
+      const { rows } = await tx.query<{ id: number; now: Date }>(
+        `insert into teams (slug, name, track, idea, is_solo, password_hash, captain_id, state, max_size, recruiting_open)
+         values ($1, $2, $3, '', false, $4, $5, 'formed', $6, false) returning id, now() as now`,
+        [slug, data.name, data.track, passwordHash, captain, TEAM_SIZE_CAP],
+      );
+      const team = rows[0];
+      for (const p of people) {
+        await tx.query("insert into team_memberships (team_id, member_id, role, approved_by) values ($1, $2, $3, $4)", [team.id, p.id, p.id === captain ? "captain" : "member", staff.id]);
+        await tx.query("update members set team_id = $2 where id = $1", [p.id, team.id]);
+      }
+      await tx.query("insert into projects (team_id, name, slug) values ($1, $2, $3)", [team.id, data.name, slug]);
+      await tx.query("insert into ideas (team_id, title) values ($1, $2) on conflict (team_id) do nothing", [team.id, data.name.slice(0, 120)]);
+      await tx.query("update projects p set idea_id = i.id from ideas i where i.team_id = p.team_id and p.team_id = $1", [team.id]);
+      await tx.query("insert into activity (team_id, action) values ($1, 'Team formed by an organizer from the matchmaking pool')", [team.id]);
+      return {
+        result: { teamId: team.id, slug, name: data.name, members: people.map((p) => p.name), receipt: receiptOf(`T-${team.id}`, team.now) },
+        resourceId: team.id,
+        reason: data.reason,
+        after: { slug, name: data.name, track: data.track, member_ids: data.member_ids, captain_id: captain },
+      };
+    }),
+  );
+  return result;
 }
 
 // ── Internals ────────────────────────────────────────────────────────────────

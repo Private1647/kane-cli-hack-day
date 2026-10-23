@@ -213,27 +213,19 @@ let dummyHash: Promise<string> | null = null;
  * registered through the team form can now sign in on their own.
  */
 export async function memberLoginWithPassword(email: string, password: string) {
-  const [row] = await query<{ id: number; name: string; team_id: number | null; password_hash: string | null; team_hash: string | null; solo_own: boolean }>(
-    `select m.id, m.name, m.team_id, m.password_hash, t.password_hash as team_hash,
-            coalesce(t.is_solo and m.created_at >= t.created_at, false) as solo_own
-       from members m left join teams t on t.id = m.team_id
-      where lower(m.email) = lower($1) and m.deleted_at is null`,
+  // Event-day flow: only the member's own password (set on /register) works
+  // here. There is no shared team password any more, so this is always personal.
+  const [row] = await query<{ id: number; name: string; team_id: number | null; password_hash: string | null }>(
+    "select m.id, m.name, m.team_id, m.password_hash from members m where lower(m.email) = lower($1) and m.deleted_at is null",
     [email.trim()],
   );
   dummyHash ??= hashPassword(randomBytes(12).toString("hex"));
-  // A personal password proves the person. A shared team password only proves
-  // team membership, so it gives a team-level session (hub access): anyone on
-  // the team knows it. Solo is the exception below.
-  let personal = false;
   let ok = false;
-  if (row?.password_hash && (await verifyPassword(password, row.password_hash))) personal = ok = true;
-  // A solo builder's "team" password is theirs alone, provided the account was
-  // created with that team (not an earlier desk/walk-in account it adopted).
-  else if (row?.team_hash && (await verifyPassword(password, row.team_hash))) personal = (ok = true) && row.solo_own;
-  else if (!row) await verifyPassword(password, await dummyHash);
+  if (row?.password_hash) ok = await verifyPassword(password, row.password_hash);
+  else await verifyPassword(password, await dummyHash);
   if (!row || !ok) throw new AppError("UNAUTHENTICATED", { userMessage: SIGN_IN_FAILED });
-  await setMemberSession({ memberId: row.id, personal });
-  await writeAudit(memberActor(row), { action: personal ? "member.login_password" : "member.login_team_password", resourceType: "member", resourceId: row.id });
+  await setMemberSession({ memberId: row.id, personal: true });
+  await writeAudit(memberActor(row), { action: "member.login_password", resourceType: "member", resourceId: row.id });
   return row.id;
 }
 

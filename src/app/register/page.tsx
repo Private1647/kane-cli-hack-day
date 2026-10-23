@@ -1,26 +1,34 @@
 import type { Metadata } from "next";
+import Link from "next/link";
+import { redirect } from "next/navigation";
 import { Suspense } from "react";
+import FlowProgress from "@/components/FlowProgress";
 import PageHeader from "@/components/ui/PageHeader";
-import { challenge, submissions } from "@/data/hackday";
-import { to12h } from "@/lib/time";
-import { MAX_MEMBERS, isRegistrationOpen } from "@/lib/teams";
-import RegisterForm from "./RegisterForm";
+import { query } from "@/lib/db";
+import { isRegistrationOpen } from "@/lib/teams";
+import { getPersonalMember } from "@/server/auth";
+import { avatarSrc, avatarVersion } from "@/server/avatar";
+import { flowState, type FlowStage } from "@/server/flow";
+import { ChoiceStep, PhotoStep, ProfileStep, type ProfileDefaults } from "./parts";
 
-export const metadata: Metadata = { title: "Register" };
+export const metadata: Metadata = { title: "Start here" };
 
-export default function RegisterPage() {
+// The event-day profile builder. Checked in at the desk? Sit down and start
+// here: (a) profile, (b) photo, (c) "looking for a team?". The step shown is
+// read from the database, so a reload or a second device resumes it.
+// ?edit=profile / ?edit=photo reopen a finished step.
+
+export default function RegisterPage({ searchParams }: PageProps<"/register">) {
   return (
     <main>
-      <PageHeader
-        eyebrow="Register"
-        dim="Solo or squad,"
-        bright="Get your page."
-        intro={`Register by ${to12h(submissions.team.deadline)}. You get a team page at your own URL where everyone logs progress.`}
-      />
-      <section className="py-16 sm:py-20">
-        <div className="container-page max-w-3xl">
+      <Suspense fallback={<FlowProgress stage={null} />}>
+        <Progress />
+      </Suspense>
+      <PageHeader eyebrow="Start here" dim="Checked in?" bright="Build your profile." intro="Two minutes: who you are, a photo for your profile, and whether you want help finding a team." />
+      <section className="py-12 sm:py-16">
+        <div className="container-page max-w-2xl">
           <Suspense fallback={<p className="font-plex text-sm text-lightgray">Loading…</p>}>
-            <Registration />
+            <Steps searchParams={searchParams} />
           </Suspense>
         </div>
       </section>
@@ -28,13 +36,87 @@ export default function RegisterPage() {
   );
 }
 
-async function Registration() {
-  if (!(await isRegistrationOpen())) {
+async function Progress() {
+  const m = await getPersonalMember();
+  return <FlowProgress stage={m ? (await flowState(m.id)).stage : null} viewing="profile" />;
+}
+
+const STEP_TITLE: Partial<Record<FlowStage, [string, string]>> = {
+  profile: ["Step 1 of 3", "Your profile"],
+  photo: ["Step 2 of 3", "Your photo"],
+  choice: ["Step 3 of 3", "Matchmaking"],
+};
+
+async function Steps({ searchParams }: Pick<PageProps<"/register">, "searchParams">) {
+  const sp = await searchParams;
+  const edit = typeof sp.edit === "string" ? sp.edit : "";
+  const member = await getPersonalMember();
+
+  if (!member) {
+    if (!(await isRegistrationOpen())) {
+      return <p className="border-l-2 border-lime pl-4 font-plex text-bright">Registration is closed. Find an organizer at the help desk.</p>;
+    }
     return (
-      <p className="border-l-2 border-lime pl-4 font-plex text-bright">
-        Registration is closed. Find an organizer at the help desk if you still need a team.
-      </p>
+      <>
+        <StepTitle stage="profile" />
+        <ProfileStep defaults={{ name: "", email: "", skills: "", interests: "", github: "", x: "" }} signedIn={false} hasPassword={false} />
+        <p className="mt-8 font-plex text-sm text-lightgray">
+          Already have a profile?{" "}
+          <Link href="/passport/login?next=/me" className="text-bright underline underline-offset-4 hover:text-lime">
+            Sign in
+          </Link>
+        </p>
+      </>
     );
   }
-  return <RegisterForm tracks={challenge.tracks} maxMembers={MAX_MEMBERS} />;
+
+  const state = await flowState(member.id);
+  const stage: FlowStage = edit === "profile" ? "profile" : edit === "photo" ? "photo" : state.stage;
+  if (stage !== "profile" && stage !== "photo" && stage !== "choice") redirect(state.next);
+
+  if (stage === "profile") {
+    const [m] = await query<{ skills: string[] | null; interests: string[] | null; github_handle: string | null; x_handle: string | null; has_password: boolean }>(
+      "select skills, interests, github_handle, x_handle, password_hash is not null as has_password from members where id = $1",
+      [member.id],
+    );
+    const defaults: ProfileDefaults = {
+      name: member.display_name ?? member.name,
+      email: member.email,
+      skills: (m.skills ?? []).join(", "),
+      interests: (m.interests ?? []).join(", "),
+      github: m.github_handle ?? "",
+      x: m.x_handle ?? "",
+    };
+    return (
+      <>
+        <StepTitle stage="profile" />
+        <ProfileStep defaults={defaults} signedIn hasPassword={m.has_password} />
+      </>
+    );
+  }
+  if (stage === "photo") {
+    const v = await avatarVersion(member.id);
+    return (
+      <>
+        <StepTitle stage="photo" />
+        <PhotoStep hasPhoto={!!v} avatar={v ? avatarSrc(member.id, v) : null} />
+      </>
+    );
+  }
+  return (
+    <>
+      <StepTitle stage="choice" />
+      <ChoiceStep />
+    </>
+  );
+}
+
+function StepTitle({ stage }: { stage: FlowStage }) {
+  const [n, title] = STEP_TITLE[stage] ?? ["", ""];
+  return (
+    <div className="mb-8">
+      <p className="font-pixel text-[10px] uppercase tracking-[0.2em] text-lightgray">{n}</p>
+      <h2 className="mt-2 font-display text-3xl text-bright">{title}</h2>
+    </div>
+  );
 }
