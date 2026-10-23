@@ -135,7 +135,7 @@ These are word-overlap labels. No AI key is set locally, and the seed checks the
 
 | Variable | Maps to |
 |---|---|
-| `match_strength_fixture` … `match_learning_goal_fixture` | "Playwright-to-Kane test migration", "accessibility audits", "Saturday 10:00-16:00 PT", "Kane CLI testrun suites in CI". Dana's profile carries the same values, so Pat gets a complementary suggestion. |
+| `match_strength_fixture` … `match_learning_goal_fixture` | "Playwright-to-Kane test migration", "accessibility audits", "all-day", "Kane CLI testrun suites in CI". Dana's profile carries the same values, so Pat gets a complementary suggestion. |
 | `non_opted_in_profile_identifier` | `Olu Bankole (P-####)`, Olu's display name and public code. |
 | `matching_population_fixture` | Computed from the database on every run: who is opted in (discoverable profile and `teammate_discovery` consent), who of them is teamless, and how many people are not opted in. |
 | `private_phone_fixture` | `+1 415 555 0142`. See the approximations below. |

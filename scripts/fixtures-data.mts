@@ -148,7 +148,7 @@ export const UNSUPPORTED_FEATURE = "running the Kane CLI browser suite in deskto
 export const MATCH = {
   strength: "Playwright-to-Kane test migration",
   interest: "accessibility audits",
-  availability: "Saturday 10:00-16:00 PT",
+  availability: "all-day",
   learningGoal: "Kane CLI testrun suites in CI",
 };
 /** No phone field exists in the app: this number lives only in private free text (see TEST_FIXTURES.md). */

@@ -341,10 +341,10 @@ async function profile(email: string, discoverable: boolean, p: { skills: string
   );
   await query("insert into member_consents (member_id, category, granted, source) values ($1, 'teammate_discovery', $2, 'web')", [m.id, discoverable]);
 }
-await profile(F.P.email, true, { skills: ["frontend", "kane-cli"], interests: ["checkout flows"], availability: "All day Saturday", goals: "Ship a Kane-verified release", bio: "Building Kestrel." });
+await profile(F.P.email, true, { skills: ["frontend", "kane-cli"], interests: ["checkout flows"], availability: "all-day", goals: "Ship a Kane-verified release", bio: "Building Kestrel." });
 await profile(F.O.email, false, { skills: ["python"], interests: ["agents"] });
-await profile(F.LONERS[0].email, true, { skills: ["accessibility audits", "Playwright-to-Kane test migration"], interests: ["Kane CLI testrun suites in CI"], availability: "Saturday 10:00-16:00 PT", goals: "Pair on a CI harness", bio: "Looking for a team that ships web apps." });
-await profile("hugo@demo.test", true, { skills: ["agents", "evaluation"], interests: ["flaky tests"], availability: "Saturday afternoon", bio: "Heron captain." });
+await profile(F.LONERS[0].email, true, { skills: ["accessibility audits", "Playwright-to-Kane test migration"], interests: ["Kane CLI testrun suites in CI"], availability: F.MATCH.availability, goals: "Pair on a CI harness", bio: "Looking for a team that ships web apps." });
+await profile("hugo@demo.test", true, { skills: ["agents", "evaluation"], interests: ["flaky tests"], availability: "afternoon", bio: "Heron captain." });
 
 // ── Photos ───────────────────────────────────────────────────────────────────
 // Published files are plain files under public/photos/event/fixtures (Next serves
