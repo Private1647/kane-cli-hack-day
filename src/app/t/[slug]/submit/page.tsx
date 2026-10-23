@@ -3,7 +3,9 @@ import Link from "next/link";
 import StatusPill from "@/components/ui/StatusPill";
 import { event } from "@/data/hackday";
 import { PROGRESS_ITEMS } from "@/lib/progress";
+import { query } from "@/lib/db";
 import { getProgress } from "@/lib/teams";
+import { getPersonalMember } from "@/server/auth";
 import { to12h } from "@/lib/time";
 import { PROJECT_TYPES, PROJECT_TYPE_LABEL, runConfidence } from "@/server/showcase";
 import { KANE_COMPONENTS, getSubmissionContext, isFrozen, type PreflightItem, type SubmissionContext } from "@/server/submission";
@@ -31,7 +33,15 @@ const clock = new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-dig
 const eyebrow = "font-pixel text-[10px] uppercase tracking-[0.2em] text-lightgray";
 
 async function SubmitView({ team, me }: HubContext) {
-  const [ctx, progress] = await Promise.all([getSubmissionContext(team.id), getProgress(team.id)]);
+  const [ctx, progress, personal, [cap]] = await Promise.all([
+    getSubmissionContext(team.id),
+    getProgress(team.id),
+    getPersonalMember(),
+    query<{ captain_id: number | null }>("select captain_id from teams where id = $1", [team.id]),
+  ]);
+  // Finalize and consent are personal: the captain (or the person) signed in as themselves.
+  const isPersonal = !!me && personal?.id === me.id;
+  const isCaptain = !!me && (!cap?.captain_id || Number(cap.captain_id) === me.id);
   const frozen = !!ctx.submission && isFrozen(ctx.submission.status);
   const readOnly = !me || ctx.locked || frozen;
 
@@ -76,6 +86,10 @@ async function SubmitView({ team, me }: HubContext) {
                       Ask the help desk →
                     </Link>
                   </div>
+                ) : me && !isCaptain ? (
+                  <p className="mt-3 font-plex text-sm text-lightgray">Only your team captain can finalize. Everyone can edit the draft and run preflight.</p>
+                ) : me && !isPersonal ? (
+                  <PersonalSignIn slug={team.slug} what="finalize" />
                 ) : me ? (
                   <div className="mt-3">
                     <FinalizePanel slug={team.slug} teamName={team.name} ready={!!ctx.submission && ctx.preflight.ok} missing={ctx.submission ? ctx.preflight.missing : ["save your draft"]} />
@@ -94,7 +108,7 @@ async function SubmitView({ team, me }: HubContext) {
         </section>
       )}
 
-      <Credits ctx={ctx} slug={team.slug} meId={me?.id ?? null} />
+      <Credits ctx={ctx} slug={team.slug} meId={me?.id ?? null} personal={isPersonal} />
       <PrizeChecklist slug={team.slug} progress={progress} shipped={ctx.prize.shipped} readOnly={!me} />
     </>
   );
@@ -255,7 +269,19 @@ function Row({ k, v, mono }: { k: string; v: string; mono?: boolean }) {
   );
 }
 
-function Credits({ ctx, slug, meId }: { ctx: SubmissionContext; slug: string; meId: number | null }) {
+function PersonalSignIn({ slug, what }: { slug: string; what: string }) {
+  return (
+    <div className="mt-3 space-y-3 font-plex text-sm">
+      <p className="text-lightgray">To {what}, sign in as yourself (a one-time code from the desk, or your personal password). The team password only opens the hub.</p>
+      <Link href={`/passport/login?next=${encodeURIComponent("/passport")}`} className="inline-flex min-h-11 items-center border border-hairline px-4 text-bright hover:border-lime hover:text-lime">
+        Sign in as yourself →
+      </Link>
+      <p className="text-xs text-lightgray">Then come back to /t/{slug}/submit.</p>
+    </div>
+  );
+}
+
+function Credits({ ctx, slug, meId, personal }: { ctx: SubmissionContext; slug: string; meId: number | null; personal: boolean }) {
   const mine = ctx.members.find((m) => m.id === meId);
   return (
     <section className="border-t border-dashed border-hairline py-12">
@@ -274,7 +300,7 @@ function Credits({ ctx, slug, meId }: { ctx: SubmissionContext; slug: string; me
                   {m.handle && <span className="ml-2 text-xs text-lightgray">{m.handle}</span>}
                 </span>
                 {m.consent === true ? (
-                  <span className="font-pixel text-[10px] uppercase tracking-[0.2em] text-bright">✓ Credited</span>
+                  <span className="font-pixel text-[10px] uppercase tracking-[0.2em] text-bright">■ Credited</span>
                 ) : m.consent === false ? (
                   <span className="font-pixel text-[10px] uppercase tracking-[0.2em] text-lightgray">Not named</span>
                 ) : (
@@ -288,9 +314,13 @@ function Credits({ ctx, slug, meId }: { ctx: SubmissionContext; slug: string; me
           <div className="brackets self-start border border-lime bg-lime-deep p-5">
             <p className="font-pixel text-[10px] uppercase tracking-[0.2em] text-lime">Your choice</p>
             <p className="mt-2 font-plex text-sm text-bright">May we show your name{mine.handle ? ` and ${mine.handle}` : ""} on your team&apos;s public showcase and deck?</p>
-            <div className="mt-4">
-              <CreditChoice slug={slug} consent={mine.consent} />
-            </div>
+            {personal ? (
+              <div className="mt-4">
+                <CreditChoice slug={slug} consent={mine.consent} />
+              </div>
+            ) : (
+              <PersonalSignIn slug={slug} what="answer for yourself" />
+            )}
           </div>
         )}
       </div>

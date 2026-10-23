@@ -11,7 +11,6 @@ import * as help from "./help";
 import * as ideas from "./ideas";
 import * as passport from "./passport";
 import * as story from "./story";
-import * as submissionService from "./submission";
 import { getSubmissionContext } from "./submission";
 import * as teams from "./teams";
 
@@ -336,7 +335,7 @@ export async function submissionPreflight(m: MemberRow, projectId?: number | nul
  * immutable snapshot, signed receipt, and the showcase story published from
  * the same draft (unless publish_showcase is false).
  */
-export async function finalizeSubmission(ctx: Ctx, _input: { confirm_phrase: string; publish_showcase: boolean; idempotency_key?: string }) {
+export async function finalizeSubmission(ctx: Ctx) {
   // Finalizing is irreversible, so agents never do it: the captain finishes it
   // in the browser (submission.ts refuses non-web callers too). Hand off.
   const team = await myTeam(ctx.member);

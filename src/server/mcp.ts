@@ -531,8 +531,8 @@ export function buildMcpServer(auth: BearerAuth) {
         "Finalizing the official submission is irreversible, so it is never done by an agent. This returns the link where the team captain finalizes in the browser (typed team name + confirmation), plus what preflight still needs. If the team already finalized, it returns the receipt link.",
       input: { confirm_phrase: z.string().trim().max(120).optional(), publish_showcase: z.boolean().optional(), idempotency_key: z.string().min(8).max(200).optional(), explicit_confirmation: confirmField },
     },
-    async (args, ctx) => {
-      const r = await A.finalizeSubmission(ctx, { confirm_phrase: args.confirm_phrase ?? "", publish_showcase: args.publish_showcase ?? true, idempotency_key: args.idempotency_key });
+    async (_args, ctx) => {
+      const r = await A.finalizeSubmission(ctx);
       if (r.already_finalized) {
         return {
           message: `Already finalized. Receipt ${r.receipt_code}.`,
