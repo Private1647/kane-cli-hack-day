@@ -1,6 +1,8 @@
 "use server";
 
 import { AppError, formObject, parse, z, zx } from "@/server/core";
+import { staffActor } from "@/server/auth";
+import { issueMemberLoginCode } from "@/server/pairing";
 import { admitRegisteredMember, admitWalkIn, checkInGuest } from "@/server/roster";
 import { act } from "../_kit/act";
 import type { OpsState } from "../_kit/state";
@@ -56,5 +58,20 @@ export async function admitMemberAction(_prev: OpsState, form: FormData): Promis
     const input = parse(admitMemberSchema, formObject(form));
     const r = await admitRegisteredMember({ memberId: input.member_id, note: input.note, idempotencyKey: input.idempotency_key }, staff);
     return { message: `${r.name} admitted at the desk and checked in${r.publicCode ? ` · ${r.publicCode}` : ""}.`, receipt: { id: r.id, server_time: r.checkedInAt }, data: r };
+  });
+}
+
+const signInCodeSchema = z.object({ member_id: zx.id, idempotency_key: zx.idempotencyKey });
+
+/**
+ * A one-time personal sign-in code for someone standing at the desk (after the
+ * venue's ID check). It proves the person, unlike the shared team password, so
+ * it unlocks pairing, consents and the selfie. Audited; replaces any earlier code.
+ */
+export async function signInCodeAction(_prev: OpsState, form: FormData): Promise<OpsState> {
+  return act([...DESK], form, async (staff) => {
+    const input = parse(signInCodeSchema, formObject(form));
+    const code = await issueMemberLoginCode(input.member_id, staffActor(staff));
+    return { message: "One-time sign-in code. Show it only to this person; it works once, at /passport/login.", data: { code } };
   });
 }

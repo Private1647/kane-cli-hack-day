@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { inputCls } from "@/components/forms/fields";
 import StatusPill from "@/components/ui/StatusPill";
 import ActionForm, { TextField } from "../_kit/ActionForm";
-import { admitMemberAction, checkInAction, walkInAction } from "./actions";
+import { admitMemberAction, checkInAction, signInCodeAction, walkInAction } from "./actions";
 import { admissionLabel } from "./labels";
 
 // Check-in desk client pieces: search box with an optional camera scanner,
@@ -277,6 +277,24 @@ export function HitRow({ hit, canOverride }: { hit: Hit; canOverride: boolean })
 
       {!hit.checkedInAt && !hit.guestId && hit.memberId && (
         <ActionForm action={admitMemberAction} submit="Admit as walk-in and check in" pending="Admitting…" variant="secondary" className="mt-3">
+          <input type="hidden" name="member_id" value={hit.memberId} />
+        </ActionForm>
+      )}
+
+      {hit.memberId && (
+        <ActionForm
+          action={signInCodeAction}
+          submit="One-time sign-in code"
+          pending="Making code…"
+          variant="secondary"
+          className="mt-3"
+          render={(s) => (
+            <div className="space-y-1 border-l-2 border-verified pl-3 font-plex text-sm">
+              <p className="font-dots text-3xl tracking-[0.1em] text-bright">{(s.data as { code?: string } | undefined)?.code}</p>
+              <p className="text-xs text-lightgray">{s.message}</p>
+            </div>
+          )}
+        >
           <input type="hidden" name="member_id" value={hit.memberId} />
         </ActionForm>
       )}

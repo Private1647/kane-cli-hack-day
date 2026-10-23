@@ -39,6 +39,7 @@ export default function PersonalLoginPage({ searchParams }: PageProps<"/passport
 }
 
 async function WithNext({ searchParams }: Pick<PageProps<"/passport/login">, "searchParams">) {
-  const next = (await searchParams).next;
-  return <PersonalLoginForm next={typeof next === "string" ? next : "/passport"} />;
+  const sp = await searchParams;
+  const next = sp.next;
+  return <PersonalLoginForm next={typeof next === "string" ? next : "/passport"} initialMode={sp.mode === "code" ? "code" : "password"} />;
 }

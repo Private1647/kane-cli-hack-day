@@ -4,9 +4,9 @@ import { useActionState, useState } from "react";
 import { FormError, Label, SubmitButton, inputCls } from "@/components/forms/fields";
 import { personalLogin, type PersonalLoginState } from "./actions";
 
-export default function PersonalLoginForm({ next }: { next: string }) {
+export default function PersonalLoginForm({ next, initialMode = "password" }: { next: string; initialMode?: "password" | "code" }) {
   const [state, action] = useActionState<PersonalLoginState, FormData>(personalLogin, null);
-  const [mode, setMode] = useState<"password" | "code">("password");
+  const [mode, setMode] = useState<"password" | "code">(initialMode);
   // Controlled, so a wrong password doesn't also wipe the email (React resets forms after an action).
   const [email, setEmail] = useState(state?.email ?? "");
   return (

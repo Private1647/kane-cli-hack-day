@@ -5,7 +5,7 @@ import DegradedServiceAlert from "@/components/ui/DegradedServiceAlert";
 import PageHeader from "@/components/ui/PageHeader";
 import StatusPill from "@/components/ui/StatusPill";
 import { formatEventTime, getEvent } from "@/lib/event";
-import { getPersonalMember } from "@/server/auth";
+import { getMember, getPersonalMember } from "@/server/auth";
 import { describePairing, shortName } from "@/server/pairing";
 import { decide, lookup } from "./actions";
 
@@ -41,6 +41,33 @@ async function Body({ searchParams }: Pick<PageProps<"/pair">, "searchParams">) 
   const member = await getPersonalMember();
   if (!member) {
     const next = `/pair${code ? `?code=${encodeURIComponent(code)}` : ""}`;
+    // Signed in with the shared team password: that opens the team hub but can't
+    // prove who you are, and a paired device acts as you. Say so instead of looping.
+    if (await getMember()) {
+      return (
+        <div className="max-w-xl space-y-4 font-plex text-sm">
+          <p className="text-bright">You&apos;re signed in with your team password. Pairing gives this device a token that acts as you, so it needs a personal sign-in.</p>
+          <p className="text-lightgray">
+            Use a one-time code from the check-in desk or an organizer, or your personal password if you&apos;ve set one. Already signed in on another device personally? Make a code there under
+            Passport → Sign-in and devices.
+          </p>
+          <div className="flex flex-wrap gap-3">
+            <Link
+              href={`/passport/login?mode=code&next=${encodeURIComponent(next)}`}
+              className="inline-flex min-h-11 items-center bg-bright px-5 text-ink transition-colors hover:bg-lime"
+            >
+              Use a one-time code →
+            </Link>
+            <Link
+              href={`/passport/login?next=${encodeURIComponent(next)}`}
+              className="inline-flex min-h-11 items-center border border-hairline px-5 text-bright transition-colors hover:border-lime hover:text-lime"
+            >
+              Personal password
+            </Link>
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="space-y-4 font-plex text-sm">
         <p className="text-bright">Sign in first, so the token is yours.</p>
