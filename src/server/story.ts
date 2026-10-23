@@ -451,13 +451,36 @@ async function runFacts(projectId: number, ids: string[]): Promise<Record<string
 }
 
 /**
+ * Credited people from a publish receipt, re-checked against *current*
+ * consent so a withdrawal takes effect without a republish. Accepts both the
+ * studio receipt shape ({ name }) and the finalize one ({ display_name }).
+ */
+async function stillCredited(list: { member_id: number; name?: string; display_name?: string; handle?: string | null }[]) {
+  const ids = list.map((c) => Number(c.member_id)).filter((n) => Number.isSafeInteger(n) && n > 0);
+  if (!ids.length) return [];
+  const rows = await query<{ member_id: number; category: string }>(
+    "select member_id, category from member_consent_current where member_id = any($1::bigint[]) and category in ('activity_publication','social_mention') and granted",
+    [ids],
+  ).catch(() => []);
+  const ok = new Set(rows.map((r) => Number(r.member_id)));
+  const mention = new Set(rows.filter((r) => r.category === "social_mention").map((r) => Number(r.member_id)));
+  // An @handle needs social_mention, same as at publish time.
+  return list
+    .filter((c) => ok.has(Number(c.member_id)))
+    .map((c) => ({ name: c.name ?? c.display_name ?? "", handle: mention.has(Number(c.member_id)) ? (c.handle ?? null) : null }));
+}
+
+/**
  * The published Ship Page story for `slug` (or a project id), as a public
  * DTO, or null when nothing is published or the page is hidden. This is the
  * one function /ship/[slug] and the deck read.
  */
 export async function getPublishedStory(slugOrId: string | number): Promise<{ story: PublicStory; template: ShipTemplateId; projectId: number } | null> {
   const project = typeof slugOrId === "number" ? await getProjectById(slugOrId) : await getProjectBySlug(slugOrId);
-  if (!project || project.showcase_state === "hidden_by_moderation") return null;
+  // Same visibility rule as /ship/{slug} (showcase.ts): only public or
+  // unlisted pages are readable; a team that switched its page Off, or a
+  // moderation hide, takes the deck down too.
+  if (!project || (project.showcase_state !== "public" && project.showcase_state !== "unlisted")) return null;
   const pub = await getLatestPublished(project.id, "ship_page");
   if (!pub || pub.state === "hidden_by_moderation" || pub.state === "draft" || !pub.storyId) return null;
   const [row] = await query<StoryRow>(`${STORY_SELECT} where s.id = $1`, [pub.storyId]);
@@ -473,7 +496,7 @@ export async function getPublishedStory(slugOrId: string | number): Promise<{ st
     { ...sv.content, status: "published" },
     {
       shipPage: siteUrl(`/ship/${project.slug}`),
-      credited: (pub.consent?.credited ?? []).map((c) => ({ name: c.name, handle: c.handle })),
+      credited: await stillCredited(pub.consent?.credited ?? []),
       proofRuns: runs,
       badges,
       version: pub.version,

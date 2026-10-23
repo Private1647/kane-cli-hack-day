@@ -256,7 +256,12 @@ export async function getPublishedStory(slug: string, opts: { includeHidden?: bo
   if (!opts.includeHidden && project.showcase_state !== "public" && project.showcase_state !== "unlisted") return null;
   const pub = await latestPublished(project.id);
   if (!pub) return null;
-  const receipt = pub.consent_receipt?.credited ?? [];
+  // Studio publishes (story.ts) record credited people as { member_id, name };
+  // finalize records { member_id, display_name }. Accept both shapes.
+  const receipt = (pub.consent_receipt?.credited ?? []).map((c) => {
+    const raw = c as CreditedMember & { name?: string };
+    return { ...raw, display_name: raw.display_name ?? raw.name ?? "", handle: raw.handle ?? null, consent_recorded_at: raw.consent_recorded_at ?? null };
+  });
   const ok = await currentlyConsenting(receipt.map((c) => Number(c.member_id)));
   const credited = receipt.filter((c) => ok.has(Number(c.member_id)));
   const names = new Set(credited.map((c) => c.display_name));
