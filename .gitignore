@@ -49,3 +49,6 @@ next-env.d.ts
 .testmuai/variables/
 # placeholder photos written by scripts/seed-fixtures.mts for the local gallery
 /public/photos/event/fixtures/
+
+# event-day-flow: local-only photo store (HACKOS_ENV=local without a Blob token)
+/.local-blob/
