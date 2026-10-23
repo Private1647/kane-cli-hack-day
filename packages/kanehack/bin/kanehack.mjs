@@ -22,7 +22,7 @@ import { createInterface } from "node:readline/promises";
 import { redactText, typedOnly } from "../lib/redact.mjs";
 import { scan } from "../lib/stream.mjs";
 
-const VERSION = "0.1.0";
+const VERSION = "0.1.1";
 const DIR = join(homedir(), ".kanehack");
 const CONFIG = join(DIR, "config.json");
 const MAX_NDJSON = 1_900_000;
@@ -93,7 +93,18 @@ async function api(cfg, path, init = {}) {
   if (cfg.token) headers.authorization = `Bearer ${cfg.token}`;
   let res;
   try {
-    res = await fetch(`${cfg.api}${path}`, { ...init, headers, signal: AbortSignal.timeout(init.timeout ?? 30_000) });
+    // Follow redirects ourselves: fetch drops Authorization when one changes host, and
+    // kaneclihack.sh ⇄ www.kaneclihack.sh is a host change. Only within the same site.
+    let url = `${cfg.api}${path}`;
+    for (let hops = 0; ; hops++) {
+      res = await fetch(url, { ...init, headers, redirect: "manual", signal: AbortSignal.timeout(init.timeout ?? 30_000) });
+      const next = res.status >= 300 && res.status < 400 && res.headers.get("location");
+      if (!next || hops >= 3) break;
+      const to = new URL(next, url);
+      if (to.protocol !== "https:" && to.hostname !== "localhost") break;
+      if (to.hostname.replace(/^www\./, "") !== new URL(url).hostname.replace(/^www\./, "")) break;
+      url = to.toString();
+    }
   } catch (e) {
     return { ok: false, status: 0, env: null, error: `Can't reach ${cfg.api} (${e.name}).` };
   }
@@ -214,8 +225,8 @@ async function doctor(a) {
   } else add("kane_auth", "skipped", null, "kane-cli not installed", "Install Kane CLI first");
   const skillDirs = [".claude/skills/kane-cli", ".agents/skills/kane-cli", ".codex/skills/kane-cli", ".gemini/skills/kane-cli"].map((d) => join(homedir(), d));
   add("kane_skill", skillDirs.some((d) => existsSync(join(d, "SKILL.md"))) ? "pass" : "warn", null, null, "npx @testmuai/kane-cli-skill");
-  const pluginDirs = [join(process.cwd(), ".agents/skills/hack-onboard"), join(homedir(), ".agents/skills/hack-onboard"), join(homedir(), ".codex/skills/hack-onboard")];
-  add("plugin", pluginDirs.some((d) => existsSync(join(d, "SKILL.md"))) ? "pass" : "warn", null, null, "Optional: copy the hack-* skills (see kaneclihack.sh/install.sh)");
+  const pluginDirs = [join(process.cwd(), ".agents/skills/hack-onboard"), join(homedir(), ".agents/skills/hack-onboard"), join(homedir(), ".claude/skills/hack-onboard"), join(homedir(), ".codex/skills/hack-onboard")];
+  add("plugin", pluginDirs.some((d) => existsSync(join(d, "SKILL.md"))) ? "pass" : "warn", null, null, "Re-run the installer to add the hack-* skills: curl -fsSL https://kaneclihack.sh/install.sh | sh");
   if (!cfg.token) add("api", "warn", null, "not paired", "kanehack pair");
   else {
     const r = await api(cfg, "/api/v1/kane/runs?limit=1", { timeout: 10_000 });

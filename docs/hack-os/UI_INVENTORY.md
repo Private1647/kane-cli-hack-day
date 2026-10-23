@@ -216,7 +216,7 @@ SECTIONS:
 STATES: Revoked, expired, or invalid token shows a "Badge" down alert with a link to "Help desk" (/help).
 
 /pair | logged-in member (signed out shows a prompt)
-PURPOSE: Approve a `kanehack login` / MCP device pairing code.
+PURPOSE: Approve a `kanehack pair` / MCP device pairing code.
 STATES and ACTIONS:
 - Signed out: "Sign in first…" → "Sign in →" /passport/login?next=/pair?code=…
 - No code: "Code from your terminal" (XXXX-XXXX) → "Look up →"

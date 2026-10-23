@@ -1,7 +1,7 @@
 import { envelopeResponse, parse, z } from "@/server/core";
 import { startPairing } from "@/server/pairing";
 
-// kanehack login, step 1 (no account needed). Returns a short user code to
+// kanehack pair, step 1 (no account needed). Returns a short user code to
 // show the person and a secret device code to poll /api/v1/pair/confirm with.
 // The person approves the user code at /pair while signed in.
 

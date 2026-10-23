@@ -1,17 +1,20 @@
 # Kane CLI Hack Day installer for Windows: https://kaneclihack.sh/install.ps1
-# Version: 0.1.0
+# Version: 0.1.1
 #
 # Read me before you run me. This script checks Node, Git, Chrome, Codex
 # (optional), Kane CLI, Kane auth, the official Kane CLI skill, the hack skills
 # and whether the event API answers. It asks before installing anything, and
-# only installs the `kanehack` helper into %USERPROFILE%\.kanehack from a
-# tarball whose sha256 is pinned below. No admin rights, no profile edits, no
-# reading your repos or chat history.
+# only installs the `kanehack` helper into %USERPROFILE%\.kanehack and the hack-*
+# skills into your agents' skill folders, each from a tarball whose sha256 is
+# pinned below. No admin rights, no PATH change unless you say yes, no reading
+# your repos or chat history.
 
 $ErrorActionPreference = "Stop"
-$KanehackVersion = "0.1.0"
-$KanehackSha256 = "8c77a492117622535f5301a1aeb1e4cb2638df35b7fc77c4d4a149a638a8a27b"
-$Site = if ($env:KANEHACK_SITE) { $env:KANEHACK_SITE } else { "https://kaneclihack.sh" }
+$KanehackVersion = "0.1.1"
+$KanehackSha256 = "0e6d9b879c374955d93fa11c09ba8424ce84d665e8ffb91dff4ede1ae933e5fd"
+$SkillsSha256 = "15908514717814bae5546024b9718db0cf0b2f07001e0b9c163a0286d3719215"
+# The www host directly: Windows PowerShell 5.1 may not follow the apex's 308 redirect.
+$Site = if ($env:KANEHACK_SITE) { $env:KANEHACK_SITE } else { "https://www.kaneclihack.sh" }
 $Prefix = Join-Path $HOME ".kanehack"
 $script:Failed = $false
 
@@ -47,12 +50,16 @@ if (Have kane-cli) {
 $skill = @(".claude\skills\kane-cli", ".agents\skills\kane-cli", ".codex\skills\kane-cli") | Where-Object { Test-Path (Join-Path $HOME "$_\SKILL.md") }
 if ($skill) { Pass "kane_skill" } else { Warn "kane_skill" "not found" "npx @testmuai/kane-cli-skill" }
 
-if ((Test-Path (Join-Path $HOME ".agents\skills\hack-onboard\SKILL.md")) -or (Test-Path (Join-Path $HOME ".codex\skills\hack-onboard\SKILL.md"))) { Pass "hack_skills" }
-else { Warn "hack_skills" "not found" "Optional: copy plugin\skills\hack-* into %USERPROFILE%\.agents\skills" }
+# Where agents look for personal skills: .agents\skills always, plus Claude Code and Codex when present.
+$skillDirs = @(Join-Path $HOME ".agents\skills")
+if (Test-Path (Join-Path $HOME ".claude")) { $skillDirs += Join-Path $HOME ".claude\skills" }
+if (Test-Path (Join-Path $HOME ".codex")) { $skillDirs += Join-Path $HOME ".codex\skills" }
+$needSkills = @($skillDirs | Where-Object { -not (Test-Path (Join-Path $_ "hack-onboard\SKILL.md")) }).Count -gt 0
+if (-not $needSkills) { Pass "hack_skills" } else { Warn "hack_skills" "not found" "Offered below" }
 
 # One unauthenticated request: 401 means the API is up and wants a token.
 try {
-  $r = Invoke-WebRequest -Uri "$Site/api/v1/kane/runs" -Method Get -TimeoutSec 10 -UseBasicParsing -SkipHttpErrorCheck -ErrorAction Stop
+  $r = Invoke-WebRequest -Uri "$Site/api/v1/kane/runs" -Method Get -TimeoutSec 10 -UseBasicParsing -ErrorAction Stop
   $code = [int]$r.StatusCode
 } catch {
   $code = if ($_.Exception.Response) { [int]$_.Exception.Response.StatusCode } else { 0 }
@@ -77,13 +84,46 @@ if (-not ((Have node) -and (Have npm))) {
     $entry = Join-Path $Prefix "cli\node_modules\kanehack\bin\kanehack.mjs"
     Set-Content -Path $cmdShim -Value "@echo off`r`nnode `"$entry`" %*" -Encoding ASCII
     Pass "kanehack" "$KanehackVersion → $cmdShim (sha256 verified)"
-    if (-not ($env:PATH -split ";" | Where-Object { $_ -eq $bin })) {
-      Write-Host "Add it to your PATH for this session (we don't change your settings): `$env:PATH = `"$bin;`$env:PATH`""
-    }
   } finally { Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue }
 } else {
   Warn "kanehack" "skipped" "Re-run this script when you're ready"
 }
 
-Write-Host "`nNext: kanehack pair   ·   kanehack doctor   ·   $Site/passport"
+if ($needSkills -and ((Read-Host "Install the 12 hack-* skills into $($skillDirs -join ', ')? [y/N]") -match "^(y|yes)$")) {
+  $stmp = Join-Path ([IO.Path]::GetTempPath()) ("hack-skills-" + [guid]::NewGuid())
+  New-Item -ItemType Directory -Path $stmp | Out-Null
+  try {
+    $stgz = Join-Path $stmp "hack-skills-$KanehackVersion.tgz"
+    Invoke-WebRequest -Uri "$Site/hack-skills-$KanehackVersion.tgz" -OutFile $stgz -UseBasicParsing -TimeoutSec 60
+    $got = (Get-FileHash -Algorithm SHA256 $stgz).Hash.ToLower()
+    if ($got -ne $SkillsSha256) { Fail "hack_skills" "checksum mismatch" "Don't use this download; tell the help desk (got $got)" }
+    else {
+      # tar.exe ships with Windows 10 1803+. Only the hack-* folders are written.
+      foreach ($d in $skillDirs) { New-Item -ItemType Directory -Force -Path $d | Out-Null; tar -xzf $stgz -C $d }
+      Pass "hack_skills" "12 skills → $($skillDirs -join ', ') (sha256 verified). Start a new agent session to load them."
+    }
+  } finally { Remove-Item -Recurse -Force $stmp -ErrorAction SilentlyContinue }
+} elseif ($needSkills) { Warn "hack_skills" "skipped" "Re-run this script when you're ready" }
+
+# kanehack lives in .kanehack\bin. If that isn't on PATH, offer to add it (asked, never silent),
+# and print the next steps with the full path so they work right now.
+$kh = "kanehack"
+if ((Test-Path $cmdShim) -and -not ($env:PATH -split ";" | Where-Object { $_ -eq $bin })) {
+  if ((Read-Host "Add $bin to your user PATH? [y/N]") -match "^(y|yes)$") {
+    $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+    if (-not (($userPath -split ";") -contains $bin)) { [Environment]::SetEnvironmentVariable("Path", (@($bin, $userPath) | Where-Object { $_ }) -join ";", "User") }
+    $env:PATH = "$bin;$env:PATH"
+    Pass "path" "added (this window and new ones)"
+  } else {
+    $kh = "& `"$cmdShim`""
+    Write-Host "kanehack isn't on your PATH. Use the full path below, or run: `$env:PATH = `"$bin;`$env:PATH`"" -ForegroundColor Yellow
+  }
+}
+
+Write-Host "`nNext:"
+Write-Host "  1. $kh pair        link this machine to your passport"
+Write-Host "  2. $kh doctor      re-check your setup"
+Write-Host "  3. $kh report -- kane-cli run `"Open $Site and find the schedule`" --agent"
+Write-Host "     (your first Kane run, sent to your team's Proof tab)"
+Write-Host "Web: $Site/passport"
 if ($script:Failed) { Write-Host "Some checks failed. Fix them with the commands above, or ask at the help desk." -ForegroundColor Yellow }

@@ -15,7 +15,7 @@ export const metadata: Metadata = { title: "Pair a device", robots: { index: fal
 const inputCls =
   "w-full border border-hairline bg-surface px-3 py-2.5 font-plex text-sm text-bright placeholder:text-lightgray/60 outline-none transition-colors focus:border-lime";
 
-// /pair?code=XXXX-XXXX : approve a `kanehack login` (or MCP client) pairing.
+// /pair?code=XXXX-XXXX : approve a `kanehack pair` (or MCP client) pairing.
 // The code alone grants nothing; it binds to whoever approves it here, so
 // we show which machine asked and make the person press Approve.
 
@@ -71,7 +71,7 @@ async function Body({ searchParams }: Pick<PageProps<"/pair">, "searchParams">) 
     return (
       <div className="space-y-6">
         <DegradedServiceAlert state="stale" system="Pairing code">
-          That code has expired or was already used. Run <code>kanehack login</code> again for a fresh one.
+          That code has expired or was already used. Run <code>kanehack pair</code> again for a fresh one.
         </DegradedServiceAlert>
         <CodeEntry />
       </div>

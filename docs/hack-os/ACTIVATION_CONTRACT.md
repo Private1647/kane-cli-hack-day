@@ -76,7 +76,7 @@ The receipt code is in `[data-testid="activation-receipt"]`. The code form is `[
 ## 4. The controller (hack-onboard)
 
 ```
-0. token ← pairing (kanehack login): pair/start → show user_code → person approves at /pair → poll pair/confirm.
+0. token ← pairing (kanehack pair): pair/start → show user_code → person approves at /pair → poll pair/confirm.
 1. GET /participants/me. If state ≠ needs_activation / awaiting_selfie → already active: show passport link, stop.
 2. Ask the person (in chat) only for missing identity values and for each consent separately.
    Never assume a consent. Never ask for or handle a photo.

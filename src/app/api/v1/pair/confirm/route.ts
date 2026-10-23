@@ -1,7 +1,7 @@
 import { envelopeResponse, parse, z } from "@/server/core";
 import { exchangePairing } from "@/server/pairing";
 
-// kanehack login, step 3 (poll). pending → keep polling at `interval`;
+// kanehack pair, step 3 (poll). pending → keep polling at `interval`;
 // approved → the bearer token, exactly once. Expired, denied or replayed
 // device codes fail closed with PAIR_EXPIRED (410).
 

@@ -209,7 +209,7 @@ async function Body({ searchParams }: Pick<PageProps<"/passport">, "searchParams
                   </ul>
                 ) : (
                   <p className="mt-2 font-plex text-sm text-lightgray">
-                    None. Run <code className="text-bright">kanehack login</code> and approve the code at{" "}
+                    None. Run <code className="text-bright">kanehack pair</code> and approve the code at{" "}
                     <Link href="/pair" className="text-bright underline underline-offset-4 hover:text-lime">
                       /pair
                     </Link>

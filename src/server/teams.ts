@@ -89,7 +89,7 @@ export type ActingMember = { member: MemberRow; actor: Actor };
 export async function actingMember(req?: Request): Promise<ActingMember> {
   if (req?.headers.get("authorization")) {
     const bearer = await authenticateBearer(req);
-    if (!bearer) throw new AppError("UNAUTHENTICATED", { userMessage: "Missing or invalid token. Pair this machine again with `kanehack login`." });
+    if (!bearer) throw new AppError("UNAUTHENTICATED", { userMessage: "Missing or invalid token. Pair this machine again with `kanehack pair`." });
     return { member: bearer.member, actor: tokenActor(bearer) };
   }
   const member = await getMember();

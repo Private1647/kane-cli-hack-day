@@ -287,6 +287,6 @@ export async function authenticateBearer(req: Request): Promise<BearerAuth | nul
 /** Like authenticateBearer but throws UNAUTHENTICATED. */
 export async function requireBearer(req: Request): Promise<BearerAuth> {
   const auth = await authenticateBearer(req);
-  if (!auth) throw new AppError("UNAUTHENTICATED", { userMessage: "Missing or invalid token. Pair this machine again with `kanehack login`." });
+  if (!auth) throw new AppError("UNAUTHENTICATED", { userMessage: "Missing or invalid token. Pair this machine again with `kanehack pair`." });
   return auth;
 }

@@ -60,7 +60,7 @@ export type Caller = { member: MemberRow; actor: Actor; via: "cookie" | "bearer"
 export async function resolveCaller(req: Request): Promise<Caller> {
   if (req.headers.get("authorization")) {
     const bearer = await authenticateBearer(req);
-    if (!bearer) throw new AppError("UNAUTHENTICATED", { userMessage: "Missing or invalid token. Pair this machine again with `kanehack login`." });
+    if (!bearer) throw new AppError("UNAUTHENTICATED", { userMessage: "Missing or invalid token. Pair this machine again with `kanehack pair`." });
     return { member: bearer.member, actor: tokenActor(bearer), via: "bearer", bearer };
   }
   const member = await getMember();
@@ -68,7 +68,7 @@ export async function resolveCaller(req: Request): Promise<Caller> {
   return { member, actor: memberActor(member), via: "cookie", bearer: null };
 }
 
-// ── Device pairing (kanehack login) ──────────────────────────────────────────
+// ── Device pairing (kanehack pair) ──────────────────────────────────────────
 
 const PAIR_MINUTES = 10;
 const BEARER_DAYS = 14;

@@ -3,7 +3,7 @@
   "mcpServers": {
     "kane-hack-event": {
       "type": "streamable-http",
-      "url": "https://kaneclihack.sh/mcp",
+      "url": "https://www.kaneclihack.sh/mcp",
       "headers": {
         "Authorization": "Bearer ${KANEHACK_TOKEN}"
       },

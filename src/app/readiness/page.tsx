@@ -76,7 +76,7 @@ async function Body() {
         <div className="brackets border border-hairline bg-surface p-5 sm:p-6">
           <h2 className="font-display text-xl font-semibold text-bright">Let your agent run it</h2>
           <p className="mt-2 font-plex text-sm text-lightgray">
-            Pair once with <code className="text-bright">kanehack login</code> (approve the code at{" "}
+            Pair once with <code className="text-bright">kanehack pair</code> (approve the code at{" "}
             <Link href="/pair" className="text-bright underline underline-offset-4 hover:text-lime">
               /pair
             </Link>
