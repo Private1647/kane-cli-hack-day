@@ -3,7 +3,7 @@ import { Suspense, type ReactNode } from "react";
 import Mentions from "@/components/home/Mentions";
 import { Eyebrow } from "@/components/ui/Section";
 import type { HubTab } from "@/lib/hub";
-import { getTeamSession, isAdmin } from "@/lib/session";
+import { getMemberSession, getTeamSession, isAdmin } from "@/lib/session";
 import { getMembers, getTeamBySlug, type Member, type Team } from "@/lib/teams";
 import { CopyLink, JoinForm, PickMember, SessionButtons } from "./parts";
 import Bell from "./Bell";
@@ -62,9 +62,12 @@ async function Gated({
   const team = await getTeamBySlug(slug);
   if (!team) notFound();
 
-  const [session, admin, members] = await Promise.all([getTeamSession(), isAdmin(), getMembers(team.id)]);
+  const [session, personal, admin, members] = await Promise.all([getTeamSession(), getMemberSession(), isAdmin(), getMembers(team.id)]);
   const unlocked = session?.teamId === team.id;
-  const me = (unlocked && members.find((m) => m.id === session.memberId)) || null;
+  // A personal sign-in (desk code, personal password, activation) is a stronger
+  // proof than the shared team password, so it opens the member's own team hub too.
+  const viaPersonal = personal?.personal ? members.find((m) => m.id === personal.memberId) : undefined;
+  const me = (unlocked && members.find((m) => m.id === session.memberId)) || viaPersonal || null;
   const welcome = (await searchParams)?.welcome === "1";
 
   if (!me && !admin && publicView) {

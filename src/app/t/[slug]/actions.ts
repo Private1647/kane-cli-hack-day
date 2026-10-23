@@ -6,7 +6,7 @@ import { markSeen } from "@/lib/notifications";
 import { isRegPath, normalizeLinkedin, normalizeX, setMemberConsent, setTeamPhoto, updateMemberProfile } from "@/lib/photos";
 import { PROGRESS_IDS, PROGRESS_ITEMS } from "@/lib/progress";
 import { verifyPassword } from "@/lib/password";
-import { clearTeamSession, getTeamSession, setTeamSession } from "@/lib/session";
+import { clearTeamSession, getMemberSession, getTeamSession, setTeamSession } from "@/lib/session";
 import {
   MAX_MEMBERS,
   RegistrationError,
@@ -25,10 +25,13 @@ const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 /** Re-checks the cookie against the database on every action; never trust the client. */
 async function requireMember(slug: string) {
   const team = await getTeamBySlug(slug);
-  const session = await getTeamSession();
-  if (!team || session?.teamId !== team.id || !session.memberId) throw new Error("Not signed in to this team");
-  const member = (await getMembers(team.id)).find((m) => m.id === session.memberId);
-  if (!member) throw new Error("Member not found");
+  if (!team) throw new Error("Not signed in to this team");
+  // The team cookie's chosen member, or a personal sign-in by someone on this team.
+  const [session, personal] = await Promise.all([getTeamSession(), getMemberSession()]);
+  const memberId =
+    session?.teamId === team.id && session.memberId ? session.memberId : personal?.personal ? personal.memberId : null;
+  const member = memberId ? (await getMembers(team.id)).find((m) => m.id === memberId) : undefined;
+  if (!member) throw new Error("Not signed in to this team");
   return { team, member };
 }
 
