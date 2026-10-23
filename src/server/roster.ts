@@ -519,6 +519,8 @@ export type CheckinHit = {
   checkedInAt: Date | null;
   /** The member has finished activation (has a personal account). */
   activated: boolean;
+  /** Event-day checklist in words, e.g. "Activation 2/3 · plan: not registered" (null without a member). */
+  checklist: string | null;
 } & Provenance;
 
 /** How a roster row was admitted and how its check-in was taken: two separate facts. */
@@ -617,7 +619,19 @@ export async function searchCheckin(raw: string, limit = 25): Promise<CheckinHit
      select * from hits order by checked_in_at is not null, lower(name) limit $5`,
     [code ? `P-${code[1]}` : null, email, like, q, limit],
   );
+  const memberIds = rows.map((r) => r.member_id).filter((x): x is number => !!x);
+  const steps = memberIds.length
+    ? await query<{ member_id: number; ticks: number; plan: string | null; code: boolean }>(
+        `select m.id as member_id, (select count(*)::int from activation_ticks a where a.member_id = m.id) as ticks,
+                (select c.status from testmu_plan_claims c where c.member_id = m.id) as plan,
+                exists (select 1 from codex_credit_codes k where k.assigned_member_id = m.id and k.status = 'assigned') as code
+           from members m where m.id = any($1::bigint[])`,
+        [memberIds],
+      ).catch(() => [])
+    : [];
+  const checklist = new Map(steps.map((s) => [s.member_id, `Activation ${s.ticks}/3${s.plan && s.plan !== "claimed" ? ` · plan: ${s.plan.replace("_", " ")}` : ""}${s.code ? " · Codex code given" : ""}`]));
   return rows.map((r) => ({
+    checklist: r.member_id ? (checklist.get(r.member_id) ?? null) : null,
     key: r.guest_id ? `g${r.guest_id}` : `m${r.member_id}`,
     guestId: r.guest_id,
     memberId: r.member_id,

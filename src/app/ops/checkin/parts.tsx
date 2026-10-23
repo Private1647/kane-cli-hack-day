@@ -158,6 +158,7 @@ export type Hit = {
   checkedInAt: string | null;
   checkedInLabel: string | null;
   activated: boolean;
+  checklist?: string | null;
   admissionBasis: string | null;
   admittedByName: string | null;
   admittedAt: string | null;
@@ -304,6 +305,8 @@ export function HitRow({ hit, canOverride }: { hit: Hit; canOverride: boolean })
           <input type="hidden" name="member_id" value={hit.memberId} />
         </ActionForm>
       )}
+
+      {hit.checklist && <p className="mt-2 font-plex text-xs text-lightgray" data-checklist>{hit.checklist}</p>}
 
       {hit.checkedInAt && !hit.activated && (hit.memberId || hit.guestId) && (
         <ActionForm
