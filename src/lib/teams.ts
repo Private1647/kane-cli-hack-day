@@ -74,13 +74,17 @@ export async function registerTeam(input: {
       [slug, input.name, input.track, input.idea, input.isSolo, passwordHash, input.photoUrl],
     );
     const teamId = rows[0].id;
+    // The registrant's member row, and whether this registration created it. An
+    // adopted row (a walk-in or desk account with the same email) belongs to
+    // someone who may not be the person at this keyboard.
+    let registrant: { id: number; created: boolean } | null = null;
     for (const [i, m] of input.members.entries()) {
       // The first member is the person registering: theirs is the only answer we have.
       const consent = i === 0 ? input.captainConsent : null;
       // A walk-in admitted at the desk (or anyone with a personal account) is
       // already a member with no team: adopt that row instead of colliding
       // on the unique email. A member already on a team still conflicts.
-      const { rows: added } = await client.query<{ id: number }>(
+      const { rows: added } = await client.query<{ id: number; created: boolean }>(
         `insert into members (team_id, name, email, email_hash, photo_url, linkedin, x_handle, consent_social, consent_at)
          values ($1, $2, $3, $4, $5, $6, $7, $8::boolean, case when $8::boolean is not null then now() end)
          on conflict ((lower(email))) do update
@@ -91,11 +95,12 @@ export async function registerTeam(input: {
                consent_social = coalesce(excluded.consent_social, members.consent_social),
                consent_at = case when excluded.consent_social is not null then now() else members.consent_at end
            where members.team_id is null and members.deleted_at is null
-         returning id`,
+         returning id, (xmax = 0) as created`,
         [teamId, m.name, m.email, emailHash(m.email), m.photoUrl, m.linkedin, m.xHandle, consent],
       );
       if (!added[0]) throw new RegistrationError(`${m.email} is already registered on another team.`);
       const memberId = added[0].id;
+      if (i === 0) registrant = { id: memberId, created: added[0].created };
       // Hack OS: membership history, captain, and per-person consent rows.
       await client.query("insert into team_memberships (team_id, member_id, role) values ($1, $2, $3)", [teamId, memberId, i === 0 ? "captain" : "member"]);
       if (i === 0) await client.query("update teams set captain_id = $2, state = 'formed' where id = $1", [teamId, memberId]);
@@ -112,7 +117,7 @@ export async function registerTeam(input: {
     await client.query("insert into ideas (team_id, title, private_description) values ($1, $2, $3) on conflict do nothing", [teamId, input.name.slice(0, 120), input.idea]);
     await client.query("insert into activity (team_id, action) values ($1, 'Team registered')", [teamId]);
     await client.query("commit");
-    return { teamId, slug };
+    return { teamId, slug, registrant };
   } catch (err) {
     await client.query("rollback");
     throw toRegistrationError(err);

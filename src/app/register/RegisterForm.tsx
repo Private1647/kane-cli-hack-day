@@ -35,7 +35,6 @@ export default function RegisterForm({ tracks, maxMembers }: { tracks: string[];
   const [state, action] = useActionState<RegisterState, FormData>(register, null);
   const [mode, setMode] = useState<"team" | "solo">("team");
   const solo = mode === "solo";
-  const steps: StepId[] = solo ? ["team", "you", "photo", "finish"] : ["team", "you", "teammates", "photo", "finish"];
 
   const [at, setAt] = useState<StepId>("team");
   const [reached, setReached] = useState<Set<StepId>>(new Set(["team"]));
@@ -48,6 +47,12 @@ export default function RegisterForm({ tracks, maxMembers }: { tracks: string[];
   const [me, setMe] = useState<Person>(blank());
   const [mates, setMates] = useState<Person[]>([blank()]);
   const [consent, setConsent] = useState<boolean | null>(null);
+  // A solo builder who said no to photos has no use for a matching photo: skip that step.
+  const steps: StepId[] = solo
+    ? consent === false
+      ? ["team", "you", "finish"]
+      : ["team", "you", "photo", "finish"]
+    : ["team", "you", "teammates", "photo", "finish"];
   const [teamPhoto, setTeamPhoto] = useState<PhotoValue>(null);
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -379,7 +384,7 @@ export default function RegisterForm({ tracks, maxMembers }: { tracks: string[];
         </Panel>
 
         {/* Finish */}
-        <Panel active={at === "finish"} title="Last thing: a password" hint={`A simple shared password. ${solo ? "You use" : "Your teammates use"} it to open your page.`}>
+        <Panel active={at === "finish"} title="Last thing: a password" hint={solo ? "Your password: sign in with your email and this, here and from kanehack." : "A shared password your teammates use to open your page. You can set your own personal password later."}>
           <div className="grid gap-3 sm:grid-cols-2">
             <input
               type="password"
@@ -426,9 +431,11 @@ export default function RegisterForm({ tracks, maxMembers }: { tracks: string[];
                   </span>
                 </Summary>
               )}
-              <Summary label="Photo" onEdit={() => go("photo")}>
-                <span className={teamPhoto ? "text-bright" : "text-lightgray"}>{teamPhoto ? "Added" : "Skipped, add it later"}</span>
-              </Summary>
+              {steps.includes("photo") && (
+                <Summary label="Photo" onEdit={() => go("photo")}>
+                  <span className={teamPhoto ? "text-bright" : "text-lightgray"}>{teamPhoto ? "Added" : "Skipped, add it later"}</span>
+                </Summary>
+              )}
             </dl>
           </div>
         </Panel>

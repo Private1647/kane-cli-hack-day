@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { challenge } from "@/data/hackday";
 import { isRegPath, normalizeLinkedin, normalizeX } from "@/lib/photos";
-import { setTeamSession } from "@/lib/session";
+import { setMemberSession, setTeamSession } from "@/lib/session";
 import { MAX_MEMBERS, RegistrationError, isRegistrationOpen, isSlugTaken, registerTeam, slugify } from "@/lib/teams";
 
 export type RegisterState = { error?: string } | null;
@@ -66,8 +66,15 @@ export async function register(_prev: RegisterState, form: FormData): Promise<Re
       captainConsent: consentSocial,
     });
     slug = team.slug;
-    // The registrant already knows the password; skip straight to "who are you?".
-    await setTeamSession({ teamId: team.teamId, memberId: null });
+    if (team.registrant?.created) {
+      // The person at this keyboard just created their own account: sign them in
+      // as themselves (personal), so pairing, consents and the selfie work now.
+      await setMemberSession({ memberId: team.registrant.id, personal: true });
+      await setTeamSession({ teamId: team.teamId, memberId: team.registrant.id });
+    } else {
+      // An adopted account may be someone else's: hub access only, then "who are you?".
+      await setTeamSession({ teamId: team.teamId, memberId: null });
+    }
   } catch (err) {
     if (err instanceof RegistrationError) return { error: err.message };
     throw err;
