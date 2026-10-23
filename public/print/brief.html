@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Kane CLI Hack Day · static event brief</title>
+<!-- Static fallback (T-FB-04): served straight from the CDN, so it works when
+     the app or database is down. No data, no scripts. If the official times
+     changed in /ops/settings, staff announce it; this page says so. -->
+<style>
+  :root { --ink:#000; --bright:#f2f2f2; --gray:#7e7e7e; --hair:#37383a; --lime:#daff52; --warn:#ffb020; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--ink); color:var(--bright); font:15px/1.6 "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace; }
+  main { width:min(100% - 2rem, 52rem); margin:0 auto; padding:3rem 0 4rem; }
+  .eyebrow { font-size:11px; letter-spacing:.25em; text-transform:uppercase; color:var(--gray); }
+  h1 { font:700 clamp(2.2rem, 7vw, 3.6rem)/1.02 "Inter Tight", system-ui, sans-serif; margin:.6rem 0 1rem; }
+  h2 { font:500 1.2rem/1.3 "Inter Tight", system-ui, sans-serif; margin:2.5rem 0 .8rem; border-bottom:1px dashed var(--hair); padding-bottom:.4rem; }
+  p, li { color:var(--gray); }
+  strong { color:var(--bright); font-weight:500; }
+  .banner { border-left:2px solid var(--warn); background:#2b1f05; color:var(--warn); padding:.75rem 1rem; font-size:13px; }
+  table { width:100%; border-collapse:collapse; }
+  td { border-bottom:1px dashed var(--hair); padding:.5rem .25rem; vertical-align:top; color:var(--gray); }
+  td:first-child { color:var(--bright); white-space:nowrap; width:6.5rem; }
+  .deadline td:last-child::after { content:" · hard deadline"; color:var(--lime); }
+  a { color:var(--bright); text-underline-offset:4px; }
+  a:focus-visible { outline:2px solid var(--lime); outline-offset:2px; }
+  @media print { body { background:#fff; color:#000; } p, li, td { color:#333; } .banner { background:#fff; color:#000; border-color:#000; } td:first-child, strong { color:#000; } }
+</style>
+</head>
+<body>
+<main>
+  <p class="eyebrow">Kane CLI Hack Day · SF · Saturday, October 24, 2026 · Pacific time</p>
+  <h1>Build anything. Engineer the confidence to ship it.</h1>
+  <p class="banner" role="status">! Static backup page. Live systems may be delayed. Check-in, help and submission still work at the staff desks. If an official time changed, staff will announce it and the Mission Control clock is authoritative.</p>
+
+  <h2>The challenge</h2>
+  <p>Build anything with an AI coding agent: a product, app, agent, plugin, CI pipeline, workflow, or <strong>a validation harness itself</strong>. Use Kane CLI to verify the behavior that matters, let the results drive what you fix or ship, and show honest proof from a real run.</p>
+
+  <h2>Schedule</h2>
+  <table>
+    <tr><td>09:30</td><td>Check-in, breakfast</td></tr>
+    <tr><td>10:15</td><td>Kickoff</td></tr>
+    <tr class="deadline"><td>11:00</td><td>Team registration closes. Hackathon begins</td></tr>
+    <tr class="deadline"><td>12:00</td><td>Idea locks</td></tr>
+    <tr><td>13:00</td><td>Working lunch</td></tr>
+    <tr><td>14:00</td><td>Mid evaluation (feedback only)</td></tr>
+    <tr><td>16:00</td><td>Final evaluation at your table</td></tr>
+    <tr><td>17:00</td><td>Content hour</td></tr>
+    <tr class="deadline"><td>18:00</td><td>Submissions lock</td></tr>
+    <tr><td>18:00</td><td>Demo round</td></tr>
+    <tr><td>19:30</td><td>Prizes and closing</td></tr>
+  </table>
+
+  <h2>If something is down</h2>
+  <ul>
+    <li><strong>Check-in:</strong> go to the check-in desk. Staff have a signed paper roster and can admit walk-ins.</li>
+    <li><strong>Help:</strong> go to the help desk for a numbered paper ticket (H-). Never write passwords or tokens on it.</li>
+    <li><strong>Submission:</strong> before the lock, bring your repo URL, exact commit SHA and evidence to the supervised receipt desk for a signed, time-stamped backup receipt (S-).</li>
+    <li>Media, decks, video and social are optional. A render failure never disqualifies a valid entry.</li>
+  </ul>
+</main>
+</body>
+</html>
