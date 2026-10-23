@@ -187,6 +187,12 @@ async function Body({ searchParams }: Pick<PageProps<"/passport">, "searchParams
               <LoginCodeButton />
               <div>
                 <p className="font-pixel text-[10px] uppercase tracking-[0.2em] text-lightgray">Paired CLI / MCP clients</p>
+                <p className="mt-2 font-plex text-sm text-lightgray">
+                  Your terminal showed a pairing code?{" "}
+                  <Link href="/pair" className="text-bright underline underline-offset-4 hover:text-lime">
+                    Enter it to pair a device →
+                  </Link>
+                </p>
                 {tokens.length ? (
                   <ul className="mt-2 divide-y divide-dashed divide-hairline border-y border-dashed border-hairline">
                     {tokens.map((t) => (
