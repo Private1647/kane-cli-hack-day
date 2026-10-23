@@ -4,6 +4,7 @@ import { useActionState, useEffect, useRef, useState, useSyncExternalStore, type
 import { FormError, Label, SubmitButton, inputCls } from "@/components/forms/fields";
 import type { ActionResult } from "@/server/core";
 import type { PaperImportRow, PaperResult } from "@/server/help";
+import { PAPER_LATE_AFTER_MINUTES, wallClockWords } from "@/server/help-rules";
 import { addPaper, importPaperCsv } from "./actions";
 
 // Client bits of the mentor queue: one generic action form (claim, resolve,
@@ -170,22 +171,45 @@ export function PrioritySelect({ id, defaultValue, includeBlank }: { id: string;
   );
 }
 
-/** Type in one paper slip (fallback/04_MENTOR_TICKET.md). */
-export function PaperTicketForm() {
+/**
+ * Type in one paper slip (fallback/04_MENTOR_TICKET.md). The slip time is a
+ * date plus a 24-hour time in the event zone, read back in AM/PM words so it
+ * can be checked against the slip before saving.
+ */
+export function PaperTicketForm({ today, zone }: { today: string; zone: string }) {
   const [state, run] = useActionState(addPaper, null);
   const form = useRef<HTMLFormElement>(null);
+  const [clock, setClock] = useState("");
   useEffect(() => {
     if (state?.ok) form.current?.reset();
   }, [state]);
   const r: PaperResult | null = state?.ok ? state.data : null;
+  // "00:15" or a pasted "2026-10-23T00:15": read the time part back in words.
+  const words = wallClockWords(clock.trim().slice(-5));
   return (
-    <form ref={form} action={run} className="space-y-4">
+    <form ref={form} action={run} onReset={() => setClock("")} className="space-y-4">
       <div className="grid gap-4 sm:grid-cols-3">
         <Field id="p-code" label="Slip number" hint="Printed H-number">
           <input id="p-code" name="code" required placeholder="H-9012" className={`${inputCls} min-h-11 uppercase`} />
         </Field>
-        <Field id="p-opened" label="Opened at" hint="Time on the slip">
-          <input id="p-opened" name="opened_at" required placeholder="13:05 or 1:05 PM" className={`${inputCls} min-h-11`} />
+        <Field id="p-opened-date" label="Slip date" hint={zone}>
+          <input id="p-opened-date" name="opened_date" type="date" required defaultValue={today} className={`${inputCls} min-h-11`} />
+        </Field>
+        <Field id="p-opened" label="Slip time (24-hour)" hint={zone}>
+          <input
+            id="p-opened"
+            name="opened_time"
+            required
+            maxLength={40}
+            autoComplete="off"
+            placeholder="00:15 or 13:05"
+            aria-describedby="p-opened-words"
+            onChange={(e) => setClock(e.target.value)}
+            className={`${inputCls} min-h-11`}
+          />
+          <p id="p-opened-words" aria-live="polite" className="mt-1 font-plex text-xs text-lightgray">
+            {words ? `= ${words} ${zone}` : "00:15 = 12:15 AM · 13:05 = 1:05 PM"}
+          </p>
         </Field>
         <Field id="p-status" label="Status on slip">
           <select id="p-status" name="status" defaultValue="new" className={`${inputCls} min-h-11`}>
@@ -224,11 +248,11 @@ export function PaperTicketForm() {
         <Field id="p-claimed-by" label="Claimed by" hint="Optional">
           <input id="p-claimed-by" name="claimed_by" className={`${inputCls} min-h-11`} />
         </Field>
-        <Field id="p-claimed-at" label="Claimed at" hint="Optional">
-          <input id="p-claimed-at" name="claimed_at" className={`${inputCls} min-h-11`} />
+        <Field id="p-claimed-at" label="Claimed at" hint="24-hour, optional">
+          <input id="p-claimed-at" name="claimed_at" placeholder="00:40" className={`${inputCls} min-h-11`} />
         </Field>
-        <Field id="p-resolved-at" label="Resolved at" hint="Optional">
-          <input id="p-resolved-at" name="resolved_at" className={`${inputCls} min-h-11`} />
+        <Field id="p-resolved-at" label="Resolved at" hint="24-hour, optional">
+          <input id="p-resolved-at" name="resolved_at" placeholder="01:10" className={`${inputCls} min-h-11`} />
         </Field>
         <Field id="p-initials" label="Staff initials" hint="Optional">
           <input id="p-initials" name="staff_initials" maxLength={12} className={`${inputCls} min-h-11`} />
@@ -237,11 +261,16 @@ export function PaperTicketForm() {
       <Field id="p-resolution" label="Resolution / next action" hint="Optional">
         <input id="p-resolution" name="resolution" maxLength={500} className={`${inputCls} min-h-11`} />
       </Field>
-      <p className="font-plex text-xs text-lightgray">Times are read in the event&apos;s time zone. The entry time is recorded separately; nothing is backdated.</p>
+      <Field id="p-late" label="Why entered late" hint={`Required if the slip is ${PAPER_LATE_AFTER_MINUTES}+ minutes old`}>
+        <input id="p-late" name="late_reason" maxLength={500} placeholder="e.g. Venue Wi-Fi outage; slip typed in after the backend recovered" className={`${inputCls} min-h-11`} />
+      </Field>
+      <p className="font-plex text-xs text-lightgray">
+        Times are 24-hour, in the event&apos;s time zone ({zone}). The slip time is kept as written and the entry time is recorded separately; nothing is backdated.
+      </p>
       {state && !state.ok && <FormError message={state.error.message} />}
       {r && (
         <p role="status" className="font-plex text-sm text-bright">
-          {r.status === "created" ? `${r.code} added to the queue.` : `${r.code} was already entered; nothing changed.`}
+          {r.status === "created" ? `${r.code} added to the queue. Slip time recorded as ${r.opened_at_local}.` : `${r.code} was already entered (slip time ${r.opened_at_local}); nothing changed.`}
         </p>
       )}
       <SubmitButton pending="Adding…" className="min-h-11">
@@ -263,6 +292,10 @@ export function PaperCsvImport() {
       <Field id="csv-text" label="Or paste rows" hint="Header row first">
         <textarea id="csv-text" name="csv" rows={4} className={`${inputCls} font-plex text-xs`} placeholder="manual_ticket_id,opened_at,team_id,participant_id,table,category,priority,summary,claimed_by,claimed_at,resolved_at,status,staff_initials" />
       </Field>
+      <Field id="csv-late" label="Why entered late" hint="Every row; a late_reason column overrides it">
+        <input id="csv-late" name="late_reason" maxLength={500} className={`${inputCls} min-h-11`} />
+      </Field>
+      <p className="font-plex text-xs text-lightgray">opened_at: 2026-10-24 13:05 (24-hour) or 1:05 PM. A bare 1:05 is refused because it could be AM or PM.</p>
       {state && !state.ok && <FormError message={state.error.message} />}
       {state?.ok && (
         <div role="status" className="font-plex text-sm">

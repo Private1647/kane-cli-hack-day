@@ -85,7 +85,8 @@ export async function importPaperCsv(
   const res = await runAction(async () => {
     const file = form.get("file");
     const text = file instanceof File && file.size > 0 ? await file.text() : String(form.get("csv") ?? "");
-    return importPaperTicketsCsv(await getStaff(), text);
+    const reason = String(form.get("late_reason") ?? "").trim();
+    return importPaperTicketsCsv(await getStaff(), text, reason || null);
   });
   if (res.ok) refresh();
   return res;
