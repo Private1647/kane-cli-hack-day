@@ -7,6 +7,7 @@ import { inputCls } from "@/components/forms/fields";
 import StatusPill from "@/components/ui/StatusPill";
 import ActionForm, { TextField } from "../_kit/ActionForm";
 import { admitMemberAction, checkInAction, walkInAction } from "./actions";
+import { admissionLabel } from "./labels";
 
 // Check-in desk client pieces: search box with an optional camera scanner,
 // one row per person with the right action, and the walk-in form.
@@ -156,14 +157,65 @@ export type Hit = {
   emailHint: string | null;
   checkedInAt: string | null;
   checkedInLabel: string | null;
+  admissionBasis: string | null;
+  admittedByName: string | null;
+  admittedAt: string | null;
+  admittedLabel: string | null;
+  admissionReason: string | null;
+  checkedInByName: string | null;
+  checkinSource: string | null;
+  checkinRef: string | null;
+  checkinEnteredAt: string | null;
+  enteredLabel: string | null;
 };
+
+/** Admission and attendance as two lines: who let them in and why, then when they checked in and how. */
+function Provenance({ hit }: { hit: Hit }) {
+  if (!hit.guestId) return null;
+  return (
+    <dl className="mt-2 grid gap-1 font-plex text-xs text-lightgray sm:grid-cols-[auto_1fr] sm:gap-x-3">
+      <dt className="font-pixel text-[10px] uppercase tracking-[0.2em]">Admission</dt>
+      <dd data-admission-basis={hit.admissionBasis ?? "roster"}>
+        <span className={hit.admissionBasis ? "text-warning" : "text-bright"}>{admissionLabel(hit.admissionBasis, hit.source)}</span>
+        {hit.admissionBasis && (
+          <>
+            {" "}
+            · by {hit.admittedByName ?? "staff"}
+            {hit.admittedLabel && <time dateTime={hit.admittedAt ?? undefined}> at {hit.admittedLabel}</time>}
+            {hit.admissionReason && <> · “{hit.admissionReason}”</>}
+          </>
+        )}
+      </dd>
+      <dt className="font-pixel text-[10px] uppercase tracking-[0.2em]">Attendance</dt>
+      <dd data-checkin-source={hit.checkinSource ?? (hit.checkedInAt ? "unknown" : "none")}>
+        {hit.checkedInAt ? (
+          <>
+            <span className="text-bright">Checked in</span> <time dateTime={hit.checkedInAt}>{hit.checkedInLabel}</time>
+            {hit.checkinSource === "offline_ledger"
+              ? ` · paper slip ${hit.checkinRef ?? ""}, entered ${hit.enteredLabel ?? "later"} by ${hit.checkedInByName ?? "staff"}`
+              : hit.checkedInByName
+                ? ` · at the desk by ${hit.checkedInByName}`
+                : ""}
+          </>
+        ) : (
+          "Not checked in yet"
+        )}
+      </dd>
+    </dl>
+  );
+}
 
 const SOURCE_LABEL: Record<string, string> = { luma_csv: "Luma", walk_in: "Walk-in", manual_offline: "Paper", registration: "Site only" };
 
 export function HitRow({ hit, canOverride }: { hit: Hit; canOverride: boolean }) {
   const [overriding, setOverriding] = useState(false);
   const status = hit.checkedInAt ? (
-    <StatusPill tone="verified">Verified · in {hit.checkedInLabel}</StatusPill>
+    // A paper slip entered later is a staff record, not a desk-verified scan.
+    hit.checkinSource === "offline_ledger" ? (
+      <StatusPill tone="unverified">Paper · in {hit.checkedInLabel}</StatusPill>
+    ) : (
+      <StatusPill tone="verified">Verified · in {hit.checkedInLabel}</StatusPill>
+    )
   ) : hit.source === "registration" ? (
     <StatusPill tone="pending">No roster match</StatusPill>
   ) : hit.admission === "admitted" ? (
@@ -183,8 +235,9 @@ export function HitRow({ hit, canOverride }: { hit: Hit; canOverride: boolean })
             {hit.displayName && hit.displayName !== hit.name && <span className="text-lightgray"> · “{hit.displayName}”</span>}
           </p>
           <p className="mt-1 font-plex text-xs break-words text-lightgray">
-            {[hit.publicCode, hit.teamName ? `team ${hit.teamName}` : "no team yet", SOURCE_LABEL[hit.source] ?? hit.source, hit.emailHint].filter(Boolean).join(" · ")}
+            {[hit.publicCode, hit.teamName ? `team ${hit.teamName}` : "no team yet", SOURCE_LABEL[hit.source] ?? hit.source, hit.guestId ? `source ${hit.source}` : null, hit.emailHint].filter(Boolean).join(" · ")}
           </p>
+          <Provenance hit={hit} />
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {status}

@@ -517,7 +517,48 @@ export type CheckinHit = {
   memberAdmission: string | null;
   emailHint: string | null;
   checkedInAt: Date | null;
+} & Provenance;
+
+/** How a roster row was admitted and how its check-in was taken: two separate facts. */
+export type Provenance = {
+  /** null: admitted by the roster file. */
+  admissionBasis: "walk_in_exception" | "desk_override" | "override" | null;
+  admittedByName: string | null;
+  admittedAt: Date | null;
+  admissionReason: string | null;
+  checkedInByName: string | null;
+  checkinSource: "desk" | "offline_ledger" | "import" | null;
+  /** The paper slip id for an offline_ledger check-in. */
+  checkinRef: string | null;
+  checkinEnteredAt: Date | null;
 };
+
+type ProvenanceCols = {
+  admission_basis: Provenance["admissionBasis"];
+  admitted_by_name: string | null;
+  admitted_at: Date | null;
+  admission_reason: string | null;
+  checked_in_by_name: string | null;
+  checkin_source: Provenance["checkinSource"];
+  checkin_ref: string | null;
+  checkin_entered_at: Date | null;
+};
+
+/** Select list for ProvenanceCols, given roster_guests as g, admitter as ab and checker as cb. */
+const PROVENANCE_SQL = `g.admission_basis, ab.name as admitted_by_name, g.admitted_at, g.admission_reason, cb.name as checked_in_by_name,
+              g.checkin_source, g.checkin_ref, g.checkin_entered_at`;
+const PROVENANCE_JOINS = `left join staff_accounts ab on ab.id = g.admitted_by left join staff_accounts cb on cb.id = g.checked_in_by`;
+
+const provenance = (r: ProvenanceCols): Provenance => ({
+  admissionBasis: r.admission_basis,
+  admittedByName: r.admitted_by_name,
+  admittedAt: r.admitted_at,
+  admissionReason: r.admission_reason,
+  checkedInByName: r.checked_in_by_name,
+  checkinSource: r.checkin_source,
+  checkinRef: r.checkin_ref,
+  checkinEnteredAt: r.checkin_entered_at,
+});
 
 const likeEscape = (s: string) => s.replace(/[\\%_]/g, (c) => `\\${c}`);
 
@@ -545,14 +586,15 @@ export async function searchCheckin(raw: string, limit = 25): Promise<CheckinHit
     admission_state: string | null;
     email_hint: string | null;
     checked_in_at: Date | null;
-  }>(
+  } & ProvenanceCols>(
     `with hits as (
        select g.id as guest_id, m.id as member_id, coalesce(m.name, g.name) as name, m.display_name, m.public_code,
               t.name as team_name, t.slug as team_slug, g.source, g.approval_status, g.admission_status, m.admission_state,
-              g.email_hint, coalesce(g.checked_in_at, m.checked_in_at) as checked_in_at
+              g.email_hint, coalesce(g.checked_in_at, m.checked_in_at) as checked_in_at, ${PROVENANCE_SQL}
          from roster_guests g
          left join members m on m.id = coalesce(g.member_id, (select x.id from members x where x.guest_id = g.id limit 1)) and m.deleted_at is null
          left join teams t on t.id = m.team_id
+         ${PROVENANCE_JOINS}
         where g.event_id = current_event_id()
           and ( ($1::text is not null and upper(m.public_code) = $1)
              or ($2::text is not null and (g.email_hash = $2 or m.email_hash = $2))
@@ -560,7 +602,7 @@ export async function searchCheckin(raw: string, limit = 25): Promise<CheckinHit
                   or lower(coalesce(m.display_name, '')) like $3 escape '\\' or g.luma_guest_id = $4 or lower(coalesce(t.name, '')) like $3 escape '\\')) )
        union all
        select null, m.id, m.name, m.display_name, m.public_code, t.name, t.slug, 'registration', null, null, m.admission_state,
-              null, m.checked_in_at
+              null, m.checked_in_at, null, null, null, null, null, null, null, null
          from members m left join teams t on t.id = m.team_id
         where m.deleted_at is null and m.guest_id is null and m.role = 'participant'
           and not exists (select 1 from roster_guests g where g.member_id = m.id)
@@ -587,6 +629,7 @@ export async function searchCheckin(raw: string, limit = 25): Promise<CheckinHit
     memberAdmission: r.admission_state,
     emailHint: r.email_hint,
     checkedInAt: r.checked_in_at,
+    ...provenance(r),
   }));
 }
 
@@ -600,6 +643,9 @@ export type CheckinReceipt = Receipt & {
   createdMember?: boolean;
   createdGuest?: boolean;
 };
+
+/** SET fragment for a desk check-in: stamps how and when only on the first check-in (SET sees the old row). */
+const DESK_CHECKIN = "checkin_source = case when checked_in_at is null then 'desk' else checkin_source end, checkin_entered_at = case when checked_in_at is null then now() else checkin_entered_at end";
 
 /**
  * Mark a roster guest checked in (server time, staff id). An unapproved guest
@@ -629,12 +675,17 @@ export async function checkInGuest(
         }
         if (staff.role !== "organizer" && staff.role !== "admin") throw new AppError("FORBIDDEN", { userMessage: "Only an organizer can admit a guest who isn't approved." });
         reason = input.override.reason;
-        await tx.query("update roster_guests set admission_status = 'admitted', staff_reference = $2, updated_at = now() where id = $1", [g.id, `admitted at desk: ${reason}`.slice(0, 200)]);
+        await tx.query(
+          `update roster_guests set admission_status = 'admitted', staff_reference = $2, admission_basis = 'desk_override', admitted_by = $3, admitted_at = now(),
+                  admission_reason = $4, updated_at = now() where id = $1`,
+          [g.id, `admitted at desk: ${reason}`.slice(0, 200), staff.id, reason.slice(0, 300)],
+        );
       }
       const memberId = g.member_id ?? (await tx.query<{ id: number }>("select id from members where guest_id = $1", [g.id])).rows[0]?.id ?? null;
       const already = !!g.checked_in_at;
       const { rows: up } = await tx.query<{ checked_in_at: Date }>(
-        "update roster_guests set checked_in_at = coalesce(checked_in_at, now()), checked_in_by = coalesce(checked_in_by, $2), updated_at = now() where id = $1 returning checked_in_at",
+        `update roster_guests set checked_in_at = coalesce(checked_in_at, now()), checked_in_by = coalesce(checked_in_by, $2), ${DESK_CHECKIN}, updated_at = now()
+          where id = $1 returning checked_in_at`,
         [g.id, staff.id],
       );
       let publicCode: string | null = null;
@@ -711,21 +762,31 @@ export async function admitWalkIn(
       let createdGuest = false;
       let createdMember = false;
       let reason: string | null = note;
+      // Set when this call admits them (not on the roster, or over a status): the staff walk-in exception.
+      let exception = false;
       if (guest && guest.admission_status !== "admitted") needOverride(guest.admission_status);
       else if (!guest && member && member.admission_state && !["admitted", "unknown"].includes(member.admission_state)) needOverride(member.admission_state);
       if (guest) {
         if (guest.admission_status !== "admitted") {
           reason = `walk-in admit over ${guest.admission_status}${note ? `: ${note}` : ""}`;
-          await tx.query("update roster_guests set admission_status = 'admitted', staff_reference = $2, updated_at = now() where id = $1", [guest.id, reason.slice(0, 200)]);
+          exception = true;
+          await tx.query(
+            `update roster_guests set admission_status = 'admitted', staff_reference = $2, admission_basis = 'walk_in_exception', admitted_by = $3, admitted_at = now(),
+                    admission_reason = $2, updated_at = now() where id = $1`,
+            [guest.id, reason.slice(0, 200), staff.id],
+          );
         }
       } else {
+        // Not on the roster at all: the staff walk-in exception, recorded on the row (who, when, why).
         const { rows } = await tx.query<{ id: number; admission_status: AdmissionStatus; member_id: number | null; name: string }>(
-          `insert into roster_guests (source, name, email_hash, email_hint, email_ciphertext, approval_status, admission_status, source_version, staff_reference)
-           values ('walk_in', $1, $2, $3, $4, 'walk_in', 'admitted', 'walk-in', $5) returning id, admission_status, member_id, name`,
-          [input.name.trim(), hash, maskEmail(input.email), encryptEmail(input.email), note?.slice(0, 200) ?? null],
+          `insert into roster_guests (source, name, email_hash, email_hint, email_ciphertext, approval_status, admission_status, source_version, staff_reference,
+                                      admission_basis, admitted_by, admitted_at, admission_reason)
+           values ('walk_in', $1, $2, $3, $4, 'walk_in', 'admitted', 'walk-in', $5, 'walk_in_exception', $6, now(), $7) returning id, admission_status, member_id, name`,
+          [input.name.trim(), hash, maskEmail(input.email), encryptEmail(input.email), note?.slice(0, 200) ?? null, staff.id, (note ?? "walk-in, not on the Luma roster").slice(0, 300)],
         );
         guest = rows[0];
         createdGuest = true;
+        exception = true;
       }
       if (!member) {
         const { rows } = await tx.query<{ id: number; name: string; guest_id: number | null; public_code: string | null; admission_state: string | null }>(
@@ -745,10 +806,19 @@ export async function admitWalkIn(
       }
       const { rows: up } = await tx.query<{ checked_in_at: Date; already: boolean }>(
         `update roster_guests set member_id = coalesce(member_id, $2), checked_in_at = coalesce(checked_in_at, now()),
-                checked_in_by = coalesce(checked_in_by, $3), updated_at = now()
+                checked_in_by = coalesce(checked_in_by, $3), ${DESK_CHECKIN}, updated_at = now()
           where id = $1 returning checked_in_at, (checked_in_at < now()) as already`,
         [guest.id, member.id, staff.id],
       );
+      // Admission and attendance are two facts: checkin.walk_in (below, via
+      // withAudit) records the admission; this records the check-in itself.
+      if (!up[0].already) {
+        await writeAudit(
+          actor,
+          { action: "checkin.guest", resourceType: "roster_guest", resourceId: guest.id, after: { checked_in_at: up[0].checked_in_at }, payload: { via: "walk_in", member_id: member.id } },
+          tx,
+        );
+      }
       const { rows: n } = await tx.query<{ now: Date }>("select now()");
       return {
         result: {
@@ -766,7 +836,7 @@ export async function admitWalkIn(
         resourceId: guest.id,
         reason,
         after: { guest_id: guest.id, member_id: member.id, public_code: member.public_code, source: createdGuest ? "walk_in" : "existing" },
-        payload: { created_guest: createdGuest, created_member: createdMember },
+        payload: { created_guest: createdGuest, created_member: createdMember, admission_basis: exception ? "walk_in_exception" : null },
       };
     }),
   );
@@ -808,13 +878,12 @@ export type RosterRow = {
   approval_status: ApprovalStatus;
   admission_status: AdmissionStatus;
   checked_in_at: Date | null;
-  checked_in_by_name: string | null;
   member_id: number | null;
   public_code: string | null;
   team_name: string | null;
   source_version: string | null;
   staff_reference: string | null;
-};
+} & ProvenanceCols;
 
 export type RosterFilter = "all" | "admitted" | "checked_in" | "not_checked_in" | "walk_in" | "not_admitted" | "needs_reconciliation" | "unlinked";
 
@@ -833,11 +902,11 @@ export async function listRoster(opts: { filter?: RosterFilter; q?: string; limi
   const q = opts.q?.trim() ? `%${likeEscape(opts.q.trim().toLowerCase())}%` : null;
   return query<RosterRow>(
     `select g.id, g.source, g.luma_guest_id, g.name, g.email_hint, g.approval_status, g.admission_status, g.checked_in_at,
-            s.name as checked_in_by_name, m.id as member_id, m.public_code, t.name as team_name, g.source_version, g.staff_reference
+            m.id as member_id, m.public_code, t.name as team_name, g.source_version, g.staff_reference, ${PROVENANCE_SQL}
        from roster_guests g
        left join members m on m.id = coalesce(g.member_id, (select x.id from members x where x.guest_id = g.id limit 1))
        left join teams t on t.id = m.team_id
-       left join staff_accounts s on s.id = g.checked_in_by
+       ${PROVENANCE_JOINS}
       where g.event_id = current_event_id() and ${cond[filter]}
         and ($1::text is null or lower(g.name) like $1 escape '\\' or g.luma_guest_id = $2 or upper(coalesce(m.public_code, '')) = upper($2))
       order by lower(g.name)
