@@ -47,6 +47,33 @@ type Snapshot = {
   submission?: Partial<SubmissionDraft> & { artifact_hash?: string | null; harness?: string; caveats?: string | null; evidence_refs?: string | string[] | null };
 };
 
+/** A manual backup receipt (recovery.ts insertManualReceipt) is frozen flat, not under `submission`. */
+type ManualSnapshot = {
+  project?: { name?: string };
+  repo_url?: string | null;
+  commit_sha?: string | null;
+  artifact_sha256?: string | null;
+  live_url?: string | null;
+  harness?: string | null;
+  evidence?: string | null;
+  caveats?: string | null;
+  lock_at?: string;
+};
+
+/** The manual snapshot read as the fields an online receipt shows. */
+function manualDraft(m: ManualSnapshot): NonNullable<Snapshot["submission"]> {
+  return {
+    project_name: m.project?.name,
+    repo_url: m.repo_url ?? undefined,
+    commit_sha: m.commit_sha ?? undefined,
+    artifact_hash: m.artifact_sha256,
+    demo_url: m.live_url ?? undefined,
+    harness: m.harness ?? undefined,
+    caveats: m.caveats,
+    evidence_refs: m.evidence ? [m.evidence] : undefined,
+  };
+}
+
 async function Receipt({ params }: { params: PageProps<"/submit/receipt/[code]">["params"] }) {
   const { code } = await params;
   let r: ReceiptView;
@@ -57,9 +84,11 @@ async function Receipt({ params }: { params: PageProps<"/submit/receipt/[code]">
     if (e instanceof AppError && (e.code === "NOT_FOUND" || e.code === "UNAUTHENTICATED" || e.code === "FORBIDDEN")) notFound();
     throw e;
   }
-  const s = r.snapshot as Snapshot;
-  const d = s.submission ?? {};
   const manual = r.source === "manual_offline";
+  const raw = r.snapshot as Snapshot & ManualSnapshot;
+  // Manual receipts keep evidence as staff-typed text and the lock as lock_at.
+  const s: Snapshot = manual ? { ...raw, evidence: undefined, locks_at: raw.locks_at ?? raw.lock_at } : raw;
+  const d = manual ? manualDraft(raw) : (s.submission ?? {});
   const refs = Array.isArray(d.evidence_refs) ? d.evidence_refs : d.evidence_refs ? [d.evidence_refs] : [];
 
   return (
