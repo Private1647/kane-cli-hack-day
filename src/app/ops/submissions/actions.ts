@@ -29,7 +29,7 @@ export async function withdrawAction(_prev: R<number>, form: FormData) {
   return done(await runAction(async () => withdrawSubmission(await requireRole("organizer"), formObject(form))));
 }
 
-export async function lockAction(_prev: R<number>) {
+export async function lockAction() {
   return done(await runAction(async () => lockFinalized(await requireRole("organizer"))));
 }
 
