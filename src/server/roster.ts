@@ -3,7 +3,7 @@ import { createCipheriv, createDecipheriv, createHmac, randomBytes } from "node:
 import type { PoolClient } from "pg";
 import { pool, query } from "@/lib/db";
 import { staffActor, type Staff } from "./auth";
-import { AppError, emailHash, idempotent, maskEmail, sha256, transaction, withAudit, writeAudit, type Actor, type Receipt } from "./core";
+import { AppError, emailHash, idempotent, maskEmail, sha256, withAudit, writeAudit, type Actor, type Receipt } from "./core";
 import { csvObjects, toCsv } from "./csv";
 
 // Admissions (T-ROS-01..04): the approved-guest roster from a Luma CSV (or the
