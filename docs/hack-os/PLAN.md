@@ -27,7 +27,7 @@ monolith (SPEC §10: "single modular monolith acceptable at event scale").
 | Event day is **Sat Oct 24 2026**, America/Los_Angeles. Today is Oct 22. | `src/data/hackday.ts`, SPEC header, photo-pipeline README | Only ~2 days to the event. Everything is split into **Wave 0 (must work on Oct 24)**, **Wave 1 (nice for Oct 24 if time allows)** and **Wave 2 (post-event / next edition)**. The desktop agent's channel message mentions Nov 14. Confirm the date before anything else. |
 | Site already has: team registration + password login, per-team hub `/t/[slug]/*` (dashboard, setup, brief, resources, submit checklist, photos, content hour, judging, help), `/admin` (teams table, nudges, export), notifications feed, setup ticks, per-member consent, selfie / team photo upload to private Blob, a local face-matching photo pipeline that posts to `/api/import/photo`, and Buffer CSV social drafts. | `src/app/**`, `db/001–004`, `photo-pipeline/` | Many blueprint features are **extensions**, not greenfield. Don't rebuild what works. |
 | The blueprint is "a planning and starter-template pack, not a deployed application". Its SQL, OpenAPI and plugin are scaffolds. | README, SPEC §17 | Treat `schema.sql` / `openapi.yaml` as contracts to adapt. They are not migrations to paste in. |
-| Official submission today is **Devpost** (locks 18:00). Rubric in repo = Kane CLI usage 30 / Built with OpenAI 25 / Works live 20 / Idea 15 / Craft 10. The blueprint rubric is Harness+Kane 30 / Validation+evidence 25 / Velocity 20 / Technical 15 / Creativity 10. | `hackday.ts`, `EVALUATION.md` | Open decisions **D4** and **D5** below. |
+| Before this build, submission was on **Devpost** and the site showed an older rubric. Both are superseded: our hub submission is official (D2) and the blueprint rubric applies (D3). | `hackday.ts`, `EVALUATION.md` | Resolved by the decisions above. |
 | No authentic Kane CLI / TestMu logo files in the pack. The repo already has `public/logos` and the Kane AI mascot (last commit). | BRAND_ASSET_MANIFEST | Use only the repo's approved assets. Never fake a logo. |
 
 ### Non-negotiable principles (from README / SPEC, applied to every task)
@@ -52,8 +52,8 @@ monolith (SPEC §10: "single modular monolith acceptable at event scale").
 | **D1** | Event date and scope for Oct 24 | (a) Ship Wave 0 only for Oct 24, rest after; (b) attempt full P0 from SPEC §13 | **(a).** The full SPEC P0 needs Windows/macOS dry runs, a Codex plugin, an MCP server and a Kane-driven activation ceremony. That doesn't fit in 48h. |
 | **D2** | Identity model | (a) Keep team-first registration and add "personal" by letting a member exist without a team; (b) rebuild as participant-first per SPEC §4 | **(a) now, converging to (b).** Migration 005 makes `members.team_id` nullable and adds per-member login. The data then has the SPEC shape without breaking hub URLs. |
 | **D3** | Admission source of truth | Luma API (needs Luma Plus) / signed CSV import | **CSV import** with `luma_guest_id` reconciliation. Add the webhook later if Plus is confirmed. |
-| **D4** | Official submission | (a) Devpost stays official and we add a server **proof receipt** (repo + SHA + Kane evidence) that judges see; (b) our `/submit` becomes the official immutable submission | **(a) for Oct 24.** Rules and prize copy already say Devpost. (b) next edition. |
-| **D5** | Rubric | Repo rubric vs blueprint EVALUATION.md | Keep the **repo rubric** (already public on the site). Adopt the blueprint's *anchors* (0–5 × weight/5) and its "no AI scores, evidence required" rules. |
+| **D4** | Official submission | **Decided (D2 above): our `/t/[slug]/submit` is the official, immutable submission**, and a public `/ship/{team-slug}` showcase follows finalize. Devpost is an optional link only. | Decided. |
+| **D5** | Rubric | **Decided (D3 above): the blueprint rubric** — Harness & Kane 30, Validation & evidence 25, Shipping velocity 20, Technical execution 15, Creativity 10; anchors 0–5 × weight/5; no AI scores. | Decided. |
 | **D6** | Login | Team password (today) / email magic link / GitHub OAuth | Keep the team password and add **per-member pairing codes** (for CLI/MCP) plus optional GitHub OAuth (P1). |
 | **D7** | Domain | `kaneclihack.sh` per blueprint vs current Vercel domain | Confirm the registrar and DNS owner. Don't announce `install.sh` or `/mcp` until they are deployed and tested. |
 | **D8** | Agent host | Blueprint targets Codex (`$hack-*` skills). The event is "Built with OpenAI". | Ship skills in the portable `SKILL.md` format, so they work in Codex and Claude Code. |
@@ -143,10 +143,10 @@ breakpoints 360 / 390 / 820 / 1440 and TV 1920×1080; no horizontal page scroll.
 Goal: the SPEC §12 Tier-0 trio (**check-in, help, submission**) plus the fallbacks, on top of the existing hub.
 
 1. Commit/stabilise the current hub refactor (coordinate with desktop agent).
-2. Migration 005: participants-light (`members.team_id` nullable, `role`, `checked_in_at`, `luma_guest_id`), `audit_events`, `help_tickets`/`help_messages`, `submissions` (proof receipt), `kane_runs` (manual + CLI report), `event_config`, `integration_state`, `recovery_cases`, `announcements`, `idempotency_keys`.
+2. Migration 005: participants-light (`members.team_id` nullable, `role`, `checked_in_at`, `luma_guest_id`), `audit_events`, `help_tickets`/`help_messages`, `submissions` (official immutable submission), `kane_runs` (manual + CLI report), `event_config`, `integration_state`, `recovery_cases`, `announcements`, `idempotency_keys`.
 3. Roster CSV import + staff check-in screen (`/ops/checkin`), with a QR lookup by member code.
 4. Help desk v1: participant ticket from hub → `/ops/help` queue with atomic claim → status back in hub. Slack webhook notify (optional) and paper ticket IDs (H-####) reconciled.
-5. Proof receipt v1: `/t/[slug]/submit` preflight (repo URL, commit SHA, Kane run report/evidence link, Devpost URL) → finalize → immutable snapshot + receipt code + server timestamp. Locks at server deadline. Manual receipt intake in `/ops/recovery`.
+5. Official submission v1: `/t/[slug]/submit` preflight (repo URL, commit SHA, Kane run report/evidence link, optional Devpost link) → finalize → immutable snapshot + receipt code + server timestamp. Locks at server deadline. Manual receipt intake in `/ops/recovery`.
 6. `/live` Mission Control v1: phase (operator-set), server clock, submission countdown, next agenda item, help/team QR, announcements, trusted counts (checked-in, teams, receipts, help open) with `as_of` + stale banner.
 7. Ops console: rename `/admin` → `/ops` (redirect), add announcements, phase override, integration health, recovery and audit log view.
 8. Print kit + CSV templates in `public/print/`, plus a staff runbook page.
@@ -188,7 +188,7 @@ Blueprint `schema.sql` has 40+ tables keyed by `uuid` with `event_id`. The repo 
 | kane_runs, kane_test_members, evidence_artifacts, defects, defect_verifications, milestones | `progress['kane-cli-run-report']` link | New |
 | activity_events | `activity` | Extend `activity` with `source`, `source_event_id` (unique), `visibility`, `occurred_at`, `payload`, `signature_status` |
 | help_tickets, help_messages (+claims) | none (help page is static copy) | New |
-| submissions (+snapshots) | Devpost + progress | New (proof receipt, see D4) |
+| submissions (+snapshots) | Devpost + progress | New (official submission, see D2) |
 | judge_scores | none | New |
 | photos, photo_people, social_drafts, social_posts | `event_photos`, pipeline sqlite | Extend `event_photos` → `photos` status machine; drafts move into DB (P1) |
 | project_stories, deck_versions, render_jobs, published_assets | none | New (P1) |
