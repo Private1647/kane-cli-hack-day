@@ -187,7 +187,8 @@
       "overrides": {
         "participant_email": "finch.captain@demo.test",
         "participant_password": "staging-team-pass"
-      }
+      },
+      "clock": "build_phase"
     },
     {
       "id": "W07",

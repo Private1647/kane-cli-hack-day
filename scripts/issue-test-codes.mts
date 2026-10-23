@@ -347,6 +347,11 @@ if (wave?.clock === "submission_locked") {
   await query("update hack_events set submission_locks_at = $1::timestamptz where id = current_event_id()", [saved.value]);
   await query("delete from settings where key = 'fixture:submission_locks_at'");
 }
+if (wave?.clock === "build_phase") {
+  // The TV shows run metrics (executions, validated builds) only from the build phase on.
+  // seed-local.mts restores the event's own phase override before the next wave.
+  await query("update hack_events set phase_override = 'build' where id = current_event_id()");
+}
 
 // ── Write assurance.json (keeps every description and secret flag) ───────────
 const vars = JSON.parse(readFileSync(varsPath, "utf8")) as Record<string, { value: string; secret: boolean; description: string }>;
