@@ -50,6 +50,10 @@ const nextConfig: NextConfig = {
       // Staff pages and paper copies stay out of search engines.
       { source: "/ops/:path*", headers: [{ key: "X-Robots-Tag", value: "noindex" }] },
       { source: "/print/:path*", headers: [{ key: "X-Robots-Tag", value: "noindex" }] },
+      // Installers are read before they're run: serve them as UTF-8 text, not octet-stream, so
+      // browsers show them and PowerShell's irm decodes them as text (✓ marks included).
+      { source: "/install.sh", headers: [{ key: "Content-Type", value: "text/plain; charset=utf-8" }] },
+      { source: "/install.ps1", headers: [{ key: "Content-Type", value: "text/plain; charset=utf-8" }] },
     ];
   },
   turbopack: {
