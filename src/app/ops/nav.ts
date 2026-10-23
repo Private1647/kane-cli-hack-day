@@ -15,5 +15,6 @@ export const OPS_NAV: { href: string; label: string; roles: StaffRole[] }[] = [
   { href: "/ops/announcements", label: "Announcements", roles: ["organizer"] },
   { href: "/ops/nudges", label: "Nudges", roles: ["organizer"] },
   { href: "/ops/settings", label: "Settings", roles: ["organizer"] },
+  { href: "/ops/override", label: "Override", roles: ["organizer"] },
   { href: "/ops/audit", label: "Audit", roles: ["organizer"] },
 ];

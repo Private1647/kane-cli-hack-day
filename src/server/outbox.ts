@@ -26,7 +26,10 @@ class Permanent extends Error {}
 
 async function deliver(row: OutboxRow) {
   const [family] = row.kind.split(".");
-  if (family === "noop") return;
+  // Domain events with no external delivery yet (e.g. submission.finalized
+  // from submission.ts): recorded for replay/audit, marked published so they
+  // don't show as failing on /ops/integrations.
+  if (family === "noop" || family === "submission") return;
   if (family === "slack") {
     const url = process.env.SLACK_WEBHOOK_URL;
     if (!url) throw new Permanent("SLACK_WEBHOOK_URL not set");

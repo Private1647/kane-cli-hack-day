@@ -941,7 +941,8 @@ const PhaseOverrideInput = z.object({
 /**
  * Organizer sets (or clears, with "auto") the /live phase. Writes
  * hack_events.phase_override with an audit event; the TV picks it up on the
- * next snapshot (≤5s on SSE).
+ * next snapshot (≤5s on SSE). Same column as /ops/settings (ops.ts
+ * setPhaseOverride); both target current_event_id() and audit the change.
  */
 export async function setPhaseOverride(input: unknown): Promise<{ data: { phase: Phase | null }; receipt: Receipt }> {
   const v = parse(PhaseOverrideInput, input);
@@ -950,10 +951,10 @@ export async function setPhaseOverride(input: unknown): Promise<{ data: { phase:
   const next = v.phase === "auto" ? null : v.phase;
   const { result } = await idempotent(v.idempotency_key, `live.phase_override:staff:${staff.id ?? "admin"}`, () =>
     withAudit(actor, "live.phase_override", "hack_event", async (tx) => {
-      const { rows: before } = await tx.query<{ id: number; phase_override: Phase | null }>("select id, phase_override from hack_events order by id limit 1 for update");
+      const { rows: before } = await tx.query<{ id: number; phase_override: Phase | null }>("select id, phase_override from hack_events where id = current_event_id() for update");
       if (!before[0]) throw new AppError("NOT_FOUND", { userMessage: "No event row to update." });
       const { rows } = await tx.query<{ id: number; phase_override: Phase | null; now: Date }>(
-        "update hack_events set phase_override = $1 where id = $2 returning id, phase_override, now() as now",
+        "update hack_events set phase_override = $1, updated_at = now() where id = $2 returning id, phase_override, now() as now",
         [next, before[0].id],
       );
       return {

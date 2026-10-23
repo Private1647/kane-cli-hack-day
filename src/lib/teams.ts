@@ -76,11 +76,24 @@ export async function registerTeam(input: {
     for (const [i, m] of input.members.entries()) {
       // The first member is the person registering: theirs is the only answer we have.
       const consent = i === 0 ? input.captainConsent : null;
+      // A walk-in admitted at the desk (or anyone with a personal account) is
+      // already a member with no team: adopt that row instead of colliding
+      // on the unique email. A member already on a team still conflicts.
       const { rows: added } = await client.query<{ id: number }>(
         `insert into members (team_id, name, email, email_hash, photo_url, linkedin, x_handle, consent_social, consent_at)
-         values ($1, $2, $3, $4, $5, $6, $7, $8::boolean, case when $8::boolean is not null then now() end) returning id`,
+         values ($1, $2, $3, $4, $5, $6, $7, $8::boolean, case when $8::boolean is not null then now() end)
+         on conflict ((lower(email))) do update
+           set team_id = excluded.team_id,
+               photo_url = coalesce(members.photo_url, excluded.photo_url),
+               linkedin = coalesce(members.linkedin, excluded.linkedin),
+               x_handle = coalesce(members.x_handle, excluded.x_handle),
+               consent_social = coalesce(excluded.consent_social, members.consent_social),
+               consent_at = case when excluded.consent_social is not null then now() else members.consent_at end
+           where members.team_id is null and members.deleted_at is null
+         returning id`,
         [teamId, m.name, m.email, emailHash(m.email), m.photoUrl, m.linkedin, m.xHandle, consent],
       );
+      if (!added[0]) throw new RegistrationError(`${m.email} is already registered on another team.`);
       const memberId = added[0].id;
       // Hack OS: membership history, captain, and per-person consent rows.
       await client.query("insert into team_memberships (team_id, member_id, role) values ($1, $2, $3)", [teamId, memberId, i === 0 ? "captain" : "member"]);
@@ -170,11 +183,16 @@ export async function saveProgress(teamId: number, memberId: number, item: strin
 export async function addMember(teamId: number, name: string, email: string) {
   try {
     const [row] = await query<{ id: number }>(
-      `with m as (insert into members (team_id, name, email, email_hash) values ($1, $2, $3, $4) returning id),
+      // Adopts a teamless member (walk-in / personal account) with this email.
+      `with m as (insert into members (team_id, name, email, email_hash) values ($1, $2, $3, $4)
+                  on conflict ((lower(email))) do update set team_id = excluded.team_id
+                  where members.team_id is null and members.deleted_at is null
+                  returning id),
             h as (insert into team_memberships (team_id, member_id) select $1, id from m)
        select id from m`,
       [teamId, name, email, emailHash(email)],
     );
+    if (!row) throw new RegistrationError("That email is already registered on another team.");
     return row.id;
   } catch (err) {
     throw toRegistrationError(err);
