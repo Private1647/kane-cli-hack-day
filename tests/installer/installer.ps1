@@ -37,9 +37,12 @@ function Fresh($name) {
 function RunPS($code, [switch]$Interactive) {
   # The child's stderr must not become a terminating error here (Windows PowerShell 5.1).
   $ErrorActionPreference = "Continue"
-  $saved = @{ USERPROFILE = $env:USERPROFILE; HOME = $env:HOME; NPM_CONFIG_PREFIX = $env:NPM_CONFIG_PREFIX; KANEHACK_SITE = $env:KANEHACK_SITE }
+  $saved = @{ USERPROFILE = $env:USERPROFILE; HOME = $env:HOME; NPM_CONFIG_PREFIX = $env:NPM_CONFIG_PREFIX; KANEHACK_SITE = $env:KANEHACK_SITE; CODEX_HOME = $env:CODEX_HOME }
   # KANEHACK_SITE so `irm | iex` runs talk to the test server, never production.
   $env:USERPROFILE = $script:H; $env:HOME = $script:H; $env:NPM_CONFIG_PREFIX = $script:Npm; $env:KANEHACK_SITE = $Site
+  # Codex on Windows finds ~ through the OS profile folder (dirs::home_dir), not USERPROFILE, so the
+  # test home is given to it as CODEX_HOME. (For a real user the two are the same folder.)
+  $env:CODEX_HOME = Join-Path $script:H ".codex"
   try {
     $psArgs = @("-NoProfile")
     if (-not $Interactive) { $psArgs += "-NonInteractive" }
@@ -64,12 +67,12 @@ Check "no-tty: no prompt left waiting" (-not (LogHas "[y/N]:")) $Log
 
 # 2. Scriptblock with -Yes, npm's prefix on PATH and writable: install, shim there, plain next steps.
 Fresh "yes"
-New-Item -ItemType Directory -Force -Path $Npm, (Join-Path $H ".claude") | Out-Null
+New-Item -ItemType Directory -Force -Path $Npm | Out-Null
 $env:PATH = "$Npm;$OrigPath"
 $rc = RunPS "$Sb -Yes -Site '$Site'"
 Check "yes: exit 0" ($rc -eq 0) $Log
 Check "yes: kanehack $Version installed (sha256 verified)" ((KhVersion) -eq $Version -and (LogHas "sha256 verified")) $Log
-Check "yes: 12 skills in .agents and .claude" ((@(Get-ChildItem (Join-Path $H ".agents\skills") -Directory -Filter "hack-*").Count -eq 12) -and (Test-Path (Join-Path $H ".claude\skills\hack-onboard\SKILL.md"))) $Log
+Check "yes: 12 skills in .agents\skills (where Codex reads them)" (@(Get-ChildItem (Join-Path $H ".agents\skills") -Directory -Filter "hack-*").Count -eq 12) $Log
 Check "yes: kanehack.cmd + sh shim in npm's prefix" ((Test-Path (Join-Path $Npm "kanehack.cmd")) -and (Test-Path (Join-Path $Npm "kanehack"))) $Log
 Check "yes: next steps say plain kanehack" ((LogHas "  1. kanehack pair") -and -not (LogHas '& "')) $Log
 Check "yes: -Site saved as kanehack's server" ((Get-Content (Join-Path $H ".kanehack\config.json") -Raw) -match [regex]::Escape($Site)) $Log
@@ -80,7 +83,7 @@ $bash = "C:\Program Files\Git\bin\bash.exe"
 if (Test-Path $bash) {
   # Git Bash turns the Windows PATH (which has the npm prefix) into a POSIX one by itself.
   $v = & $bash -c "kanehack version"
-  Check "yes: ``kanehack`` runs from Git Bash (Claude Code's Bash tool)" ($v -eq $Version) $Log
+  Check "yes: ``kanehack`` runs from Git Bash" ($v -eq $Version) $Log
 } else { Write-Host "# skip Git Bash: not installed" }
 $rc = RunPS "$Sb -Yes -Site '$Site'"
 Check "re-run: idempotent (already installed, already a command, skills current)" ($rc -eq 0 -and (LogHas "already installed") -and (LogHas ("kanehack " + [char]0x2192)) -and -not (LogHas "y (-Yes)")) $Log
@@ -116,6 +119,51 @@ Set-Content -Path (Join-Path $H ".kanehack\bin\kanehack.cmd") -Value "@echo off`
 $before = KhVersion
 $rc = RunPS "$Sb -Yes -NoSkills -Site '$Site'"
 Check "upgrade: 0.1.0 -> $Version" ($before -eq "0.1.0" -and $rc -eq 0 -and (KhVersion) -eq $Version -and (LogHas "Upgrade the kanehack helper")) $Log
+
+# 6b. Codex: an existing .codex with its own config and the 0.1.2 skill copies. -Yes connects it
+# (no token in config.toml, backup made, other servers kept), removes the duplicate skills, and a
+# re-run changes nothing. With CODEX_BIN_DIR (the real @openai/codex, kept off the default PATH)
+# Codex itself must read the entry and list each skill once.
+Fresh "codex"
+$cxd = Join-Path $H ".codex"
+New-Item -ItemType Directory -Force -Path $Npm, (Join-Path $cxd "skills\hack-onboard"), (Join-Path $cxd "skills\hack-verify"), (Join-Path $cxd "skills\my-own-skill") | Out-Null
+[IO.File]::WriteAllText((Join-Path $cxd "config.toml"), "[mcp_servers.other]`ncommand = `"echo`"`n")
+Set-Content -Path (Join-Path $cxd "skills\hack-onboard\.bundle-version") -Value "0.1.2" -Encoding ASCII
+foreach ($s in "hack-onboard", "hack-verify", "my-own-skill") { Set-Content -Path (Join-Path $cxd "skills\$s\SKILL.md") -Value "old" -Encoding ASCII }
+$env:PATH = (@($Npm, $env:CODEX_BIN_DIR, $OrigPath) | Where-Object { $_ }) -join ";"
+$rc = RunPS "$Sb -Yes -Site '$Site'"
+$cfgText = Get-Content (Join-Path $cxd "config.toml") -Raw
+Check "codex: exit 0, asked and connected" ($rc -eq 0 -and (LogHas "Connect Codex to the event server") -and (LogHas "Codex -> kane-hack-event")) $Log
+Check "codex: config.toml has kane-hack-event with the helper, the other server, no token" (($cfgText -match '(?m)^\[mcp_servers\.kane-hack-event\]') -and $cfgText.Contains("url = `"$Site/mcp`"") -and ($cfgText -match 'http_headers_helper = .*mcp-headers') -and ($cfgText -match '(?m)^\[mcp_servers\.other\]') -and ($cfgText -notmatch 'khk_')) $Log
+Check "codex: config.toml backed up first" (@(Get-ChildItem $cxd -Filter "config.toml.kanehack-*.bak").Count -eq 1) $Log
+Check "codex: skills in .agents\skills, the 0.1.2 copies removed, other skills kept" ((@(Get-ChildItem (Join-Path $H ".agents\skills") -Directory -Filter "hack-*").Count -eq 12) -and -not (Test-Path (Join-Path $cxd "skills\hack-onboard")) -and -not (Test-Path (Join-Path $cxd "skills\hack-verify")) -and (Test-Path (Join-Path $cxd "skills\my-own-skill\SKILL.md"))) $Log
+if ($env:CODEX_BIN_DIR) {
+  $saved = @{ USERPROFILE = $env:USERPROFILE; HOME = $env:HOME; CODEX_HOME = $env:CODEX_HOME }
+  $env:USERPROFILE = $H; $env:HOME = $H; $env:CODEX_HOME = $cxd
+  $emptyCwd = Join-Path $Work "empty-cwd"; New-Item -ItemType Directory -Force -Path $emptyCwd | Out-Null
+  Push-Location $emptyCwd
+  $profileSkills = Join-Path $saved.USERPROFILE ".agents\skills"
+  $copied = @()
+  if ($env:CI) {
+    New-Item -ItemType Directory -Force -Path $profileSkills | Out-Null
+    foreach ($d in Get-ChildItem (Join-Path $H ".agents\skills") -Directory -Filter "hack-*") { if (-not (Test-Path (Join-Path $profileSkills $d.Name))) { Copy-Item -Recurse $d.FullName $profileSkills; $copied += Join-Path $profileSkills $d.Name } }
+  }
+  try {
+    $g = (& node (Join-Path $Here "codex-probe.mjs") get) | ConvertFrom-Json
+    $k = (& node (Join-Path $Here "codex-probe.mjs") skills) | ConvertFrom-Json
+  } finally { Pop-Location; foreach ($envName in $saved.Keys) { [Environment]::SetEnvironmentVariable($envName, $saved[$envName]) }; foreach ($c in $copied) { Remove-Item -Recurse -Force $c } }
+  Check "codex: codex mcp get kane-hack-event reads it (url, helper)" ($g.code -eq 0 -and $g.json.transport.url -eq "$Site/mcp" -and $g.json.transport.http_headers_helper) $Log
+  $names = @($k.hack.PSObject.Properties)
+  Check "codex: Codex lists all 12 hack-* skills once each (roots: $($k.roots -join ', '))" ($names.Count -eq 12 -and -not ($names | Where-Object { $_.Value -ne 1 })) $Log
+} else { Write-Host "# skip codex binary checks: CODEX_BIN_DIR not set" }
+$before = $cfgText
+$rc = RunPS "$Sb -Yes -Site '$Site'"
+Check "codex re-run: already connected, no question, config unchanged, no new backup" ($rc -eq 0 -and (LogHas "already connected") -and -not (LogHas "y (-Yes)") -and ((Get-Content (Join-Path $cxd "config.toml") -Raw) -eq $before) -and @(Get-ChildItem $cxd -Filter "*.bak").Count -eq 1) $Log
+Fresh "no-agents"
+New-Item -ItemType Directory -Force -Path (Join-Path $H ".codex") | Out-Null
+[IO.File]::WriteAllText((Join-Path $H ".codex\config.toml"), "model = `"x`"`n")
+$rc = RunPS "$Sb -Yes -NoAgents -NoSkills -Site '$Site'"
+Check "-NoAgents: Codex config untouched, not asked" ($rc -eq 0 -and ((Get-Content (Join-Path $H ".codex\config.toml") -Raw) -eq "model = `"x`"`n") -and -not (LogHas "Connect Codex")) $Log
 
 # 7. Tampered tarball: non-zero exit, nothing installed, and `irm | iex` doesn't kill the host.
 $T = Join-Path $Work "tampered"; New-Item -ItemType Directory -Force -Path $T | Out-Null
