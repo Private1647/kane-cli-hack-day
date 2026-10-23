@@ -1,15 +1,15 @@
 import { envelopeResponse } from "@/server/core";
 import { authorizeProject, getProofSources, getStory, pathId, readMutation, reviewStory, saveStory } from "@/server/story";
 
-// GET /api/v1/projects/{projectId}/story  latest story version + its claim review
-// PUT /api/v1/projects/{projectId}/story  save a new version
+// GET /api/v1/projects/{id}/story  latest story version + its claim review
+// PUT /api/v1/projects/{id}/story  save a new version
 //   body: { content: <project-story.schema.json>, expected_version, idempotency_key? }
 //   409 CONFLICT if someone saved since expected_version; 400 if a claim is forged.
 // Auth: Bearer token (CLI/MCP) or the team's browser session.
 
-export async function GET(req: Request, ctx: RouteContext<"/api/v1/projects/[projectId]/story">) {
+export async function GET(req: Request, ctx: RouteContext<"/api/v1/projects/[id]/story">) {
   return envelopeResponse(async () => {
-    const access = await authorizeProject(pathId((await ctx.params).projectId), { req });
+    const access = await authorizeProject(pathId((await ctx.params).id), { req });
     const sv = await getStory(access.project.id);
     const review = sv ? reviewStory(sv.content, await getProofSources(access.project.id)) : null;
     return {
@@ -24,9 +24,9 @@ export async function GET(req: Request, ctx: RouteContext<"/api/v1/projects/[pro
   });
 }
 
-export async function PUT(req: Request, ctx: RouteContext<"/api/v1/projects/[projectId]/story">) {
+export async function PUT(req: Request, ctx: RouteContext<"/api/v1/projects/[id]/story">) {
   return envelopeResponse(async () => {
-    const access = await authorizeProject(pathId((await ctx.params).projectId), { req, write: true });
+    const access = await authorizeProject(pathId((await ctx.params).id), { req, write: true });
     const { data, receipt } = await saveStory(access, await readMutation(req));
     return {
       message: `Saved story version ${data.version}.`,
