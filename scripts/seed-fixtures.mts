@@ -22,6 +22,7 @@ const ideas = await import("../src/server/ideas.ts");
 const story = await import("../src/server/story.ts");
 const deck = await import("../src/server/deck.ts");
 const auth = await import("../src/server/auth.ts");
+const kane = await import("../src/server/kane.ts");
 const { jar } = (await import("../tests/support/stubs/next-headers.mjs")) as { jar: Map<string, string> };
 
 const sha = (s: string) => createHash("sha256").update(s).digest("hex");
@@ -246,6 +247,7 @@ const baseDraft = (k: F.TeamKey, runId: number | null, withRepo = true) => ({
   demo_video_url: "",
   limitations: "Covers checkout and signup only.",
   kane_run_ids: runId ? [String(runId)] : [],
+  evidence_refs: runId ? `https://example.com/${k}/kane-report` : "",
 });
 const receipts: Partial<Record<F.TeamKey, string>> = {};
 async function submission(k: F.TeamKey, mode: "complete" | "no_repo" | "no_evidence" | "finalized") {
@@ -253,6 +255,24 @@ async function submission(k: F.TeamKey, mode: "complete" | "no_repo" | "no_evide
   await actAs(captain);
   await sub.getSubmissionContext(teamId[k]!);
   const runId = mode === "no_evidence" ? null : await run({ team: k, upstream: `demo-run-${k}-pass`, status: "passed", exit: 0, verified: true, sha: F.SHA.staging, ago: 60 });
+  if (runId) {
+    // The run's sealed report, shared with judges, linked to the run before the draft
+    // is saved, so the finalized snapshot's evidence lists it (evidence_artifact_id).
+    const evId = await evidence(k, "kane-report", "judges", runId);
+    // An evidence-backed claim the judge view lists (milestones shared with judges):
+    // proposed by the captain, approved by a teammate, as the Proof tab does it.
+    const cap = await memberRow(captain);
+    const ms = await kane.proposeMilestone({ kind: "member", member: cap as never }, {
+      title: `${F.T[k].name.replace("Demo ", "")} critical flows pass on ${F.SHA.staging.slice(0, 7)}`,
+      claim: "Signup and checkout pass end to end on the submitted commit (verified Kane run with a sealed report).",
+      evidence_ids: [evId],
+      source_run_id: runId,
+      visibility: "judges",
+    });
+    const mate = F.T[k].people[1];
+    if (mate) await kane.approveMilestone((await memberRow(mate.email)) as never, ms.milestone_id, "approve");
+    await actAs(captain);
+  }
   await sub.saveDraft(slugOf(k), baseDraft(k, runId, mode !== "no_repo"));
   if (mode === "finalized") {
     const fin = await sub.finalizeSubmission(slugOf(k), { confirm_phrase: F.T[k].name, confirm: "on", publish_showcase: "on", idempotency_key: `demo-${k}-final` });
@@ -428,7 +448,10 @@ const luma: [string, string, string, string][] = [
   ["gst-finn", "Finn Lake", "finn@demo.test", "approved"],
   ["gst-gia", "Gia Park", "gia@demo.test", "approved"],
   [F.GUEST.hal, "Hal Declined", "hal@demo.test", "declined"],
-  ["gst-ivy", "Ivy Waitlist", "ivy@demo.test", "waitlist"],
+  // Changed since the seeded roster: Ivy came off the waitlist, and Rowan (registered,
+  // no roster row yet) is new, so the import preview has real changes to apply.
+  [F.GUEST.ivy, "Ivy Waitlist", "ivy@demo.test", "approved"],
+  [F.GUEST.rowan, "Rowan Price", "rowan@demo.test", "approved"],
 ];
 writeSigned("luma-roster-signed.csv", ROSTER_HEADER, luma.map(([id, name, email, st]) => ["kane-hack-sf-2026", id, st, name, "", F.LUMA_SOURCE_VERSION, "demo-seed", email]));
 // The paper check-in ledger: the roster-import template (the only importer that

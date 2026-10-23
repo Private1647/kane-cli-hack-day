@@ -77,6 +77,7 @@ export const captainOf = (k: TeamKey) => T[k].people[0];
 /** Teamless people. */
 export const LONERS = [
   { name: "Dana Cole", email: "dana@demo.test", display: "Dana C." }, // discoverable: introduction target
+  { name: "Rowan Price", email: "rowan@demo.test", display: "Rowan P." }, // registered, but only on the signed Luma CSV
 ];
 
 // ── Roster ────────────────────────────────────────────────────────────────────
@@ -85,6 +86,8 @@ export const GUEST = {
   olu: "gst-olu", // other_approved_luma_guest_id
   quinn: "gst-quinn", // approved attendee on the offline check-in ledger
   hal: "gst-hal", // not admitted (declined), from seed-local
+  rowan: "gst-rowan", // new in the signed Luma CSV: not on the seeded roster
+  ivy: "gst-ivy", // waitlist in the seeded roster, approved in the signed Luma CSV
 };
 export const QUINN = { name: "Quinn Archer", email: "quinn@demo.test" };
 export const WALKIN = { name: "Wendy Walker", email: "wendy.walkin@demo.test" };

@@ -1,7 +1,7 @@
 {
   "file": "luma-roster-signed.csv",
-  "sha256": "03df534608b3c53de4727e98268ea7c4e7ba61c4172682492fe1349457bbdf82",
-  "hmac_sha256": "62477bea0fc5e13a716c36e4a5747c7bb1b77048894aa662fac94cac56784669",
+  "sha256": "d5762eaa574cdc487fce409f0a4cccf3ad88ac74ee88bd90d13146518f7d9a18",
+  "hmac_sha256": "5d6ae31da9db8c5a10658902e37e76ce6397f527cb5de486deddc29f4af4b26e",
   "key": "RECEIPT_SIGNING_KEY from the local .env.local",
   "signed_by": "scripts/seed-fixtures.mts"
 }

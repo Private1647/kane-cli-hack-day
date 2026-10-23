@@ -24,6 +24,7 @@ The seed and code scripts call the app's own services through the test loader: `
 | Olu Bankole `olu@demo.test` | `demo-pass-1234` | `other_participant_email`. On **demo-heron**, which is team two. Approved guest `gst-olu`. Not opted in to matching, so he is the non-opted-in fixture. |
 | Dana Cole `dana@demo.test` | `demo-pass-1234` | Teamless and discoverable. The introduction target in waves P11 and P12. |
 | Gia Park `gia@demo.test` | `demo-pass-1234` | Teamless. The joiner in the join race (wave P01). |
+| Rowan Price `rowan@demo.test` | `demo-pass-1234` | Teamless and registered, but not on the seeded roster. Only the signed Luma CSV adds `gst-rowan`. |
 | `<bird>.captain@demo.test` | `demo-pass-1234`, except staging captains (see below) | The captain of `demo-<bird>`. Solo teams have only a captain. |
 | Staging captains: wren, tern, robin, gannet, egret, dove, finch | personal password = team password `staging-team-pass` | Finalizing is a personal step (captain only, personal sign-in at `/passport/login`). A captain can therefore sign in personally with the same password the test knows. |
 | organizer@, mentor@, mentor2@, judge@, photo@ `demo.test` | one-time codes from `issue-test-codes` | Staff. Codes are single use and last 3 days. Each run of `issue-test-codes` retires the earlier ones. |
@@ -49,7 +50,7 @@ The seed and code scripts call the app's own services through the test loader: `
 
 | Variable | Maps to |
 |---|---|
-| `signed_luma_csv` | Absolute path to `tests/fixtures/luma-roster-signed.csv`. This is the roster-import template (`event_id,luma_guest_id,approval_status,display_name,checked_in_at,source_version,staff_reference,email`) with every demo guest. `luma-roster-signed.sig.json` holds its sha256 and an HMAC with the local `RECEIPT_SIGNING_KEY`, which is the same scheme as the app's `signDigest`. |
+| `signed_luma_csv` | Absolute path to `tests/fixtures/luma-roster-signed.csv`. This is the roster-import template (`event_id,luma_guest_id,approval_status,display_name,checked_in_at,source_version,staff_reference,email`) with every demo guest, plus two real changes against the seeded roster: `gst-rowan` (Rowan Price, a registered member with no roster row yet) is new, and `gst-ivy` goes from waitlist to approved. The import preview therefore shows 1 added and 1 changed. `luma-roster-signed.sig.json` holds its sha256 and an HMAC with the local `RECEIPT_SIGNING_KEY`, which is the same scheme as the app's `signDigest`. |
 | `luma_source_version` | `demo-luma-export-2026-10-22.v3`. It is also the `source_version` column of that CSV. |
 | `approved_luma_guest_id` | `gst-pat`: approved, admitted, linked to Pat, not checked in. It is in the signed CSV. |
 | `other_approved_luma_guest_id` | `gst-olu`: approved, linked to Olu. |
@@ -102,6 +103,7 @@ The seed and code scripts call the app's own services through the test loader: `
 | `submission_team_password` | `staging-team-pass`, the team password for every staging team and the staging captains' personal password. |
 | `complete_submission_team_slug` | The base value is **demo-finch**: finalized, public Ship Page, deck v1 saved before finalizing. The judge tests use this. Overrides: **demo-tern** in L02 (t-44) and **demo-wren** in L11 (t-31). These are complete saved drafts with a verified passing run on the same SHA. |
 | `submission_receipt_id` | Finch's receipt `S-…`. |
+| (judge evidence) | Each submission team's verified run (`demo-run-<bird>-pass`) has a sealed-report artifact with visibility `judges`. It is linked to the run before the draft is saved, so the finalized snapshot's `evidence` lists `evidence_artifact_id`, and the draft carries an `evidence_refs` link. Each team also has a verified milestone shared with judges, proposed by the captain and approved by the teammate through `proposeMilestone`/`approveMilestone`. Finch and Heron show 1 evidence item and 1 milestone in the judge inspector. Kestrel's unlisted artifact stays private, and `getJudgeEvidence` refuses it. Opening an artifact at `/judge/evidence/<id>` returns 404 locally because Blob is not configured. |
 | `retry_submission_team_slug` | **demo-robin**: a complete draft. |
 | `deadline_submission_team_slug` | **demo-dove**: a complete draft. The app has no per-team deadline; see the approximations below. |
 | `preflight_missing_repo_team_slug` | **demo-gannet**: a draft with a linked verified run, but no repository URL or SHA. |
@@ -175,3 +177,4 @@ These are word-overlap labels. No AI key is set locally, and the seed checks the
 12. **Re-seed before each wave.** Most tests mutate their fixtures: they finalize, claim, rotate a badge or save an idea. Seeding takes a few seconds.
 13. **Time-sensitive:** the event is 2026-10-24 (team lock 11:00 PT, idea lock 12:00 PT). After the team lock, `syncRosterLocks` locks every roster, which breaks the joinable-team fixtures. Shift `hack_events` if you run the suite later.
 14. **t-43 imports t-42**, so one test signs in with the organizer code twice. The second sign-in only works if the session from the imported steps is still active.
+15. **Team login on `/help`:** `/help`'s "Sign in" link goes to `/login` (team name + team password). t-3 and t-44 tell the agent to sign in there with `participant_email`/`participant_password`, a person's email and personal password, so the team login refuses them. No fixture value can be both a team name and Pat's sign-in email for the 30 other tests. The fix belongs in the app: point that link at `/passport/login?next=/help`, which opens Pat's hub since b226f17. t-44's other team-hub step (`complete_submission_team_slug` + `submission_team_password`) does work at `/login`: the slug slugifies to itself.
