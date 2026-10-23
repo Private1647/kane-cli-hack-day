@@ -49,8 +49,9 @@ export function CreateTeamForm({ tracks, idempotencyKey }: { tracks: string[]; i
         <Toggle name="solo" label="Going solo" description="You can still accept an invite-holder later; a teammate joining turns this into a team." checked={solo} onChange={setSolo} />
         <Toggle
           name="recruiting_open"
-          label="Recruiting"
-          description="List the team in the matchmaker with its open seats. Only the team name, track and public summary are shown."
+          label="Open seats in matchmaking"
+          description="People looking for a team can ask to join; any teammate can accept. Only the team name, track and public summary are shown."
+          defaultChecked
           disabled={solo}
         />
       </div>
@@ -60,13 +61,6 @@ export function CreateTeamForm({ tracks, idempotencyKey }: { tracks: string[]; i
         </Label>
         <textarea id="team-summary" name="summary_public" maxLength={280} rows={3} className={inputCls} placeholder="What you're building and who you're looking for. Shown to other participants. Keep the details of your idea private." />
       </div>
-      <div>
-        <Label htmlFor="team-password" hint="Optional · 8+ characters">
-          Shared-device password
-        </Label>
-        <input id="team-password" name="password" type="password" autoComplete="new-password" minLength={8} className={inputCls} />
-        <p className="mt-2 font-plex text-xs text-lightgray">Lets teammates open the hub on a shared laptop with the team name and this password. Invites work without it.</p>
-      </div>
       <ActionNote state={state} />
       <SubmitButton pending="Creating…" className="min-h-11">
         Create team →
@@ -75,18 +69,19 @@ export function CreateTeamForm({ tracks, idempotencyKey }: { tracks: string[]; i
   );
 }
 
-export function ConfirmJoinForm({ code, teamName, idempotencyKey, switching }: { code: string; teamName: string; idempotencyKey: string; switching: string | null }) {
+/** Join with an invite code from a teammate: type it (or arrive with ?code=), confirm, done. */
+export function JoinByCodeForm({ code, idempotencyKey, teamName }: { code: string; idempotencyKey: string; teamName: string | null }) {
   const [state, action] = useActionState<TeamFormState, FormData>(joinTeamAction, null);
   return (
     <form action={action} className="space-y-4">
-      <input type="hidden" name="code" value={code} />
       <input type="hidden" name="idempotency_key" value={idempotencyKey} />
+      <div>
+        <Label htmlFor="join-code">Invite code</Label>
+        <input id="join-code" name="code" required defaultValue={code} autoComplete="off" placeholder="XXXX-XXXX" className={`${inputCls} uppercase tracking-[0.2em]`} />
+      </div>
       <label className="flex min-h-11 cursor-pointer items-start gap-3 font-plex text-sm text-bright">
         <input type="checkbox" name="confirm" required className="mt-1 h-5 w-5 accent-[var(--lime)]" />
-        <span>
-          Yes, I want to join <span className="text-lime">{teamName}</span>
-          {switching && <span className="block text-xs text-lightgray">This moves you out of {switching}.</span>}
-        </span>
+        <span>{teamName ? <>Yes, I want to join <span className="text-lime">{teamName}</span></> : "Yes, I want to join the team this code is for"}</span>
       </label>
       <ActionNote state={state} />
       <SubmitButton pending="Joining…" className="min-h-11">

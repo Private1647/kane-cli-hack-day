@@ -136,7 +136,7 @@ async function IdeaLab({ team, me }: HubContext) {
               <Button href={`/t/${slug}/idea/print`} variant="secondary" className="min-h-11">
                 Printable checklist
               </Button>
-              <Link href={`/team/${slug}/manage`} className="inline-flex min-h-11 items-center font-plex text-sm text-lightgray underline decoration-hairline underline-offset-4 hover:text-lime">
+              <Link href={"/team"} className="inline-flex min-h-11 items-center font-plex text-sm text-lightgray underline decoration-hairline underline-offset-4 hover:text-lime">
                 Roster & invites
               </Link>
             </div>

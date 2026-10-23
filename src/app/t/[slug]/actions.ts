@@ -5,12 +5,8 @@ import { setup } from "@/data/hackday";
 import { markSeen } from "@/lib/notifications";
 import { isRegPath, normalizeLinkedin, normalizeX, setMemberConsent, setTeamPhoto, updateMemberProfile } from "@/lib/photos";
 import { PROGRESS_IDS, PROGRESS_ITEMS } from "@/lib/progress";
-import { verifyPassword } from "@/lib/password";
-import { clearTeamSession, getMemberSession, getTeamSession, setTeamSession } from "@/lib/session";
+import { getMemberSession } from "@/lib/session";
 import {
-  MAX_MEMBERS,
-  RegistrationError,
-  addMember,
   getMembers,
   getTeamBySlug,
   logActivity,
@@ -20,54 +16,16 @@ import {
 
 export type FormState = { error?: string; ok?: boolean } | null;
 
-const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
 /** Re-checks the cookie against the database on every action; never trust the client. */
 async function requireMember(slug: string) {
   const team = await getTeamBySlug(slug);
   if (!team) throw new Error("Not signed in to this team");
-  // The team cookie's chosen member, or a personal sign-in by someone on this team.
-  const [session, personal] = await Promise.all([getTeamSession(), getMemberSession()]);
-  const memberId =
-    session?.teamId === team.id && session.memberId ? session.memberId : personal?.personal ? personal.memberId : null;
+  // A personal sign-in by someone on this team (there is no shared team password).
+  const personal = await getMemberSession();
+  const memberId = personal?.personal ? personal.memberId : null;
   const member = memberId ? (await getMembers(team.id)).find((m) => m.id === memberId) : undefined;
   if (!member) throw new Error("Not signed in to this team");
   return { team, member };
-}
-
-export async function joinTeam(slug: string, _prev: FormState, form: FormData): Promise<FormState> {
-  const team = await getTeamBySlug(slug);
-  if (!team) return { error: "Team not found." };
-  const ok = await verifyPassword(String(form.get("password") ?? ""), team.password_hash);
-  if (!ok) return { error: "Wrong password." };
-  await setTeamSession({ teamId: team.id, memberId: null });
-  refresh();
-  return { ok: true };
-}
-
-export async function pickMember(slug: string, _prev: FormState, form: FormData): Promise<FormState> {
-  const team = await getTeamBySlug(slug);
-  const session = await getTeamSession();
-  if (!team || session?.teamId !== team.id) return { error: "Enter the team password first." };
-  const memberId = Number(form.get("memberId"));
-  const member = (await getMembers(team.id)).find((m) => m.id === memberId);
-  if (!member) return { error: "Pick your name from the list." };
-  await setTeamSession({ teamId: team.id, memberId: member.id });
-  await logActivity(team.id, member.id, "Signed in");
-  refresh();
-  return { ok: true };
-}
-
-export async function switchMember(slug: string) {
-  const team = await getTeamBySlug(slug);
-  const session = await getTeamSession();
-  if (team && session?.teamId === team.id) await setTeamSession({ teamId: team.id, memberId: null });
-  refresh();
-}
-
-export async function leaveTeam() {
-  await clearTeamSession();
-  refresh();
 }
 
 export async function updateItem(slug: string, _prev: FormState, form: FormData): Promise<FormState> {
@@ -81,29 +39,6 @@ export async function updateItem(slug: string, _prev: FormState, form: FormData)
   await saveProgress(team.id, member.id, item, value, done);
   const label = PROGRESS_ITEMS.find((i) => i.id === item)!.label;
   await logActivity(team.id, member.id, done ? `Marked ${label} done` : `Updated ${label}`);
-  refresh();
-  return { ok: true };
-}
-
-export async function addTeammate(slug: string, _prev: FormState, form: FormData): Promise<FormState> {
-  const { team, member } = await requireMember(slug);
-  const name = String(form.get("name") ?? "").trim();
-  const email = String(form.get("email") ?? "").trim().toLowerCase();
-  if (!name || name.length > 40) return { error: "Enter a name (up to 40 characters)." };
-  if (!EMAIL.test(email)) return { error: "Enter a valid email." };
-
-  const members = await getMembers(team.id);
-  if (team.is_solo) return { error: "Solo registrations have one member." };
-  if (members.length >= MAX_MEMBERS) return { error: `Teams can have up to ${MAX_MEMBERS} members.` };
-  if (members.some((m) => m.name.toLowerCase() === name.toLowerCase())) return { error: "That name is already on the team." };
-
-  try {
-    await addMember(team.id, name, email);
-  } catch (err) {
-    if (err instanceof RegistrationError) return { error: err.message };
-    throw err;
-  }
-  await logActivity(team.id, member.id, `Added ${name} to the team`);
   refresh();
   return { ok: true };
 }

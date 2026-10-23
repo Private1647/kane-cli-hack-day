@@ -5,7 +5,8 @@ import { PROGRESS_ITEMS, shippedMinimum } from "@/lib/progress";
 import { MAX_MEMBERS, getActivity, getProgress } from "@/lib/teams";
 import { to12h } from "@/lib/time";
 import Hub, { type HubContext } from "./hub";
-import { AddTeammate, AutoRefresh, CopyLink, ProgressRow, SessionButtons } from "./parts";
+import Link from "next/link";
+import { AutoRefresh, CopyLink, ProgressRow, SessionButtons } from "./parts";
 import { ConsentChoice } from "./photos/parts";
 
 export const metadata: Metadata = { title: "Team" };
@@ -96,7 +97,7 @@ async function Dashboard({ team, members, me }: HubContext) {
             ) : (
               <div className="border border-lime p-5 font-plex text-sm text-lightgray">
                 <p className="font-pixel text-[10px] uppercase tracking-[0.2em] text-lime">Viewing as admin</p>
-                <p className="mt-2">Read-only. Members sign in with the team password to make changes.</p>
+                <p className="mt-2">Read-only. Members sign in as themselves to make changes.</p>
               </div>
             )}
 
@@ -113,7 +114,11 @@ async function Dashboard({ team, members, me }: HubContext) {
                   </li>
                 ))}
               </ul>
-              {me && !team.is_solo && members.length < MAX_MEMBERS && <AddTeammate slug={slug} />}
+              {me && members.length < MAX_MEMBERS && (
+                <Link href="/team" className="mt-3 inline-block border border-dashed border-hairline px-3 py-1.5 font-plex text-xs text-bright transition-colors hover:border-lime hover:text-lime">
+                  + Invite a teammate
+                </Link>
+              )}
             </div>
 
             <div>

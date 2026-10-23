@@ -2,10 +2,9 @@
 
 import { refresh } from "next/cache";
 import { redirect } from "next/navigation";
-import { rememberMember, requireRole } from "@/server/auth";
+import { memberActor, requirePersonalMember, requireRole } from "@/server/auth";
 import { AppError, formObject, runAction, type ActionResult } from "@/server/core";
 import {
-  actingMember,
   advanceTeamState,
   createInvite,
   createTeam,
@@ -17,14 +16,19 @@ import {
   revokeInvite,
   transferCaptain,
   updateTeamSettings,
+  type ActingMember,
   type CreatedInvite,
 } from "@/server/teams";
-import { setTeamSession } from "@/lib/session";
 
 // Thin wrappers: every rule (who, when, how many) lives in src/server/teams.ts.
-// After creating or joining, the browser gets the team cookie (so the hub at
-// /t/[slug] opens) and the member cookie (so the person stays signed in even
-// if they later leave).
+// Event-day flow: every team action needs a personal sign-in; the hub opens
+// from that same personal session (there is no team cookie or team password).
+
+/** The personally signed-in member, as the actor for team changes. */
+async function actingMember(): Promise<ActingMember> {
+  const member = await requirePersonalMember();
+  return { member, actor: memberActor(member) };
+}
 
 export type TeamFormState = ActionResult<unknown> | null;
 export type InviteFormState = ActionResult<CreatedInvite> | null;
@@ -38,20 +42,15 @@ async function teamId(slug: string) {
 export async function createTeamAction(_prev: TeamFormState, form: FormData): Promise<TeamFormState> {
   return runAction(async () => {
     const who = await actingMember();
-    const team = await createTeam(who, formObject(form));
-    await rememberMember(who.member.id);
-    await setTeamSession({ teamId: team.teamId, memberId: who.member.id });
-    redirect(`/team/${team.slug}/manage?created=1`);
+    await createTeam(who, formObject(form));
+    redirect("/team?created=1");
   });
 }
 
 export async function joinTeamAction(_prev: TeamFormState, form: FormData): Promise<TeamFormState> {
   return runAction(async () => {
-    const who = await actingMember();
-    const joined = await joinTeam(who, formObject(form));
-    await rememberMember(who.member.id);
-    await setTeamSession({ teamId: joined.teamId, memberId: who.member.id });
-    redirect(`/t/${joined.slug}`);
+    await joinTeam(await actingMember(), formObject(form));
+    redirect("/activate");
   });
 }
 
@@ -106,8 +105,6 @@ export async function leaveTeamAction(_prev: TeamFormState, form: FormData): Pro
     if (form.get("confirm") !== "on") throw new AppError("VALIDATION_FAILED", { userMessage: "Tick the box to confirm you're leaving." });
     const who = await actingMember();
     await leaveTeam(who);
-    // Stay signed in as a person; the team cookie no longer matches.
-    await rememberMember(who.member.id);
     redirect("/team");
   });
 }

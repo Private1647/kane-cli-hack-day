@@ -1,11 +1,12 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense, type ReactNode } from "react";
 import Mentions from "@/components/home/Mentions";
 import { Eyebrow } from "@/components/ui/Section";
 import type { HubTab } from "@/lib/hub";
-import { getMemberSession, getTeamSession, isAdmin } from "@/lib/session";
+import { getMemberSession, isAdmin } from "@/lib/session";
 import { getMembers, getTeamBySlug, type Member, type Team } from "@/lib/teams";
-import { CopyLink, JoinForm, PickMember, SessionButtons } from "./parts";
+import { SessionButtons } from "./parts";
 import Bell from "./Bell";
 import TabNav from "./TabNav";
 
@@ -62,13 +63,11 @@ async function Gated({
   const team = await getTeamBySlug(slug);
   if (!team) notFound();
 
-  const [session, personal, admin, members] = await Promise.all([getTeamSession(), getMemberSession(), isAdmin(), getMembers(team.id)]);
-  const unlocked = session?.teamId === team.id;
-  // A personal sign-in (desk code, personal password, activation) is a stronger
-  // proof than the shared team password, so it opens the member's own team hub too.
-  const viaPersonal = personal?.personal ? members.find((m) => m.id === personal.memberId) : undefined;
-  const me = (unlocked && members.find((m) => m.id === session.memberId)) || viaPersonal || null;
-  const welcome = (await searchParams)?.welcome === "1";
+  const [personal, admin, members] = await Promise.all([getMemberSession(), isAdmin(), getMembers(team.id)]);
+  // The hub opens for any member of this team signed in as themselves
+  // (personal password, desk code). There is no shared team password.
+  const me = personal?.personal ? (members.find((m) => m.id === personal.memberId) ?? null) : null;
+  await searchParams;
 
   if (!me && !admin && publicView) {
     return (
@@ -79,25 +78,29 @@ async function Gated({
     );
   }
 
-  // Step 1: the team password. Step 2: who are you? Admins skip both.
   if (!me && !admin) {
+    const next = `/t/${slug}${tab ? `/${tab}` : ""}`;
     return (
       <>
         <HubHeader team={team} />
         <section className="py-16 sm:py-20">
           <div className="container-page max-w-md space-y-6">
-            {unlocked ? (
-              <>
-                <GateTitle title="Who are you?" body="Pick your name so the team knows who logged what." />
-                {welcome && <WelcomeNote slug={slug} />}
-                <PickMember slug={slug} members={members.map((m) => ({ id: m.id, name: m.name }))} />
-              </>
+            {personal?.personal ? (
+              <GateTitle title="Not your team’s hub" body="You’re signed in, but not as a member of this team. Your own team is one click away." />
             ) : (
-              <>
-                <GateTitle title="Enter your team password" body="Ask a teammate for the password set at registration." />
-                <JoinForm slug={slug} />
-              </>
+              <GateTitle title="Sign in as yourself" body="Use the email and password you chose at registration, or a one-time code from the desk." />
             )}
+            <div className="flex flex-wrap gap-3">
+              {personal?.personal ? (
+                <Link href="/team" className="inline-flex min-h-11 items-center bg-bright px-4 py-2.5 font-plex text-sm text-ink transition-colors hover:bg-lime">
+                  Your team →
+                </Link>
+              ) : (
+                <Link href={`/passport/login?next=${encodeURIComponent(next)}`} className="inline-flex min-h-11 items-center bg-bright px-4 py-2.5 font-plex text-sm text-ink transition-colors hover:bg-lime">
+                  Sign in →
+                </Link>
+              )}
+            </div>
           </div>
         </section>
       </>
@@ -159,18 +162,6 @@ function GateTitle({ title, body }: { title: string; body: string }) {
     <div>
       <h2 className="font-display text-3xl text-bright">{title}</h2>
       <p className="mt-2 font-plex text-sm text-lightgray">{body}</p>
-    </div>
-  );
-}
-
-function WelcomeNote({ slug }: { slug: string }) {
-  return (
-    <div className="border border-lime bg-lime-deep p-4 font-plex text-sm text-bright">
-      <p className="text-lime">You’re registered.</p>
-      <p className="mt-1 text-lightgray">Share this link and the password with your team:</p>
-      <div className="mt-3">
-        <CopyLink path={`/t/${slug}`} />
-      </div>
     </div>
   );
 }

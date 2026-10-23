@@ -74,9 +74,9 @@ export async function teamCreateTool(who: ActingMember, input: unknown): Promise
     data: { team_id: team.teamId, slug: team.slug, state: team.state, receipt: team.receipt },
     links: [
       { label: "Team hub", url: `/t/${team.slug}` },
-      { label: "Invite teammates", url: `/team/${team.slug}/manage` },
+      { label: "Invite teammates", url: "/team" },
     ],
-    fallbackText: `Created ${team.slug} (receipt ${team.receipt.id}). Invite teammates at ${siteUrl(`/team/${team.slug}/manage`)}.`,
+    fallbackText: `Created ${team.slug} (receipt ${team.receipt.id}). Invite teammates at ${siteUrl("/team")}.`,
   };
 }
 

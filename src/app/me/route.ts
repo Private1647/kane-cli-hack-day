@@ -1,6 +1,10 @@
-import { redirectToHub } from "@/lib/hub-redirect";
+import { getMemberSession } from "@/lib/session";
+import { flowState } from "@/server/flow";
 
-// "My team": your own hub, or the login page.
-export function GET(request: Request) {
-  return redirectToHub(request, "");
+// "Resume": wherever this person is in the event-day flow (profile → team →
+// activate → Codex → hub). Signed out → start at /register.
+export async function GET(request: Request) {
+  const s = await getMemberSession();
+  const next = s?.personal ? (await flowState(s.memberId)).next : "/register";
+  return Response.redirect(new URL(next, request.url), 307);
 }

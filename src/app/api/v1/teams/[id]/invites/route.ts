@@ -20,7 +20,7 @@ export async function GET(req: Request, { params }: RouteContext<"/api/v1/teams/
     return {
       message: `${invites.length} open invites · ${t.member_count}/${t.cap} members${t.locked ? " · roster locked" : ""}`,
       data: { team_id: t.id, locked: t.locked, open_seats: Math.max(0, t.cap - t.member_count), invites },
-      links: [{ label: "Roster & invites", url: `/team/${t.slug}/manage` }],
+      links: [{ label: "Roster & invites", url: "/team" }],
     };
   });
 }
