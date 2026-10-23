@@ -116,18 +116,37 @@ export function LoginCodeButton() {
 export function RotateBadgeButton() {
   const [state, setState] = useState<FormState>(null);
   const [pending, start] = useTransition();
+  // An in-page confirm step (not window.confirm), so it is visible and can't be skipped silently.
+  const [asking, setAsking] = useState(false);
   return (
     <div className="space-y-2">
-      <button
-        type="button"
-        disabled={pending}
-        onClick={() => {
-          if (confirm("Issue a new badge QR? Printed badges with the old code stop working.")) start(async () => setState(await rotateBadge()));
-        }}
-        className="min-h-11 border border-hairline px-4 font-plex text-sm text-bright transition-colors hover:border-danger hover:text-danger disabled:opacity-60"
-      >
-        {pending ? "Rotating…" : "Lost my badge: rotate QR"}
-      </button>
+      {asking ? (
+        <div role="alertdialog" aria-label="Rotate your badge QR?" className="space-y-2 border border-warning p-3">
+          <p className="font-plex text-sm text-warning">Issue a new badge QR? Printed badges with the old code stop working.</p>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              autoFocus
+              disabled={pending}
+              onClick={() => start(async () => { setState(await rotateBadge()); setAsking(false); })}
+              className="min-h-11 border border-danger px-4 font-plex text-sm text-danger hover:bg-danger-deep disabled:opacity-60"
+            >
+              {pending ? "Rotating…" : "Yes, rotate QR"}
+            </button>
+            <button type="button" onClick={() => setAsking(false)} className="min-h-11 px-4 font-plex text-sm text-lightgray hover:text-bright">
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setAsking(true)}
+          className="min-h-11 border border-hairline px-4 font-plex text-sm text-bright transition-colors hover:border-danger hover:text-danger"
+        >
+          Lost my badge: rotate QR
+        </button>
+      )}
       <Ok text={state?.ok} />
       <FormError message={state?.error} />
     </div>

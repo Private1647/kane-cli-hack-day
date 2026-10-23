@@ -273,10 +273,10 @@ function PersonalSignIn({ slug, what }: { slug: string; what: string }) {
   return (
     <div className="mt-3 space-y-3 font-plex text-sm">
       <p className="text-lightgray">To {what}, sign in as yourself (a one-time code from the desk, or your personal password). The team password only opens the hub.</p>
-      <Link href={`/passport/login?next=${encodeURIComponent("/passport")}`} className="inline-flex min-h-11 items-center border border-hairline px-4 text-bright hover:border-lime hover:text-lime">
+      <Link href={`/passport/login?next=${encodeURIComponent(`/t/${slug}/submit`)}`} className="inline-flex min-h-11 items-center border border-hairline px-4 text-bright hover:border-lime hover:text-lime">
         Sign in as yourself →
       </Link>
-      <p className="text-xs text-lightgray">Then come back to /t/{slug}/submit.</p>
+      <p className="text-xs text-lightgray">You&apos;ll come straight back to this submission.</p>
     </div>
   );
 }

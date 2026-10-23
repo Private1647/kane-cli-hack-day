@@ -95,15 +95,23 @@ export function NudgeForm({ teams }: { teams: { id: number; name: string }[] }) 
 }
 
 export function DeleteNudge({ id }: { id: number }) {
-  return (
-    <form
-      action={removeNudge.bind(null, id)}
-      onSubmit={(e) => {
-        if (!confirm("Delete this notification?")) e.preventDefault();
-      }}
-    >
-      <button type="submit" className="font-plex text-xs text-lightgray hover:text-red-300">
+  // An in-page confirm step (not window.confirm), so it is visible and can't be skipped silently.
+  const [asking, setAsking] = useState(false);
+  if (!asking) {
+    return (
+      <button type="button" onClick={() => setAsking(true)} className="font-plex text-xs text-lightgray hover:text-red-300">
         Delete
+      </button>
+    );
+  }
+  return (
+    <form action={removeNudge.bind(null, id)} role="alertdialog" aria-label="Delete this notification?" className="flex items-center gap-3 font-plex text-xs">
+      <span className="text-warning">Delete this notification?</span>
+      <button type="submit" autoFocus className="text-danger hover:underline">
+        Yes, delete
+      </button>
+      <button type="button" onClick={() => setAsking(false)} className="text-lightgray hover:text-bright">
+        Cancel
       </button>
     </form>
   );
