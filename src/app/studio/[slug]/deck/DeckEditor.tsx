@@ -238,7 +238,7 @@ export default function DeckEditor({
                   </>
                 )}
                 <div className="md:col-span-2">
-                  <Field label="Speaker notes" multiline value={slide.notes} max={1000} onChange={(v) => patch({ notes: v })} />
+                  <Field label="Speaker notes (published with the deck)" multiline value={slide.notes} max={1000} onChange={(v) => patch({ notes: v })} />
                 </div>
               </div>
               {slide.type === "evidence" && (

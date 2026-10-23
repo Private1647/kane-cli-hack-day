@@ -38,8 +38,8 @@ export function socialCard({ story, format, testmuDataUri, draft }: { story: Pub
         </div>
         {story.pitch && <div style={{ fontSize: unit * (wide ? 3.6 : 4), lineHeight: 1.3, color: "#d8d8d8", maxWidth: width * 0.85 }}>{story.pitch}</div>}
         <div style={{ display: "flex", gap: unit * 1.5, flexWrap: "wrap", marginTop: unit }}>
-          {story.badges.kaneVerified && <Pill unit={unit} teal text="✓ Verified with Kane CLI" />}
-          {story.badges.shipped && <Pill unit={unit} teal text="✓ Shipped · verified submission" />}
+          {story.badges.kaneVerified && <Pill unit={unit} teal text="Verified with Kane CLI" />}
+          {story.badges.shipped && <Pill unit={unit} teal text="Shipped · verified submission" />}
           {verified > 0 && <Pill unit={unit} text={`${verified} verified claim${verified === 1 ? "" : "s"}`} />}
           {!story.badges.kaneVerified && verified === 0 && <Pill unit={unit} text="Evidence not verified yet" />}
         </div>
@@ -72,8 +72,16 @@ function Pill({ unit, text, teal = false }: { unit: number; text: string; teal?:
         fontSize: unit * 2.4,
         letterSpacing: unit * 0.2,
         textTransform: "uppercase",
+        alignItems: "center",
+        gap: unit,
       }}
     >
+      {/* Drawn ✓ (the glyph needs a font download Satori can't rely on). */}
+      {teal && (
+        <svg width={unit * 2.4} height={unit * 2.4} viewBox="0 0 24 24">
+          <path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#2dd4bf" strokeWidth="3" strokeLinecap="square" />
+        </svg>
+      )}
       {text}
     </div>
   );
