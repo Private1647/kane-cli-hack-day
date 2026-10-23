@@ -6,7 +6,8 @@ import { formatEventTime, getEvent } from "@/lib/event";
 import { hasRole } from "@/server/auth";
 import { LEDGERS, SEVERITY_LABEL, SUBSYSTEMS, listIncidents, reconciliationView, type ReconRow } from "@/server/recovery";
 import { OpsPage, Panel, SectionLabel, StaffGate, fmtTime } from "../_kit/shell";
-import { CloseIncident, LedgerUpload, ManualReceipt, OpenIncident, PaperTicket } from "./parts";
+import { PaperTicketForm } from "../help/parts";
+import { CloseIncident, LedgerUpload, ManualReceipt, OpenIncident } from "./parts";
 
 export const metadata: Metadata = { title: "Recovery", robots: { index: false } };
 
@@ -47,6 +48,9 @@ export default function RecoveryPage() {
           const [ev, incidents, recon] = await Promise.all([getEvent(), organizer ? listIncidents() : Promise.resolve([]), organizer ? reconciliationView() : Promise.resolve({ rows: [], partial: [] })]);
           const open = incidents.filter((i) => !i.closed_at);
           const lockLabel = `${formatEventTime(ev.submissionLocksAt, ev)} (${fmtTime(ev.submissionLocksAt, ev.timezone)})`;
+          // Same slip form as /ops/help: date + 24-hour time in the event zone, late reason, replay-safe.
+          const today = new Intl.DateTimeFormat("en-CA", { timeZone: ev.timezone, year: "numeric", month: "2-digit", day: "2-digit" }).format(ev.now);
+          const zone = new Intl.DateTimeFormat("en-US", { timeZone: ev.timezone, timeZoneName: "short" }).formatToParts(ev.now).find((p) => p.type === "timeZoneName")?.value ?? ev.timezone;
           return (
             <div className="space-y-14">
               {open.map((i) => (
@@ -125,7 +129,7 @@ export default function RecoveryPage() {
                   Paper help ticket
                 </SectionLabel>
                 <Panel>
-                  <PaperTicket />
+                  <PaperTicketForm today={today} zone={zone} />
                 </Panel>
               </section>
 

@@ -1,14 +1,14 @@
 "use server";
 
 import { formObject, parse, z, zx } from "@/server/core";
-import { HELP_CATEGORIES, HELP_PRIORITIES, LEDGERS, SUBSYSTEMS, closeIncident, importLedger, openIncident, recordManualReceipt, recordPaperTicket, type LedgerKind } from "@/server/recovery";
+import { LEDGERS, SUBSYSTEMS, closeIncident, importLedger, openIncident, recordManualReceipt, type LedgerKind } from "@/server/recovery";
 import { pool } from "@/lib/db";
 import { act } from "../_kit/act";
 import type { OpsState } from "../_kit/state";
 
 // /ops/recovery (T-OPS-05): incidents and the manual intake paths. Incidents
-// and receipts are organizer-only; paper help tickets can be typed in by
-// mentors too (they run the help desk).
+// and receipts are organizer-only. Paper help slips on this page post to
+// /ops/help's addPaper, so mentors can enter them too.
 
 /** A wall time typed by staff (datetime-local, event zone) → an instant, via the DB so DST is right. */
 async function wallToInstant(s: string) {
@@ -43,41 +43,6 @@ export async function closeIncidentAction(_p: OpsState, form: FormData): Promise
     const input = parse(z.object({ id: zx.id, recovery_basis: zx.text(500) }), formObject(form));
     const r = await closeIncident(input.id, input.recovery_basis, staff);
     return { message: `${r.id} closed. Reconcile anything taken on paper below.`, receipt: r };
-  });
-}
-
-const ticketSchema = z.object({
-  code: z
-    .string()
-    .trim()
-    .toUpperCase()
-    .regex(/^(H-[A-Z0-9-]{2,12})?$/, "Paper ticket ids look like H-P012")
-    .optional()
-    .transform((s) => s || null),
-  opened_at: wall.optional().or(z.literal("")),
-  participant: zx.optText(12),
-  team: zx.optText(80),
-  table: zx.optText(40),
-  category: z.enum(HELP_CATEGORIES),
-  priority: z.enum(HELP_PRIORITIES),
-  summary: zx.text(300),
-  tried: zx.optText(500),
-  idempotency_key: zx.idempotencyKey,
-});
-
-export async function paperTicketAction(_p: OpsState, form: FormData): Promise<OpsState> {
-  return act(["organizer", "mentor"], form, async (staff) => {
-    const input = parse(ticketSchema, formObject(form));
-    const openedAt = input.opened_at ? await wallToInstant(input.opened_at) : null;
-    const r = await recordPaperTicket(
-      { code: input.code, openedAt, participantCode: input.participant, teamSlug: input.team, table: input.table, category: input.category, priority: input.priority, summary: input.summary, tried: input.tried },
-      staff,
-      input.idempotency_key,
-    );
-    return {
-      message: `Paper ticket ${r.id} is in the help queue.${r.matched.member || r.matched.team ? "" : " Participant/team not matched: add them in the help queue."}`,
-      receipt: { id: r.id, server_time: r.server_time },
-    };
   });
 }
 

@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Label, inputCls } from "@/components/forms/fields";
 import StatusPill from "@/components/ui/StatusPill";
 import ActionForm, { SelectField, TextArea, TextField } from "../_kit/ActionForm";
-import { closeIncidentAction, ledgerAction, manualReceiptAction, openIncidentAction, paperTicketAction } from "./actions";
+import { closeIncidentAction, ledgerAction, manualReceiptAction, openIncidentAction } from "./actions";
 
 // Recovery desk forms. Every time field is the time written on paper, in the
 // event's time zone; the server records its own entry time as well.
@@ -60,46 +60,6 @@ export function CloseIncident({ id, code }: { id: number; code: string }) {
     <ActionForm action={closeIncidentAction} submit={`Close ${code}`} pending="Closing…" variant="secondary" className="w-full">
       <input type="hidden" name="id" value={id} />
       <TextField id={`rb-${id}`} name="recovery_basis" label="What restored service" hint="required · audited" required maxLength={500} />
-    </ActionForm>
-  );
-}
-
-const CATEGORIES = [
-  ["kane_cli", "Kane CLI"],
-  ["test_manager", "Test Manager"],
-  ["auth", "Auth"],
-  ["ci_cloud", "CI / Cloud"],
-  ["mobile", "Mobile"],
-  ["idea", "Idea"],
-  ["github", "GitHub"],
-  ["other", "Other"],
-] as const;
-
-export function PaperTicket() {
-  return (
-    <ActionForm action={paperTicketAction} submit="Add paper ticket" pending="Adding…">
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <TextField id="pt-code" name="code" label="Paper ticket id" hint="pre-printed, e.g. H-P012" maxLength={16} />
-        <TextField id="pt-at" name="opened_at" type="datetime-local" label="Opened at (paper time)" hint="optional" />
-        <TextField id="pt-p" name="participant" label="Participant P-code" hint="optional" maxLength={12} />
-        <TextField id="pt-team" name="team" label="Team (slug or name)" hint="optional" maxLength={80} />
-        <TextField id="pt-table" name="table" label="Table" hint="optional" maxLength={40} />
-        <SelectField id="pt-cat" name="category" label="Category" options={CATEGORIES.map(([value, label]) => ({ value, label }))} />
-        <SelectField
-          id="pt-pri"
-          name="priority"
-          label="Priority"
-          defaultValue="normal"
-          options={[
-            { value: "low", label: "Low" },
-            { value: "normal", label: "Normal" },
-            { value: "high", label: "High" },
-            { value: "urgent", label: "Urgent (blocked on deadline)" },
-          ]}
-        />
-      </div>
-      <TextField id="pt-sum" name="summary" label="Problem in one sentence" required maxLength={300} />
-      <TextArea id="pt-tried" name="tried" label="What has been tried" hint="no secrets, no logs" maxLength={500} rows={2} />
     </ActionForm>
   );
 }

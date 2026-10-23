@@ -127,21 +127,6 @@ async function insertPaperTicket(tx: Db, input: PaperTicketInput, staff: Staff, 
   return { ...rows[0], memberId, teamId };
 }
 
-export async function recordPaperTicket(input: PaperTicketInput, staff: Staff, idempotencyKey?: string | null) {
-  const { result } = await idempotent(idempotencyKey, `recovery.paper_ticket:${staff.id ?? "admin"}`, () =>
-    withAudit(staffActor(staff), "help.paper_intake", "help_ticket", async (tx) => {
-      const { rows: n } = await tx.query<{ now: Date }>("select now()");
-      const t = await insertPaperTicket(tx, input, staff, n[0].now);
-      return {
-        result: { id: t.code, server_time: new Date(t.created_at).toISOString(), matched: { member: !!t.memberId, team: !!t.teamId } },
-        resourceId: t.id,
-        after: { code: t.code, category: input.category, priority: input.priority, paper_original_at: input.openedAt },
-      };
-    }),
-  );
-  return result;
-}
-
 // ── Manual submission receipt (fallback/05) ──────────────────────────────────
 
 export type ManualReceiptInput = {
