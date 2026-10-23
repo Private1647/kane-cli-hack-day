@@ -46,6 +46,8 @@ const emailHash = (e: string) => sha(e.trim().toLowerCase());
     await c.query("delete from help_tickets where code like 'H-OFF%' or code like 'H-T%'");
     await c.query("delete from kane_runs where upstream_execution_id like 'demo-run-%'");
     await c.query(`delete from kane_runs where project_id in ${demoProjects}`);
+    // Paper check-in slips the suite enters through /ops/recovery (offline-checkin-ledger.csv).
+    await c.query("delete from checkin_reconciliations where receipt_id like 'CHK-OFF%' or guest_id in (select id from roster_guests where luma_guest_id like 'gst-%')");
     await c.query("delete from roster_guests where staff_reference = 'demo-seed' or luma_guest_id like 'gst-%' or email_hash = encode(sha256(convert_to('wendy.walkin@demo.test', 'UTF8')), 'hex')");
     await c.query("delete from roster_guests where member_id in " + demoMembers);
     await c.query("delete from roster_imports where source_version like 'demo-%'");

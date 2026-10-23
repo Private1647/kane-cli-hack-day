@@ -454,11 +454,11 @@ const luma: [string, string, string, string][] = [
   [F.GUEST.rowan, "Rowan Price", "rowan@demo.test", "approved"],
 ];
 writeSigned("luma-roster-signed.csv", ROSTER_HEADER, luma.map(([id, name, email, st]) => ["kane-hack-sf-2026", id, st, name, "", F.LUMA_SOURCE_VERSION, "demo-seed", email]));
-// The paper check-in ledger: the roster-import template (the only importer that
-// applies checked_in_at), one row per paper receipt, the receipt id and the
-// delayed-entry reason in staff_reference.
-writeSigned("offline-checkin-ledger.csv", ROSTER_HEADER, [
-  ["kane-hack-sf-2026", F.GUEST.quinn, "approved", F.QUINN.name, F.OFFLINE.timeIso, "demo-paper-ledger-1", `${F.OFFLINE.checkinReceiptId} | ${F.OFFLINE.reason}`, F.QUINN.email],
+// The paper check-in ledger: /ops/recovery's checkin-ledger-template.csv, one
+// signed slip per row (slip id, the attendee's Luma guest id, the time on the
+// slip, the delayed-entry reason, the desk staff's id and initials, a witness).
+writeSigned("offline-checkin-ledger.csv", ["receipt_id", "attendee_id", "checked_in_at", "timezone", "delay_reason", "staff_id", "staff_signature", "witness_id"], [
+  [F.OFFLINE.checkinReceiptId, F.GUEST.quinn, F.OFFLINE.time.replace("T", " "), "America/Los_Angeles", F.OFFLINE.reason, F.OFFLINE.checkinStaff, F.OFFLINE.checkinSignature, F.OFFLINE.witness],
 ]);
 
 // ── Live metrics: project once so /live starts fresh ─────────────────────────
