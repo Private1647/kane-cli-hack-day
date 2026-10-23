@@ -295,12 +295,65 @@ export const evaluations = {
 export const judging = {
   shortlist: "Top 7 from the 4:00 scores, confirmed against Devpost at 6:00.",
   stage: { demo: "3-minute demo", qa: "2 minutes of questions" },
+  // EVALUATION.md (D3). `key` is what judge_scores.category_scores stores;
+  // `label` is short enough for the Themis scale; `name` is the full category.
+  rubricVersion: "kane-hack-os-eval@1",
   rubric: [
-    { label: "Kane CLI usage", points: 30 },
-    { label: "Built with OpenAI", points: 25 },
-    { label: "Works live", points: 20 },
-    { label: "Idea", points: 15 },
-    { label: "Craft", points: 10 },
+    {
+      key: "harness_kane",
+      label: "Harness + Kane",
+      name: "Harness innovation and Kane integration",
+      points: 30,
+      inspect: "Composability, relevance, original verification architecture, reusable decisions",
+    },
+    {
+      key: "validation_evidence",
+      label: "Validation proof",
+      name: "Validation quality and evidence",
+      points: 25,
+      inspect: "Real assertions, verifiable runs, traceability, bugs and gaps correctly identified",
+    },
+    {
+      key: "shipping_velocity",
+      label: "Ship velocity",
+      name: "Shipping velocity and automation",
+      points: 20,
+      inspect: "Closed loop, targeted checks, less manual effort, credible measured value",
+    },
+    {
+      key: "technical_execution",
+      label: "Tech execution",
+      name: "Technical execution and reliability",
+      points: 15,
+      inspect: "Functional creation, reproducible demo, resilience to common failures",
+    },
+    {
+      key: "creativity_demo",
+      label: "Creativity + demo",
+      name: "Creativity and demonstration",
+      points: 10,
+      inspect: "Novelty, clarity, demonstration quality and importance of the use case",
+    },
+  ],
+  // Each category gets one anchor; points = anchor × weight / 5.
+  anchors: [
+    { score: 0, label: "Absent" },
+    { score: 1, label: "Incomplete" },
+    { score: 2, label: "Weak" },
+    { score: 3, label: "Credible" },
+    { score: 4, label: "Strong" },
+    { score: 5, label: "Exceptional" },
+  ],
+  scoringNote:
+    "Each category gets an anchor from 0 to 5, worth anchor × weight / 5 points. Judges cite evidence or say what they couldn't verify. Scores are human decisions; AI never fills in a mark.",
+  eligibilityNote:
+    "Harnesses, CI pipelines, extensions, plugins and workflows compete on the same rubric as apps. Commit counts, run counts and number of Kane components are not multipliers.",
+  demoChecklist: [
+    "What is built",
+    "The actual harness architecture",
+    "A witnessed Kane verification and its evidence",
+    "How it responds to a failure or gap",
+    "The claimed impact and the measurement behind it",
   ],
   shippedNote: "Shipped prize: complete bundle, no scoring.",
   judges: [

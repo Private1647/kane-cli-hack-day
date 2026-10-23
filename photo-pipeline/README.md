@@ -79,6 +79,18 @@ The review page is at http://127.0.0.1:5050 (`REVIEW_PORT`). It only listens on 
 
 A file named `<team-slug>__stackchan.jpg` (in general, any `<team-slug>__*.jpg|png|heic`) dropped into `DRIVE_DIR` is **always** tagged to that team with score 1.0, whether or not it contains faces. It is published to that team's gallery right away. Any faces in the photo are still matched, so other teams can be added on top. The slug must be an enrolled team, meaning one with at least one consenting member (`any_consented`). Drafts for hard-tagged photos still name only consenting members. Otherwise the photo goes to *Unresolved* with a note.
 
+## Site consent gate (Kane Hack OS)
+
+The site no longer trusts a face match as permission to publish. `POST /api/import/photo` stores every photo privately and decides per team:
+
+- **Published** (`"added"`) only when every current member of the team, and every person sent in the optional `people` field, has **photo_publication** consent on record right now (the per-member answer in the hub's Photos tab, or the passport).
+- **Held** (`"held for review"`) otherwise: unknown, missing or withdrawn consent means hold, never publish. Held photos wait in **/ops/media** for a person to identify who is in frame (badge scan or lookup), run the consent check and have an organizer approve and publish. The publisher treats `"held for review"` as delivered, so it doesn't retry.
+- `people` (optional, repeatable) takes the P-codes from the export (`members[].public_code`) of the people the pipeline matched. They are stored only as **suggestions** (`opted_in_candidate`, unconfirmed), and only for members who allow matching. A staff member confirms each one per photo.
+
+What the export sends has changed too. `members[].consent_social`, `all_consented` and `any_consented` now mean "may be face-matched": `face_matching` granted, or, for people who answered before that category existed, no `face_matching` answer and `photo_publication` granted. Any "no" removes the person on the next `enroll`, and their cached embeddings with them. On the site, galleries re-check consent on every read, so a photo of someone who withdraws disappears immediately, even before the next enroll. Photos already published before this change are re-checked the same way. A team photo with a member who never answered is hidden until it is reviewed in /ops/media.
+
+The site now has an unpublish path: **Hold** or **Reject** in /ops/media. Approved social posts can be exported as a Buffer CSV from /ops/media (`/api/v1/social/export`). That export fills `Image URL` with the public gallery URL of published photos, which removes the local-path limitation described below for those rows.
+
 ## Consent in posts
 
 Only consenting members are ever shown to Claude (names and handles), listed as people in frame, or kept in `tag_names`. Non-consenting teammates are not named in the brief. Claude is only told how many other members asked not to be named.

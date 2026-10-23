@@ -86,9 +86,23 @@ export async function setTeamPhoto(teamId: number, pathname: string | null) {
   await query("update teams set photo_url = $2 where id = $1", [teamId, pathname]);
 }
 
-/** Each person answers for themselves; the time is kept for either answer. */
+/**
+ * Each person answers for themselves; the time is kept for either answer.
+ * The hub's one "photos and posts" answer covers photo_publication and
+ * social_mention, appended to the consent ledger (never rewritten). A "no"
+ * holds every photo of them and pulls unpublished social drafts right away.
+ */
 export async function setMemberConsent(memberId: number, consent: boolean) {
   await query("update members set consent_social = $2, consent_at = now() where id = $1", [memberId, consent]);
+  await query(
+    `insert into member_consents (member_id, category, granted, source)
+     select $1, c, $2, 'web' from unnest(array['photo_publication','social_mention']) c`,
+    [memberId, consent],
+  );
+  if (!consent) {
+    const { onConsentChanged } = await import("@/server/photos");
+    await onConsentChanged(memberId);
+  }
 }
 
 export async function updateMemberProfile(
@@ -107,26 +121,45 @@ export async function updateMemberProfile(
 
 export type EventPhoto = { id: number; pathname: string; width: number | null; height: number | null; caption: string | null; created_at: Date };
 
+/**
+ * SQL predicate (alias `e` = event_photos) for a photo anyone may see:
+ * published, nobody linked to it lacks photo_publication consent *now*, and
+ * either it has a human-confirmed person, a "nobody identifiable" attestation,
+ * or (pipeline team tags) every current member of its team has consented.
+ * Checked at read time too, so a revoked consent hides a photo immediately.
+ */
+export const PUBLIC_PHOTO_SQL = `(
+  e.status = 'published'
+  and not exists (
+    select 1 from photo_people pp
+      left join member_consent_current c on c.member_id = pp.member_id and c.category = 'photo_publication'
+     where pp.photo_id = e.id and c.granted is not true)
+  and (
+    exists (select 1 from photo_people pp where pp.photo_id = e.id and pp.confirmed_at is not null)
+    or e.no_people_attested_at is not null
+    or (e.team_id is not null and not exists (
+      select 1 from members m
+        left join member_consent_current c on c.member_id = m.id and c.category = 'photo_publication'
+       where m.team_id = e.team_id and m.deleted_at is null and c.granted is not true))
+  )
+)`;
+
+/** The team's gallery: published, consent-clean photos tagged to the team or showing a confirmed member of it. */
 export async function getEventPhotos(teamId: number) {
   return query<EventPhoto>(
-    "select id, pathname, width, height, caption, created_at from event_photos where team_id = $1 order by created_at desc",
+    `select e.id, e.pathname, e.width, e.height, coalesce(e.caption, e.alt_text) as caption, e.created_at
+       from event_photos e
+      where (e.team_id = $1 or exists (
+               select 1 from photo_people pp join members m on m.id = pp.member_id
+                where pp.photo_id = e.id and pp.confirmed_at is not null and m.team_id = $1))
+        and ${PUBLIC_PHOTO_SQL}
+      order by e.created_at desc`,
     [teamId],
   );
 }
 
 export async function isPublishedEventPhoto(pathname: string) {
-  const rows = await query("select 1 from event_photos where pathname = $1 limit 1", [pathname]);
-  return rows.length > 0;
-}
-
-/** Records a photo for a team; returns false when this team already had it. */
-export async function addEventPhoto(input: { teamId: number; photoKey: string; pathname: string; width?: number; height?: number; caption?: string }) {
-  const rows = await query(
-    `insert into event_photos (team_id, photo_key, pathname, width, height, caption)
-     values ($1, $2, $3, $4, $5, $6)
-     on conflict (team_id, photo_key) do nothing returning id`,
-    [input.teamId, input.photoKey, input.pathname, input.width ?? null, input.height ?? null, input.caption ?? null],
-  );
+  const rows = await query(`select 1 from event_photos e where e.pathname = $1 and ${PUBLIC_PHOTO_SQL} limit 1`, [pathname]);
   return rows.length > 0;
 }
 
@@ -142,22 +175,44 @@ export type ExportTeam = {
   all_consented: boolean;
   any_consented: boolean;
   photo_url: string | null;
-  members: { name: string; consent_social: boolean | null; linkedin: string | null; x_handle: string | null; photo_url: string | null }[];
+  members: {
+    name: string;
+    /** May this person be face-matched and named? (see MATCHABLE_SQL) */
+    consent_social: boolean | null;
+    public_code: string | null;
+    linkedin: string | null;
+    x_handle: string | null;
+    photo_url: string | null;
+  }[];
 };
+
+/**
+ * Per member (alias `m`): may the pipeline enrol and match them? Yes when
+ * face_matching is granted, or, for people who answered before face_matching
+ * existed, when they have no face_matching answer and photo_publication is
+ * granted. Any explicit "no" (either category) stops matching on the next enroll.
+ */
+const MATCHABLE_SQL = `(
+  coalesce((select c.granted from member_consent_current c where c.member_id = m.id and c.category = 'face_matching'),
+           (select c.granted from member_consent_current c where c.member_id = m.id and c.category = 'photo_publication'))
+  is true
+  and coalesce((select c.granted from member_consent_current c where c.member_id = m.id and c.category = 'photo_publication'), false)
+)`;
 
 export async function exportTeams() {
   return query<ExportTeam>(
     `select t.slug, t.name, t.track, t.idea, t.is_solo, t.photo_url,
-            coalesce((select bool_and(m.consent_social is true) from members m where m.team_id = t.id), false) as all_consented,
-            coalesce((select bool_or(m.consent_social is true) from members m where m.team_id = t.id), false) as any_consented,
-            -- Handles and photos of people who haven't said yes never leave the site.
+            coalesce((select bool_and(${MATCHABLE_SQL}) from members m where m.team_id = t.id and m.deleted_at is null), false) as all_consented,
+            coalesce((select bool_or(${MATCHABLE_SQL}) from members m where m.team_id = t.id and m.deleted_at is null), false) as any_consented,
+            -- Handles, codes and photos of people who haven't said yes never leave the site.
             coalesce((select json_agg(json_build_object(
                         'name', m.name,
-                        'consent_social', m.consent_social,
-                        'linkedin', case when m.consent_social then m.linkedin end,
-                        'x_handle', case when m.consent_social then m.x_handle end,
-                        'photo_url', case when m.consent_social then m.photo_url end) order by m.id)
-                        from members m where m.team_id = t.id), '[]') as members
+                        'consent_social', ${MATCHABLE_SQL},
+                        'public_code', case when ${MATCHABLE_SQL} then m.public_code end,
+                        'linkedin', case when ${MATCHABLE_SQL} then m.linkedin end,
+                        'x_handle', case when ${MATCHABLE_SQL} then m.x_handle end,
+                        'photo_url', case when ${MATCHABLE_SQL} then m.photo_url end) order by m.id)
+                        from members m where m.team_id = t.id and m.deleted_at is null), '[]') as members
        from teams t order by t.created_at`,
   );
 }

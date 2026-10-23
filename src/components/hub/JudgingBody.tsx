@@ -20,7 +20,10 @@ export default function JudgingBody() {
 
       <Fold id="rubric">
         <div className="grid gap-12 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
-          <SectionHeading eyebrow="Rubric" dim="Same rubric," bright="Every track." intro="Kane CLI usage carries the most weight." />
+          <div>
+            <SectionHeading eyebrow="Rubric" dim="Same rubric," bright="Every track." intro="Your harness and how it uses Kane carry the most weight." />
+            <p className="mt-6 max-w-xl font-plex text-sm leading-relaxed text-lightgray">{judging.eligibilityNote}</p>
+          </div>
           <Rubric />
         </div>
       </Fold>
@@ -31,7 +34,11 @@ export default function JudgingBody() {
           <div className="bg-ink p-8">
             <p className="font-dots text-6xl leading-none font-black text-lime">3:00</p>
             <p className="mt-4 font-display text-xl text-bright">{judging.stage.demo}</p>
-            <p className="mt-2 font-plex text-sm text-lightgray">Lead with the run report, show one real flow, end on what Kane caught.</p>
+            <ol className="mt-3 list-decimal space-y-1 pl-5 font-plex text-sm text-lightgray">
+              {judging.demoChecklist.map((c) => (
+                <li key={c}>{c}</li>
+              ))}
+            </ol>
           </div>
           <div className="bg-ink p-8">
             <p className="font-dots text-6xl leading-none font-black text-bright">2:00</p>

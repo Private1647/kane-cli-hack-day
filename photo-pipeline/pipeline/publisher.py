@@ -42,7 +42,8 @@ class Publisher:
         jpeg = (self.cfg.photos_dir / f"{h}.jpg").read_bytes()
         res = self.site.import_photo(jpeg, photo_key(h), [team], row["width"], row["height"], self._caption(row))
         outcome = (res.get("results") or {}).get(team)
-        if outcome in ("added", "already there"):
+        # "held for review": the site stored it privately because someone in it has no photo consent on record.
+        if outcome in ("added", "already there", "held for review"):
             self.db.run("UPDATE tags SET publish='published', publish_result=?, publish_error=NULL "
                         "WHERE photo_hash=? AND team=?", (outcome, h, team))
             log.info("gallery: %s -> %s (%s)", h[:8], team, outcome)
