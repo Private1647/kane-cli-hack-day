@@ -1,0 +1,754 @@
+{
+  "description": "Wave plan for .testmuai/tests. No wave holds two tests that use the same single-use credential, and tests that mutate the same fixture are split. See docs/hack-os/TEST_WAVES.md.",
+  "max_per_wave": 4,
+  "single_use_credentials": [
+    "organizer_one_time_code",
+    "mentor_one_time_code",
+    "second_mentor_one_time_code",
+    "judge_one_time_code",
+    "valid_pair_code"
+  ],
+  "reseed_before_each_wave": true,
+  "procedure": [
+    "cd <run checkout> && node --env-file=.env.local --import ./tests/support/register.mjs scripts/seed-local.mts",
+    "cd <run checkout> && node --env-file=.env.local --import ./tests/support/register.mjs scripts/issue-test-codes.mts --repo <this repo> --wave <id>",
+    "cd <this repo> && KANE_CLI_USER_AGENT=<agent> kane-cli testrun run <the wave's tests> --parallel 4 < /dev/null"
+  ],
+  "waves": [
+    {
+      "id": "L01",
+      "runnable_locally": true,
+      "target": "http://localhost:3100",
+      "tests": [
+        ".testmuai/tests/admit-and-check-in-walk-in-with-recorded-provenance_test.md",
+        ".testmuai/tests/mentor-cannot-override-denied-roster-admission_test.md",
+        ".testmuai/tests/judge-authors-the-final-score-instead-of-accepting-an-ai_test.md",
+        ".testmuai/tests/application-idea-receives-full-advisory-eligibility-review_test.md"
+      ],
+      "test_ids": [
+        "t-9",
+        "t-10",
+        "t-40",
+        "t-55"
+      ],
+      "titles": [
+        "Admit and check in walk-in with recorded provenance",
+        "Mentor cannot override denied roster admission",
+        "Judge authors the final score instead of accepting an AI decision",
+        "Application idea receives full advisory eligibility review"
+      ],
+      "single_use_credentials": [
+        "judge_one_time_code",
+        "mentor_one_time_code",
+        "organizer_one_time_code"
+      ],
+      "overrides": {},
+      "notes": "Organizer walk-in, mentor override denial, judge final score, application idea save."
+    },
+    {
+      "id": "L02",
+      "runnable_locally": true,
+      "target": "http://localhost:3100",
+      "tests": [
+        ".testmuai/tests/critical-web-operations-survive-optional-integration-outages_test.md",
+        ".testmuai/tests/mentor-shared-diagnostics-exclude-restricted-information_test.md",
+        ".testmuai/tests/broken-member-readiness-check-shows-partial-status-and-fix_test.md",
+        ".testmuai/tests/anonymous-event-visitor-cannot-see-non-opted-in-identity_test.md"
+      ],
+      "test_ids": [
+        "t-44",
+        "t-1",
+        "t-46",
+        "t-85"
+      ],
+      "titles": [
+        "Critical web operations survive optional integration outages",
+        "Mentor shared diagnostics exclude restricted information",
+        "Broken member readiness check shows partial status and fix",
+        "Anonymous event visitor cannot see non-opted-in identity"
+      ],
+      "single_use_credentials": [
+        "mentor_one_time_code",
+        "organizer_one_time_code"
+      ],
+      "overrides": {
+        "complete_submission_team_slug": "demo-tern"
+      },
+      "notes": "t-44 finalizes a fresh complete draft (demo-tern), so no judge test shares this wave."
+    },
+    {
+      "id": "L03",
+      "runnable_locally": true,
+      "target": "http://localhost:3100",
+      "tests": [
+        ".testmuai/tests/import-versioned-luma-csv-and-check-in-approved-guest_test.md",
+        ".testmuai/tests/only-one-staff-claimant-wins-competing-help-claims_test.md",
+        ".testmuai/tests/judge-cannot-change-a-frozen-submission-or-project_test.md",
+        ".testmuai/tests/standalone-validation-harness-is-reviewed-without-a-separate_test.md"
+      ],
+      "test_ids": [
+        "t-8",
+        "t-2",
+        "t-38",
+        "t-54"
+      ],
+      "titles": [
+        "Import versioned Luma CSV and check in approved guest",
+        "Only one staff claimant wins competing help claims",
+        "Judge cannot change a frozen submission or project",
+        "Standalone validation harness is reviewed without a separate app"
+      ],
+      "single_use_credentials": [
+        "judge_one_time_code",
+        "mentor_one_time_code",
+        "organizer_one_time_code",
+        "second_mentor_one_time_code"
+      ],
+      "overrides": {},
+      "notes": "The only wave with the second mentor code (t-2, competing claims)."
+    },
+    {
+      "id": "L04",
+      "runnable_locally": true,
+      "target": "http://localhost:3100",
+      "tests": [
+        ".testmuai/tests/organizer-confirms-a-public-announcement-and-inspects-audit_test.md",
+        ".testmuai/tests/participant-help-request-progresses-through-mentor_test.md",
+        ".testmuai/tests/judge-cannot-see-unrelated-participant-personal-details_test.md",
+        ".testmuai/tests/unsupported-feature-idea-receives-independent-warning-and_test.md"
+      ],
+      "test_ids": [
+        "t-80",
+        "t-3",
+        "t-36",
+        "t-53"
+      ],
+      "titles": [
+        "Organizer confirms a public announcement and inspects audit",
+        "Participant help request progresses through mentor resolution",
+        "Judge cannot see unrelated participant personal details",
+        "Unsupported feature idea receives independent warning and advisory review"
+      ],
+      "single_use_credentials": [
+        "judge_one_time_code",
+        "mentor_one_time_code",
+        "organizer_one_time_code"
+      ],
+      "overrides": {},
+      "notes": "t-3 creates Pat's new help ticket; kept apart from t-44, which also creates one."
+    },
+    {
+      "id": "L05",
+      "runnable_locally": true,
+      "target": "http://localhost:3100",
+      "tests": [
+        ".testmuai/tests/organizer-schedules-a-staff-only-notice-without-public_test.md",
+        ".testmuai/tests/judge-is-denied-an-unlisted-other-team-evidence-item_test.md",
+        ".testmuai/tests/complementary-ideas-provide-explained-collaboration_test.md",
+        ".testmuai/tests/possible-overlap-has-explained-qualified-guidance_test.md"
+      ],
+      "test_ids": [
+        "t-83",
+        "t-37",
+        "t-60",
+        "t-58"
+      ],
+      "titles": [
+        "Organizer schedules a staff-only notice without public leakage",
+        "Judge is denied an unlisted other-team evidence item",
+        "Complementary ideas provide explained collaboration",
+        "Possible overlap has explained, qualified guidance"
+      ],
+      "single_use_credentials": [
+        "judge_one_time_code",
+        "organizer_one_time_code"
+      ],
+      "overrides": {},
+      "notes": "Radar reads (complementary, overlap); no idea save in this wave."
+    },
+    {
+      "id": "L06",
+      "runnable_locally": true,
+      "target": "http://localhost:3100",
+      "tests": [
+        ".testmuai/tests/reconcile-real-time-paper-check-in-after-backend-recovery_test.md",
+        ".testmuai/tests/judge-reviews-the-frozen-submission-with-the-weighted-human_test.md",
+        ".testmuai/tests/similar-angle-has-explanation-and-participant-options_test.md",
+        ".testmuai/tests/nonconsented-summary-is-excluded-from-radar_test.md"
+      ],
+      "test_ids": [
+        "t-6",
+        "t-39",
+        "t-59",
+        "t-57"
+      ],
+      "titles": [
+        "Reconcile real-time paper check-in after backend recovery",
+        "Judge reviews the frozen submission with the weighted human rubric",
+        "Similar angle has explanation and participant options",
+        "Nonconsented summary is excluded from Radar"
+      ],
+      "single_use_credentials": [
+        "judge_one_time_code",
+        "organizer_one_time_code"
+      ],
+      "overrides": {
+        "offline_receipt_id": "CHK-OFF042"
+      },
+      "notes": "t-6 uses the check-in receipt id printed on tests/fixtures/offline-checkin-ledger.csv."
+    },
+    {
+      "id": "L07",
+      "runnable_locally": true,
+      "target": "http://localhost:3100",
+      "tests": [
+        ".testmuai/tests/reconcile-signed-offline-help-receipt-with-actual-time-and_test.md",
+        ".testmuai/tests/private-idea-cannot-shape-radar-comparison-clues_test.md",
+        ".testmuai/tests/anonymous-request-cannot-reveal-a-team-s-private-idea_test.md",
+        ".testmuai/tests/working-manual-readiness-check-is-reported-rather-than_test.md"
+      ],
+      "test_ids": [
+        "t-42",
+        "t-56",
+        "t-86",
+        "t-47"
+      ],
+      "titles": [
+        "Reconcile signed offline help receipt with actual time and audit",
+        "Private idea cannot shape Radar comparison clues",
+        "Anonymous request cannot reveal a team's private idea",
+        "Working manual readiness check is reported rather than verified"
+      ],
+      "single_use_credentials": [
+        "organizer_one_time_code"
+      ],
+      "overrides": {},
+      "notes": "Paper help receipt H-OFF042; Radar private-idea and anonymous private-idea checks."
+    },
+    {
+      "id": "L08",
+      "runnable_locally": true,
+      "target": "http://localhost:3100",
+      "tests": [
+        ".testmuai/tests/replayed-offline-help-receipt-does-not-duplicate-recovery_test.md",
+        ".testmuai/tests/approved-evidence-backed-milestone-becomes-public_test.md",
+        ".testmuai/tests/passport-saves-independent-photo-and-social-consent-choices_test.md",
+        ".testmuai/tests/anonymous-unpublished-photo-stays-out-of-gallery-and-direct_test.md"
+      ],
+      "test_ids": [
+        "t-43",
+        "t-62",
+        "t-20",
+        "t-84"
+      ],
+      "titles": [
+        "Replayed offline help receipt does not duplicate recovery event",
+        "Approved evidence-backed milestone becomes public",
+        "Passport saves independent photo and social consent choices",
+        "Anonymous unpublished photo stays out of gallery and direct access"
+      ],
+      "single_use_credentials": [
+        "organizer_one_time_code"
+      ],
+      "overrides": {},
+      "notes": "t-43 imports t-42 and replays H-OFF042 (self-contained after a re-seed)."
+    },
+    {
+      "id": "L09",
+      "runnable_locally": true,
+      "target": "http://localhost:3100",
+      "tests": [
+        ".testmuai/tests/record-an-outage-submission-and-inspect-its-signed-manual_test.md",
+        ".testmuai/tests/compare-run-proof-and-keep-drafted-milestone-team-only_test.md",
+        ".testmuai/tests/public-badge-does-not-expose-unconsented-profile-or-camera_test.md",
+        ".testmuai/tests/anonymous-visitor-sees-published-gallery-but-not-unpublished_test.md"
+      ],
+      "test_ids": [
+        "t-33",
+        "t-63",
+        "t-16",
+        "t-88"
+      ],
+      "titles": [
+        "Record an outage submission and inspect its signed manual receipt",
+        "Compare run proof and keep drafted milestone team-only",
+        "Public badge does not expose unconsented profile or camera picture",
+        "Anonymous visitor sees published gallery but not unpublished photo"
+      ],
+      "single_use_credentials": [
+        "organizer_one_time_code"
+      ],
+      "overrides": {
+        "offline_receipt_id": "S-OFF042"
+      },
+      "notes": "t-33 records the manual submission receipt S-OFF042 for demo-outage."
+    },
+    {
+      "id": "L10",
+      "runnable_locally": true,
+      "target": "http://localhost:3100",
+      "tests": [
+        ".testmuai/tests/reject-normal-check-in-for-guest-marked-not-admitted_test.md",
+        ".testmuai/tests/refuse-finalization-at-the-authoritative-server-deadline_test.md",
+        ".testmuai/tests/participant-is-denied-organizer-announcement-publication_test.md",
+        ".testmuai/tests/anonymous-request-cannot-reveal-private-kane-run-details_test.md"
+      ],
+      "test_ids": [
+        "t-7",
+        "t-32",
+        "t-79",
+        "t-87"
+      ],
+      "titles": [
+        "Reject normal check-in for guest marked not admitted",
+        "Refuse finalization at the authoritative server deadline",
+        "Participant is denied organizer announcement publication",
+        "Anonymous request cannot reveal private Kane run details"
+      ],
+      "single_use_credentials": [
+        "organizer_one_time_code"
+      ],
+      "overrides": {},
+      "notes": "Deadline wave: the server submission lock is moved into the past, so no other submission test runs here.",
+      "clock": "submission_locked"
+    },
+    {
+      "id": "L11",
+      "runnable_locally": true,
+      "target": "http://localhost:3100",
+      "tests": [
+        ".testmuai/tests/staff-web-intake-remains-usable-when-automation-and-slack_test.md",
+        ".testmuai/tests/finalize-reviewed-team-submission-before-lock-and-inspect_test.md",
+        ".testmuai/tests/unsupported-public-milestone-stays-unpublished_test.md",
+        ".testmuai/tests/another-participant-cannot-change-the-owner-s-passport_test.md"
+      ],
+      "test_ids": [
+        "t-4",
+        "t-31",
+        "t-61",
+        "t-17"
+      ],
+      "titles": [
+        "Staff web intake remains usable when automation and Slack fail",
+        "Finalize reviewed team submission before lock and inspect immutable receipt",
+        "Unsupported public milestone stays unpublished",
+        "Another participant cannot change the owner's passport consents"
+      ],
+      "single_use_credentials": [
+        "organizer_one_time_code"
+      ],
+      "overrides": {
+        "complete_submission_team_slug": "demo-wren"
+      },
+      "notes": "t-31 finalizes the fresh complete draft demo-wren, so no judge test shares this wave."
+    },
+    {
+      "id": "L12",
+      "runnable_locally": true,
+      "target": "http://localhost:3100",
+      "tests": [
+        ".testmuai/tests/unconfirmed-announcement-remains-unpublished_test.md",
+        ".testmuai/tests/retry-finalization-without-creating-another-receipt_test.md",
+        ".testmuai/tests/public-badge-scan-withholds-staff-only-check-in-information_test.md",
+        ".testmuai/tests/live-tv-holds-its-last-count-during-stream-interruption_test.md"
+      ],
+      "test_ids": [
+        "t-82",
+        "t-35",
+        "t-19",
+        "t-45"
+      ],
+      "titles": [
+        "Unconfirmed announcement remains unpublished",
+        "Retry finalization without creating another receipt",
+        "Public badge scan withholds staff-only check-in information",
+        "Live TV holds its last count during stream interruption"
+      ],
+      "single_use_credentials": [
+        "organizer_one_time_code"
+      ],
+      "overrides": {},
+      "notes": "t-19 reads the badge link; t-18 (rotation) runs in another wave."
+    },
+    {
+      "id": "L13",
+      "runnable_locally": true,
+      "target": "http://localhost:3100",
+      "tests": [
+        ".testmuai/tests/unresolved-placeholders-block-announcement-publication_test.md",
+        ".testmuai/tests/preflight-reports-missing-repository-and-missing-evidence_test.md",
+        ".testmuai/tests/rotating-a-lost-badge-invalidates-its-earlier-qr-link_test.md",
+        ".testmuai/tests/reopening-a-resolved-ticket-adds-its-own-history-event_test.md"
+      ],
+      "test_ids": [
+        "t-81",
+        "t-34",
+        "t-18",
+        "t-5"
+      ],
+      "titles": [
+        "Unresolved placeholders block announcement publication",
+        "Preflight reports missing repository and missing evidence",
+        "Rotating a lost badge invalidates its earlier QR link",
+        "Reopening a resolved ticket adds its own history event"
+      ],
+      "single_use_credentials": [
+        "organizer_one_time_code"
+      ],
+      "overrides": {},
+      "notes": "t-18 rotates Pat's badge; t-5 reopens the resolved ticket."
+    },
+    {
+      "id": "L14",
+      "runnable_locally": true,
+      "target": "http://localhost:3100",
+      "tests": [
+        ".testmuai/tests/privileged-recovery-leaves-finalized-snapshot-unchanged_test.md"
+      ],
+      "test_ids": [
+        "t-41"
+      ],
+      "titles": [
+        "Privileged recovery leaves finalized snapshot unchanged"
+      ],
+      "single_use_credentials": [],
+      "overrides": {},
+      "notes": "Break-glass admin password (reusable); kept alone so the other waves stay at 4."
+    },
+    {
+      "id": "P01",
+      "runnable_locally": false,
+      "target": "https://kaneclihack.sh (hard-coded in the test steps; do not run against production)",
+      "tests": [
+        ".testmuai/tests/concurrent-team-joins-preserve-one-active-membership_test.md",
+        ".testmuai/tests/visitor-retrieves-a-kane-workflow-for-a-selected-version_test.md",
+        ".testmuai/tests/anonymous-attendee-cannot-change-live-tv-phase_test.md",
+        ".testmuai/tests/expired-invitation-cannot-add-a-team-member_test.md"
+      ],
+      "test_ids": [
+        "t-21",
+        "t-89",
+        "t-75",
+        "t-25"
+      ],
+      "titles": [
+        "Concurrent team joins preserve one active membership",
+        "Visitor retrieves a Kane workflow for a selected version entitlement",
+        "Anonymous attendee cannot change live TV phase",
+        "Expired invitation cannot add a team member"
+      ],
+      "single_use_credentials": [],
+      "overrides": {
+        "participant_email": "gia@demo.test"
+      },
+      "notes": "The join race needs a teamless participant."
+    },
+    {
+      "id": "P02",
+      "runnable_locally": false,
+      "target": "https://kaneclihack.sh (hard-coded in the test steps; do not run against production)",
+      "tests": [
+        ".testmuai/tests/locked-roster-resists-an-unapproved-captain-change_test.md",
+        ".testmuai/tests/four-person-team-rejects-a-fifth-member_test.md",
+        ".testmuai/tests/valid-run-end-evidence-records-a-team-execution_test.md",
+        ".testmuai/tests/valid-testrun-done-evidence-records-a-team-execution_test.md"
+      ],
+      "test_ids": [
+        "t-22",
+        "t-24",
+        "t-29",
+        "t-30"
+      ],
+      "titles": [
+        "Locked roster resists an unapproved captain change",
+        "Four-person team rejects a fifth member",
+        "Valid run_end evidence records a team execution",
+        "Valid testrun_done evidence records a team execution"
+      ],
+      "single_use_credentials": [],
+      "overrides": {
+        "participant_email": "lena@demo.test"
+      },
+      "notes": "The locked-roster test needs the locked team's captain."
+    },
+    {
+      "id": "P03",
+      "runnable_locally": false,
+      "target": "https://kaneclihack.sh (hard-coded in the test steps; do not run against production)",
+      "tests": [
+        ".testmuai/tests/captain-cannot-change-a-teammate-s-personal-consent_test.md",
+        ".testmuai/tests/other-team-cannot-retrieve-an-unlisted-evidence-artifact_test.md",
+        ".testmuai/tests/tv-distinguishes-completed-run-statuses-from-verified-builds_test.md",
+        ".testmuai/tests/deny-cross-team-deck-editing_test.md"
+      ],
+      "test_ids": [
+        "t-23",
+        "t-28",
+        "t-76",
+        "t-65"
+      ],
+      "titles": [
+        "Captain cannot change a teammate's personal consent",
+        "Other team cannot retrieve an unlisted evidence artifact",
+        "TV distinguishes completed run statuses from verified builds",
+        "Deny cross-team deck editing"
+      ],
+      "single_use_credentials": [],
+      "overrides": {
+        "participant_email": "hugo@demo.test"
+      },
+      "notes": "The captain test needs the captain of the team that contains Olu."
+    },
+    {
+      "id": "P04",
+      "runnable_locally": false,
+      "target": "https://kaneclihack.sh (hard-coded in the test steps; do not run against production)",
+      "tests": [
+        ".testmuai/tests/publish-immutable-submission-pinned-deck-version_test.md",
+        ".testmuai/tests/failed-kane-execution-remains-a-suspected-detection_test.md",
+        ".testmuai/tests/live-tv-retains-fixed-information-across-rotating-panels_test.md"
+      ],
+      "test_ids": [
+        "t-67",
+        "t-27",
+        "t-78"
+      ],
+      "titles": [
+        "Publish immutable submission-pinned deck version",
+        "Failed Kane execution remains a suspected detection",
+        "Live TV retains fixed information across rotating panels"
+      ],
+      "single_use_credentials": [],
+      "overrides": {
+        "participant_email": "finch.captain@demo.test",
+        "participant_password": "staging-team-pass"
+      },
+      "notes": "The pinned-deck test needs a demo-finch member; t-27's baseline is kept away from t-29/t-30."
+    },
+    {
+      "id": "P05",
+      "runnable_locally": false,
+      "target": "https://kaneclihack.sh (hard-coded in the test steps; do not run against production)",
+      "tests": [
+        ".testmuai/tests/failed-video-render-does-not-block-final-submission_test.md",
+        ".testmuai/tests/untrusted-kane-events-leave-trusted-run-totals-unchanged_test.md",
+        ".testmuai/tests/tv-displays-consented-aggregates-and-qr-without-contacts_test.md"
+      ],
+      "test_ids": [
+        "t-71",
+        "t-26",
+        "t-51"
+      ],
+      "titles": [
+        "Failed video render does not block final submission",
+        "Untrusted Kane events leave trusted run totals unchanged",
+        "TV displays consented aggregates and QR without contacts"
+      ],
+      "single_use_credentials": [],
+      "overrides": {
+        "participant_email": "glitch.captain@demo.test"
+      },
+      "notes": "t-26's baseline is kept away from the other Kane ingests."
+    },
+    {
+      "id": "P06",
+      "runnable_locally": false,
+      "target": "https://kaneclihack.sh (hard-coded in the test steps; do not run against production)",
+      "tests": [
+        ".testmuai/tests/no-footage-video-identifies-screenshot-walkthrough_test.md",
+        ".testmuai/tests/tv-restores-reconciled-metrics-after-sse-outage_test.md"
+      ],
+      "test_ids": [
+        "t-72",
+        "t-74"
+      ],
+      "titles": [
+        "No-footage video identifies screenshot walkthrough",
+        "TV restores reconciled metrics after SSE outage"
+      ],
+      "single_use_credentials": [],
+      "overrides": {
+        "participant_email": "stills.captain@demo.test"
+      },
+      "notes": ""
+    },
+    {
+      "id": "P07",
+      "runnable_locally": false,
+      "target": "https://kaneclihack.sh (hard-coded in the test steps; do not run against production)",
+      "tests": [
+        ".testmuai/tests/reviewed-story-produces-complete-factual-launch-kit_test.md",
+        ".testmuai/tests/authorized-organizer-overrides-the-tv-phase_test.md"
+      ],
+      "test_ids": [
+        "t-73",
+        "t-77"
+      ],
+      "titles": [
+        "Reviewed story produces complete factual launch kit",
+        "Authorized organizer overrides the TV phase"
+      ],
+      "single_use_credentials": [
+        "organizer_one_time_code"
+      ],
+      "overrides": {
+        "participant_email": "reel.captain@demo.test"
+      },
+      "notes": "t-77 overrides the TV phase, so no other TV test shares this wave."
+    },
+    {
+      "id": "P08",
+      "runnable_locally": false,
+      "target": "https://kaneclihack.sh (hard-coded in the test steps; do not run against production)",
+      "tests": [
+        ".testmuai/tests/unapproved-launch-post-does-not-publish_test.md"
+      ],
+      "test_ids": [
+        "t-69"
+      ],
+      "titles": [
+        "Unapproved launch post does not publish"
+      ],
+      "single_use_credentials": [],
+      "overrides": {
+        "participant_email": "draftpost.captain@demo.test"
+      },
+      "notes": ""
+    },
+    {
+      "id": "P09",
+      "runnable_locally": false,
+      "target": "https://kaneclihack.sh (hard-coded in the test steps; do not run against production)",
+      "tests": [
+        ".testmuai/tests/unsupported-kpi-and-testimonial-stay-out-of-launch-claims_test.md"
+      ],
+      "test_ids": [
+        "t-70"
+      ],
+      "titles": [
+        "Unsupported KPI and testimonial stay out of launch claims"
+      ],
+      "single_use_credentials": [],
+      "overrides": {
+        "participant_email": "claims.captain@demo.test"
+      },
+      "notes": ""
+    },
+    {
+      "id": "P10",
+      "runnable_locally": false,
+      "target": "https://kaneclihack.sh (hard-coded in the test steps; do not run against production)",
+      "tests": [
+        ".testmuai/tests/browser-restart-recovers-awaiting-selfie-checkpoint_test.md",
+        ".testmuai/tests/export-the-five-default-scenes-with-correct-pdf-breaks_test.md",
+        ".testmuai/tests/opted-in-matching-profile-yields-explained-suggestions_test.md"
+      ],
+      "test_ids": [
+        "t-14",
+        "t-68",
+        "t-52"
+      ],
+      "titles": [
+        "Browser restart recovers awaiting-selfie checkpoint",
+        "Export the five default scenes with correct PDF breaks",
+        "Opted-in matching profile yields explained suggestions"
+      ],
+      "single_use_credentials": [
+        "valid_pair_code"
+      ],
+      "overrides": {},
+      "notes": "One valid pair code per wave."
+    },
+    {
+      "id": "P11",
+      "runnable_locally": false,
+      "target": "https://kaneclihack.sh (hard-coded in the test steps; do not run against production)",
+      "tests": [
+        ".testmuai/tests/camera-denial-permits-selfie-skip-and-activation_test.md",
+        ".testmuai/tests/restore-default-deck-after-invalid-custom-html_test.md",
+        ".testmuai/tests/request-an-introduction-without-private-contact-disclosure_test.md"
+      ],
+      "test_ids": [
+        "t-13",
+        "t-66",
+        "t-49"
+      ],
+      "titles": [
+        "Camera denial permits selfie skip and activation",
+        "Restore default deck after invalid custom HTML",
+        "Request an introduction without private contact disclosure"
+      ],
+      "single_use_credentials": [
+        "valid_pair_code"
+      ],
+      "overrides": {
+        "other_participant_email": "dana@demo.test"
+      },
+      "notes": "Introductions go to Dana (discoverable); Olu stays the non-opted-in fixture."
+    },
+    {
+      "id": "P12",
+      "runnable_locally": false,
+      "target": "https://kaneclihack.sh (hard-coded in the test steps; do not run against production)",
+      "tests": [
+        ".testmuai/tests/human-selfie-handoff-ends-in-activation-receipt_test.md",
+        ".testmuai/tests/sandbox-hostile-custom-deck-and-block-credential-access_test.md",
+        ".testmuai/tests/accept-a-pending-introduction-without-private-contact_test.md"
+      ],
+      "test_ids": [
+        "t-15",
+        "t-64",
+        "t-50"
+      ],
+      "titles": [
+        "Human selfie handoff ends in activation receipt",
+        "Sandbox hostile custom deck and block credential access",
+        "Accept a pending introduction without private contact disclosure"
+      ],
+      "single_use_credentials": [
+        "valid_pair_code"
+      ],
+      "overrides": {
+        "other_participant_email": "dana@demo.test"
+      },
+      "notes": "t-50 imports t-49; re-seed first so Dana has no pending introduction."
+    },
+    {
+      "id": "P13",
+      "runnable_locally": false,
+      "target": "https://kaneclihack.sh (hard-coded in the test steps; do not run against production)",
+      "tests": [
+        ".testmuai/tests/non-opted-in-participant-remains-absent-from-matching_test.md",
+        ".testmuai/tests/expired-and-replayed-pair-tokens-fail-closed_test.md"
+      ],
+      "test_ids": [
+        "t-48",
+        "t-12"
+      ],
+      "titles": [
+        "Non-opted-in participant remains absent from matching",
+        "Expired and replayed pair tokens fail closed"
+      ],
+      "single_use_credentials": [],
+      "overrides": {},
+      "notes": "t-12 is kept out of the waves where a valid pair code drives Pat's activation."
+    },
+    {
+      "id": "P14",
+      "runnable_locally": false,
+      "target": "https://kaneclihack.sh (hard-coded in the test steps; do not run against production)",
+      "tests": [
+        ".testmuai/tests/other-person-s-luma-guest-cannot-be-paired_test.md"
+      ],
+      "test_ids": [
+        "t-11"
+      ],
+      "titles": [
+        "Other person's Luma guest cannot be paired"
+      ],
+      "single_use_credentials": [],
+      "overrides": {},
+      "notes": ""
+    }
+  ]
+}
