@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { personalNext } from "@/lib/next-path";
 import { formObject, parse, sha256, toAppError, z } from "@/server/core";
 import { clientKey, rateLimit } from "@/server/ratelimit";
 import { memberLoginWithCode, memberLoginWithPassword } from "@/server/pairing";
@@ -14,8 +15,6 @@ const schema = z.object({
   next: z.string().max(200).optional(),
 });
 
-/** Only our own personal pages, so ?next= can't bounce anyone off-site. */
-const safeNext = (s?: string) => (s && /^\/(passport|activate|pair|readiness)(\/[\w\-/]*)?(\?[\w=&%-]*)?$/.test(s) ? s : "/passport");
 
 // Personal sign-in for anyone registered through the team form: email + the
 // team password (or a personal password), or email + a one-time code.
@@ -34,5 +33,5 @@ export async function personalLogin(_prev: PersonalLoginState, form: FormData): 
   } catch (e) {
     return { error: toAppError(e).userMessage, email: input.email };
   }
-  redirect(safeNext(input.next));
+  redirect(personalNext(input.next));
 }
