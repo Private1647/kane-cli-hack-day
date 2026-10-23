@@ -39,6 +39,7 @@ const { query, pool } = await import("../src/lib/db.ts");
 const auth = await import("../src/server/auth.ts");
 const activation = await import("../src/server/activation.ts");
 const kane = await import("../src/server/kane.ts");
+const passport = await import("../src/server/passport.ts");
 const { jar } = (await import("../tests/support/stubs/next-headers.mjs")) as { jar: Map<string, string> };
 
 const one = async <R,>(sql: string, params: unknown[] = []): Promise<R> => {
@@ -181,6 +182,9 @@ const tv = {
   osprey: await runBy(F.RUN_IDS.privateOsprey),
   sparrow: await runBy(F.RUN_IDS.sparrowVerified),
 };
+// Pat's current public badge (issued if none is live). Rotation tests (t-141) revoke it; re-seed restores one.
+const badge = await passport.getBadgeToken(pat.id, system);
+const enrolled = await one<{ name: string; public_code: string }>("select name, public_code from members where email = $1", [F.BIOMETRIC_ENROLLED]);
 const consentedRadar = ["plover", "curlew", "avocet", "lark"].map((k) => F.slugOf(k as F.TeamKey));
 const fixture = (rel: string) => path.join(repo, "tests/fixtures", rel);
 
@@ -288,6 +292,36 @@ const values: Record<string, string> = {
   private_idea_marker: F.PRIVATE_IDEA_MARKER,
   private_run_team_slug: F.slugOf("osprey"),
   private_run_marker: `${F.RUN_IDS.privateOsprey} (KR-${tv.osprey})`,
+  // Badge, photos and biometrics.
+  participant_badge_url: `${base}/passport/b/${badge.token}`,
+  event_photo_file: path.join(repo, "public/photos", F.PHOTO_DIR, F.PHOTOS[0].file),
+  consented_photo_subject_id: F.captainOf("pelican").name,
+  unconsented_photo_subject_id: F.LONERS[0].name,
+  biometric_enrolled_subject_id: `${enrolled.name} (${enrolled.public_code})`,
+  // Ship Page: projects are 1:1 with teams, so every slug the Swift team edits is demo-swift.
+  ship_team_name: F.T.swift.name,
+  ship_team_password: F.SHIP_PASSWORD,
+  ship_draft_slug: F.slugOf("martin"),
+  ship_hidden_slug: F.slugOf("puffin"),
+  ship_hidden_private_marker: F.SHIP.hiddenMarker,
+  ship_unapproved_slug: F.slugOf("swift"),
+  ship_unapproved_claim_marker: F.SHIP.unapprovedClaim,
+  ship_no_evidence_slug: F.slugOf("swift"),
+  ship_no_evidence_claim_marker: F.SHIP.noEvidenceClaim,
+  ship_finalized_slug: F.slugOf("swift"),
+  ship_receipt_id: await receiptOf("swift"),
+  ship_story_change_text: F.SHIP.storyChange,
+  ship_approved_slug: F.slugOf("swift"),
+  ship_approved_claim_marker: F.SHIP.approvedClaim,
+  // Admin settings (t-103, t-104): the seed restores the event schedule and rules.
+  changed_submission_deadline: "2026-10-24T17:45",
+  deadline_change_reason: "Local rehearsal: audited test change of the official submission lock; the next seed restores it",
+  changed_privacy_rule: "Local fixture rule (kane-cli test): no recognisable attendee appears in a public photo without verified photo consent.",
+  // Captains who sign in personally.
+  launch_failed_video_captain_email: F.captainOf("glitch").email,
+  launch_failed_video_captain_password: F.PERSONAL_PASSWORD,
+  submission_captain_email: F.captainOf("finch").email,
+  submission_captain_password: F.STAGING_PASSWORD,
 };
 
 // ── Wave: overrides and the server clock ─────────────────────────────────────
