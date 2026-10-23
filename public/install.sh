@@ -234,13 +234,15 @@ is_ours() {
 if [ -n "$KH_HAVE" ] && [ -x "${PREFIX}/bin/kanehack" ]; then
   FOUND="$(command -v kanehack 2>/dev/null || true)"
   LINKED=""
+  CONFLICT=""
   if [ -n "$FOUND" ] && is_ours "$FOUND"; then
     KH="kanehack"; LINKED=1
     pass command "kanehack → ${FOUND}"
   elif [ -n "$NO_PATH" ]; then
     echo "${D}--no-path: kanehack is not linked; use the full path below.${N}"
   elif [ -n "$FOUND" ]; then
-    warn command "another kanehack is on PATH" "${FOUND} isn't this install; left alone. Use the full path below, or remove it"
+    CONFLICT=1
+    warn command "another kanehack is on PATH" "${FOUND} isn't this install; left alone (PATH not changed). Use the full path below, or remove it"
   else
     LINK_DIR=""
     NPM_BIN=""
@@ -260,7 +262,7 @@ if [ -n "$KH_HAVE" ] && [ -x "${PREFIX}/bin/kanehack" ]; then
     fi
   fi
   # Not a command yet: offer the profile line for new terminals (asked, never silent).
-  if [ -z "$LINKED" ] && [ -z "$NO_PATH" ] && ! on_path "${PREFIX}/bin"; then
+  if [ -z "$LINKED" ] && [ -z "$NO_PATH" ] && [ -z "$CONFLICT" ] && ! on_path "${PREFIX}/bin"; then
     SH_NAME="${SHELL:-}"; SH_NAME="${SH_NAME##*/}"
     case "$SH_NAME" in
       zsh) RC="${HOME}/.zshrc" ;;

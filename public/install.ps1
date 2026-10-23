@@ -192,10 +192,10 @@ function Writable($dir) {
 }
 if ($khHave -and (Test-Path $cmdShim)) {
   $found = Get-Command kanehack -CommandType Application, ExternalScript -ErrorAction SilentlyContinue | Select-Object -First 1
-  $linked = $false
+  $linked = $false; $conflict = $false
   if ($found -and (IsOurs $found.Source)) { $kh = "kanehack"; $linked = $true; Pass "command" "kanehack → $($found.Source)" }
   elseif ($NoPath) { Write-Host "-NoPath: kanehack is not linked; use the full path below." }
-  elseif ($found) { Warn "command" "another kanehack is on PATH" "$($found.Source) isn't this install; left alone. Use the full path below" }
+  elseif ($found) { $conflict = $true; Warn "command" "another kanehack is on PATH" "$($found.Source) isn't this install; left alone (PATH not changed). Use the full path below" }
   else {
     $npmDir = $null
     if (Have npm) { try { $npmDir = (& npm prefix -g 2>$null | Select-Object -First 1) } catch {} }
@@ -207,7 +207,7 @@ if ($khHave -and (Test-Path $cmdShim)) {
       }
     } else { Write-Host "npm's global folder isn't on PATH or isn't writable; offering the user PATH instead." }
   }
-  if (-not $linked -and -not $NoPath -and -not (OnPath $bin)) {
+  if (-not $linked -and -not $NoPath -and -not $conflict -and -not (OnPath $bin)) {
     if (Ask "Add $bin to your user PATH?") {
       $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
       if (-not (($userPath -split ";") -contains $bin)) { [Environment]::SetEnvironmentVariable("Path", (@($bin, $userPath) | Where-Object { $_ }) -join ";", "User") }
