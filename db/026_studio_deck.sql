@@ -107,6 +107,6 @@ drop trigger if exists video_plans_append_only on video_plans;
 create trigger video_plans_append_only before update on video_plans
   for each row execute function forbid_mutation();
 
-create index if not exists published_assets_lookup_idx on published_assets(project_id, kind, version desc);
+-- (project_id, kind, version desc) on published_assets is created by 022 as published_assets_kind_idx.
 create index if not exists project_stories_latest_idx on project_stories(project_id, version desc);
 create index if not exists deck_versions_latest_idx on deck_versions(project_id, version desc);
