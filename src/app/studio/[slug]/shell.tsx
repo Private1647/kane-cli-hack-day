@@ -42,8 +42,8 @@ async function Gated({ params, tab, render }: { params: Promise<{ slug: string }
     ctx = { ...(await authorizeStudio(slug)), slug };
   } catch (e) {
     if (e instanceof AppError && e.code === "NOT_FOUND") notFound();
-    if (e instanceof AppError && e.code === "FORBIDDEN") return <SignIn slug={slug} state="forbidden" />;
-    if (e instanceof AppError && e.code === "UNAUTHENTICATED") return <SignIn slug={slug} state={(await unlockedWithoutName(slug)) ? "pick_name" : "signed_out"} />;
+    if (e instanceof AppError && e.code === "FORBIDDEN") return <SignIn slug={slug} tab={tab} state="forbidden" />;
+    if (e instanceof AppError && e.code === "UNAUTHENTICATED") return <SignIn slug={slug} tab={tab} state={(await unlockedWithoutName(slug)) ? "pick_name" : "signed_out"} />;
     throw e;
   }
   const published = await getLatestPublished(ctx.project.id, "ship_page");
@@ -130,12 +130,12 @@ const GATE = {
   },
   signed_out: {
     title: "Sign in to your team first",
-    body: "The studio is team-only. Open your team hub, enter the team password and pick your name, then come back.",
+    body: "The studio is team-only. Sign in with your email and password (yours or the team's) to come straight back here, or open the team hub with the team password and pick your name.",
     cta: "Open team hub →",
   },
 } as const;
 
-function SignIn({ slug, state }: { slug: string; state: keyof typeof GATE }) {
+function SignIn({ slug, tab, state }: { slug: string; tab: StudioTab; state: keyof typeof GATE }) {
   const g = GATE[state];
   return (
     <section className="py-20">
@@ -144,8 +144,23 @@ function SignIn({ slug, state }: { slug: string; state: keyof typeof GATE }) {
         <h1 className="font-display text-3xl text-bright">{g.title}</h1>
         <p className="font-plex text-sm text-lightgray">{g.body}</p>
         <div className="flex flex-wrap gap-2">
+          {state === "signed_out" && (
+            <Link
+              href={`/passport/login?next=${encodeURIComponent(studioPath(slug, tab))}`}
+              className="inline-flex min-h-11 items-center bg-bright px-4 font-plex text-sm text-ink hover:bg-lime"
+            >
+              Sign in with your email →
+            </Link>
+          )}
           {g.cta && (
-            <Link href={`/t/${slug}`} className="inline-flex min-h-11 items-center bg-bright px-4 font-plex text-sm text-ink hover:bg-lime">
+            <Link
+              href={`/t/${slug}`}
+              className={
+                state === "signed_out"
+                  ? "inline-flex min-h-11 items-center border border-hairline px-4 font-plex text-sm text-bright hover:border-lime hover:text-lime"
+                  : "inline-flex min-h-11 items-center bg-bright px-4 font-plex text-sm text-ink hover:bg-lime"
+              }
+            >
               {g.cta}
             </Link>
           )}
