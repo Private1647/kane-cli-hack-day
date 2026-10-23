@@ -116,7 +116,7 @@ export async function getPersonalMember(): Promise<MemberRow | null> {
 }
 
 export const PERSONAL_SIGN_IN =
-  "This is a personal step, so sign in as yourself at /passport/login with a one-time code from the desk or your personal password. The team password only opens the team hub.";
+  "This is a personal step, so sign in as yourself at /passport/login with your password or a one-time code from the desk.";
 
 /**
  * Personal actions (consents, pairing approval, selfie, GitHub link,

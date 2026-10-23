@@ -130,7 +130,7 @@ const GATE = {
   },
   signed_out: {
     title: "Sign in to your team first",
-    body: "The studio is team-only. Sign in with your email and password (yours or the team's) to come straight back here, or open the team hub with the team password and pick your name.",
+    body: "The studio is team-only. Sign in with your email and the password you chose at registration (or a one-time code from the desk) to come straight back here.",
     cta: "Open team hub →",
   },
 } as const;

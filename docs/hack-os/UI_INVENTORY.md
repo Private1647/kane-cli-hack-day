@@ -1025,3 +1025,56 @@ NOTES FOR THE WIREFRAME MAP
    - Live TV's "Open Submit" points at /submit.
    - The Studio tab in the hub jumps out to /studio/{slug}.
 3. There is a URL with no page: /t/[slug]/notifications is a route.ts, not a screen. It feeds the notifications bell in the hub header.
+================================================================
+EVENT-DAY-FLOW BRANCH (event-day-flow, from hack-os, 2026-10-23)
+
+Participants do nothing before the event: check in at the desk (/ops/checkin, unchanged), sit down, then
+Profile → Team → Activate → Codex → Hub. A progress bar (src/components/FlowProgress.tsx) sits on
+/register, /team, /match and /activate. Sessions are personal only (hd_member, personal: true); there is no
+team password and no team cookie. The header shows the profile photo (or initials) top right and a
+"Continue →" link to wherever the person is (/me).
+
+Added
+- /register: profile builder. (a) name, Luma email (linked to the roster guest by email hash, silently),
+  skills, interests, optional GitHub/X, personal password (8+). An email that already has an account needs
+  its password or a desk one-time code (sign-in code or desk activation code); never adopted silently.
+  (b) photo: explicit "Store my photo" consent, human shutter (HumanCameraCheckpoint), or skip.
+  (c) "Are you looking to form a team?" yes → /match, no → /team. ?edit=profile / ?edit=photo reopen a step.
+- /team (rebuilt): create a team (captain, max 4, "open seats in matchmaking" toggle) or join with an invite
+  code (?code= prefilled); on a team: roster with avatars, invites, join requests, captain settings, leave.
+- /match (rebuilt): the pool (name, photo, skills, interests; never email/phone), teams with open seats,
+  "Ask to join" (any teammate accepts on /team and the requester is added), intros, leave pool.
+- /activate (rebuilt): 3-step checklist: TestMu AI sign-up (link + tick), TestMu AI plan (server-side claim,
+  stubbed outside production), OpenAI Codex credit code (from the uploaded pool) + tick. All done → /setup.
+  /activate?code=… (desk activation code) → /passport/login?mode=code.
+- /me: resume (redirects to the current step).
+- /ops/matchmaking: everyone in the pool with skills; tick 2–4 and form a team (audited).
+- /ops/activation: Codex code upload (preview, dedupe), inventory, per-participant checklist progress with
+  masked codes, audited reveal / revoke / reassign, CSV export (/ops/activation/export).
+- /api/v1/profile/photo: the photo upload (personal session, browser only).
+
+Changed
+- /passport: lean profile (avatar, name, skills, interests, team, edit profile / photo, remove photo,
+  paired devices + /pair link, password, one-time code for another device, sign out).
+- /passport/login: personal password or desk code (sign-in or activation code). No team password.
+- /t/[slug]/*: opens for any personally signed-in member of the team; no password gate or "Who are you?".
+  The dashboard's "Add teammate" is now "+ Invite a teammate" → /team.
+- Navbar: "Passport" link removed; right side is Sign in / Start here, or Continue → + avatar.
+- Footer: Your day (Start here, Sign in, Continue, Set up Codex) and During the event (Matchmaking, Help,
+  Live, Judging).
+
+Removed (redirect in next.config.ts)
+- /login → /passport/login · /team/new, /team/join, /team/[slug]/manage → /team (query kept) ·
+  /activate/phone → /register · /docs → /setup · /resources, /content-hour → /me.
+- The team-first register form, the team-password hub gate, the Kane-driven activation steps (consent
+  wizard, selfie, phone handoff UI). The /api/v1/activate/* routes and MCP tools stay for kanehack.
+
+Kept unchanged: hub tabs and submission, /studio, /ship, /judge, /judging, /live, /ops/* (check-in, help,
+recovery, roster import, settings…), /setup, /pair, /readiness, /help.
+
+Placeholders: src/data/activation-steps.ts ([CODEX_REDEEM_INSTRUCTIONS], [CODEX_REDEEM_URL]).
+Codex code upload format: CSV with a `code` header column (other columns kept per code as `extra`), or one
+code per line; 4–128 chars of letters, digits, '-', '_', '.'; duplicates skipped.
+TestMu AI claim: POST TESTMU_TRIAL_CLAIM_URL (default https://backend.lambdatest.com/api/trials/hack-day/claim)
+only when VERCEL_ENV or HACKOS_ENV is production; elsewhere a stub (TESTMU_CLAIM_STUB=success |
+not_registered | invalid | error | timeout), or a non-TestMu mock URL.
