@@ -16,6 +16,7 @@ import {
   type Staff,
 } from "./auth";
 import { AppError, idempotent, parse, siteUrl, transaction, writeAudit, z, zx, type Actor, type Receipt } from "./core";
+import { PAPER_LATE_AFTER_MINUTES, parsePaperTime, redactRestricted, scrubSecrets, type RedactionKind } from "./help-rules";
 
 // Help desk (Tier-0, SPEC §12). Tickets come from the hub, from /help for
 // members without a team, from the CLI/MCP, or from a paper slip typed in by
@@ -78,28 +79,9 @@ const HELP_STAFF_ROLES = ["mentor", "organizer"] as const;
 const MAX_OPEN_PER_MEMBER = 3;
 const MAX_CREATED_PER_15_MIN = 5;
 
-// ── Secrets never go on a ticket ─────────────────────────────────────────────
-
-const SECRET_PATTERNS: RegExp[] = [
-  /\b(?:sk|pk|rk)-(?:proj-|live-|test-)?[A-Za-z0-9_-]{16,}\b/g, // OpenAI / Stripe style keys
-  /\bkh[kpbh]_[A-Za-z0-9_-]{10,}\b/g, // our own bearer / pairing tokens
-  /\bgh[pousr]_[A-Za-z0-9]{20,}\b/g, // GitHub tokens
-  /\bgithub_pat_[A-Za-z0-9_]{20,}\b/g,
-  /\bxox[abprs]-[A-Za-z0-9-]{10,}\b/g, // Slack
-  /\bAKIA[0-9A-Z]{16}\b/g, // AWS access key id
-  /\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{5,}\b/g, // JWTs
-  /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?(?:-----END [A-Z ]*PRIVATE KEY-----|$)/g,
-  /\b(password|passwd|pwd|secret|token|api[_-]?key|access[_-]?key)\s*[:=]\s*\S+/gi,
-];
-
-/** Strip anything that looks like a credential. Tickets are read by many mentors and go to Slack. */
-export function scrubSecrets(text: string): { text: string; redacted: boolean } {
-  let out = text;
-  for (const re of SECRET_PATTERNS) {
-    out = out.replace(re, (m, label?: string) => (typeof label === "string" && /[:=]/.test(m) ? `${label}=[redacted]` : "[redacted]"));
-  }
-  return { text: out, redacted: out !== text };
-}
+// Secret scrubbing, mentor redaction and slip-time parsing are pure rules in
+// help-rules.ts (unit-tested without a database).
+export { scrubSecrets };
 
 // ── Rows and views ───────────────────────────────────────────────────────────
 
@@ -190,6 +172,8 @@ export type HelpTicketView = {
   age_seconds: number;
   url: string;
   messages: HelpMessageView[];
+  /** What was hidden from this viewer (secrets, private-repo excerpts, biometrics). Empty for the ticket's author. */
+  redacted: RedactionKind[];
 };
 
 /** What staff see in addition: full names, participant code, who typed in a paper slip, staff-only notes. */
@@ -233,6 +217,7 @@ function toView(t: TicketJoined, messages: HelpMessageView[]): HelpTicketView {
     age_seconds: t.age_seconds,
     url: `/help/${t.code}`,
     messages,
+    redacted: [],
   };
 }
 
@@ -247,6 +232,56 @@ function toStaffView(t: TicketJoined, messages: HelpMessageView[]): HelpTicketSt
     entered_by: t.entered_by_name,
     paper_original_at: iso(t.paper_original_at),
   };
+}
+
+// ── Privacy: who reads a ticket decides what they see ────────────────────────
+//
+// The author sees their own words. Teammates see the team's private repo but
+// not someone else's face data. Mentors and organizers (web queue, REST, MCP)
+// see neither, and the UI says what was hidden. Applied on read, so the stored
+// ticket stays the participant's own text.
+
+type Audience = "author" | "team" | "staff";
+
+/** Linked private repositories per team (repository_links.permission_scope has "private"). */
+async function privateReposByTeam(teamIds: (number | null)[]): Promise<Map<number, string[]>> {
+  const ids = [...new Set(teamIds.filter((x): x is number => x !== null))];
+  const map = new Map<number, string[]>();
+  if (!ids.length) return map;
+  const rows = await query<{ team_id: number; repo: string }>(
+    `select p.team_id, rl.repo_full_name as repo
+       from repository_links rl join projects p on p.id = rl.project_id
+      where p.team_id = any($1::bigint[]) and rl.permission_scope ? 'private'`,
+    [ids],
+  );
+  for (const r of rows) map.set(r.team_id, [...(map.get(r.team_id) ?? []), r.repo]);
+  return map;
+}
+
+function restrictView<V extends HelpTicketView>(v: V, audience: Audience, privateRepos: string[]): V {
+  if (audience === "author") return v;
+  const ctx = { privateRepos, repoAccess: audience === "team" };
+  const kinds = new Set<RedactionKind>();
+  const r = (text: string | null) => {
+    if (!text) return text;
+    const out = redactRestricted(text, ctx);
+    for (const k of out.kinds) kinds.add(k);
+    return out.text;
+  };
+  return {
+    ...v,
+    summary: r(v.summary)!,
+    details: r(v.details),
+    tried: r(v.tried),
+    safe_run_id: r(v.safe_run_id),
+    messages: v.messages.map((m) => ({ ...m, body: r(m.body)! })),
+    redacted: [...kinds],
+  };
+}
+
+async function restrictMany<V extends HelpTicketView>(views: { view: V; teamId: number | null; audience: Audience }[]): Promise<V[]> {
+  const repos = await privateReposByTeam(views.filter((x) => x.audience !== "author").map((x) => x.teamId));
+  return views.map((x) => restrictView(x.view, x.audience, (x.teamId && repos.get(x.teamId)) || []));
 }
 
 async function loadMessages(ticketId: number, includeStaffOnly: boolean): Promise<HelpMessageView[]> {
@@ -466,7 +501,9 @@ export async function getHelpTicket(ref: string, viewer: { member?: MemberRow | 
   const t = await findTicket(ref);
   // Same answer for "missing" and "not yours", so codes can't be probed.
   if (!t || !canSee(t, viewer)) throw new AppError("NOT_FOUND", { userMessage: "No ticket with that code on your account." });
-  return toView(t, await loadMessages(t.id, false));
+  const audience: Audience = viewer.member && t.member_id === viewer.member.id ? "author" : viewer.staff && hasRole(viewer.staff, ...HELP_STAFF_ROLES) ? "staff" : "team";
+  const [view] = await restrictMany([{ view: toView(t, await loadMessages(t.id, false)), teamId: t.team_id, audience }]);
+  return view;
 }
 
 /** The member's own tickets plus their team's, newest first. */
@@ -479,7 +516,7 @@ export async function listTicketsFor(who: { memberId: number | null; teamId: num
       limit $4`,
     [who.memberId, who.teamId, OPEN_STATUSES, limit],
   );
-  return rows.map((r) => toView(r, []));
+  return restrictMany(rows.map((r) => ({ view: toView(r, []), teamId: r.team_id, audience: r.member_id !== null && r.member_id === who.memberId ? ("author" as const) : ("team" as const) })));
 }
 
 // ── Replies and reopen (participant or staff) ────────────────────────────────
@@ -577,15 +614,17 @@ export async function listHelpQueue(staff: Staff | null, opts: { mine?: boolean;
   ]);
   const c = Object.fromEntries(HELP_STATUSES.map((k) => [k, 0])) as Record<HelpStatus, number>;
   for (const r of counts) c[r.status] = r.n;
-  return { server_time: now.toISOString(), open: open.map((r) => toStaffView(r, [])), recent_done: done.map((r) => toStaffView(r, [])), counts: c };
+  const staffViews = (rows: TicketJoined[]) => restrictMany(rows.map((r) => ({ view: toStaffView(r, []), teamId: r.team_id, audience: "staff" as const })));
+  return { server_time: now.toISOString(), open: await staffViews(open), recent_done: await staffViews(done), counts: c };
 }
 
-/** One ticket with every message, staff-only notes included. */
+/** One ticket with every message, staff-only notes included, restricted content redacted. */
 export async function getHelpTicketForStaff(ref: string, staff: Staff | null): Promise<HelpTicketStaffView> {
   assertHelpStaff(staff);
   const t = await findTicket(ref);
   if (!t) throw new AppError("NOT_FOUND", { userMessage: `No help ticket ${ref}.` });
-  return toStaffView(t, await loadMessages(t.id, true));
+  const [view] = await restrictMany([{ view: toStaffView(t, await loadMessages(t.id, true)), teamId: t.team_id, audience: "staff" }]);
+  return view;
 }
 
 // ── Claim / start / release / resolve / escalate / duplicate / triage ────────
@@ -763,28 +802,6 @@ export async function triageHelpTicket(ref: string, staffIn: Staff | null, raw: 
 
 // ── Paper tickets (A16) ──────────────────────────────────────────────────────
 
-/**
- * "2026-10-24 13:05", "13:05", "1:05 PM" or an ISO time with offset → a
- * timestamptz SQL expression for $n. Local times are read in the event zone.
- */
-function paperTime(raw: string, eventDate: string): { value: string; local: boolean } | null {
-  const s = raw.trim();
-  if (!s) return null;
-  if (/^\d{4}-\d{2}-\d{2}[T ]\d{1,2}:\d{2}(:\d{2})?(\.\d+)?(Z|[+-]\d{2}:?\d{2})$/i.test(s)) return { value: s.replace(" ", "T"), local: false };
-  let m = /^(\d{4}-\d{2}-\d{2})[T ](\d{1,2}):(\d{2})(?::(\d{2}))?$/.exec(s);
-  if (m) return { value: `${m[1]} ${m[2].padStart(2, "0")}:${m[3]}:${m[4] ?? "00"}`, local: true };
-  m = /^(\d{1,2}):(\d{2})(?:\s*([ap])\.?m\.?)?$/i.exec(s);
-  if (m) {
-    let h = Number(m[1]);
-    const ap = m[3]?.toLowerCase();
-    if (h > 23 || Number(m[2]) > 59 || (ap && (h < 1 || h > 12))) return null;
-    if (ap === "p" && h < 12) h += 12;
-    if (ap === "a" && h === 12) h = 0;
-    return { value: `${eventDate} ${String(h).padStart(2, "0")}:${m[2]}:00`, local: true };
-  }
-  return null;
-}
-
 const paperStatus = z.enum(["new", "claimed", "in_progress", "resolved"]);
 
 export const paperTicketSchema = z.object({
@@ -793,7 +810,10 @@ export const paperTicketSchema = z.object({
     .trim()
     .toUpperCase()
     .regex(/^H-[0-9A-Z]{1,8}$/, "Use the number printed on the slip, e.g. H-9012"),
-  opened_at: z.string().trim().min(1, "Copy the time written on the slip"),
+  // Either one opened_at ("2026-10-24 13:05", "1:05 PM", ISO) or the form's date + 24-hour time.
+  opened_at: zx.optText(40),
+  opened_date: zx.optText(10),
+  opened_time: zx.optText(40),
   team: zx.optText(80),
   participant: zx.optText(40),
   table_label: zx.optText(40),
@@ -808,46 +828,70 @@ export const paperTicketSchema = z.object({
   resolved_at: zx.optText(40),
   resolution: zx.optText(500),
   staff_initials: zx.optText(12),
+  /** Why the slip is entered late. Required once the slip time is PAPER_LATE_AFTER_MINUTES old. */
+  late_reason: zx.optText(500),
 });
 export type PaperTicketInput = z.input<typeof paperTicketSchema>;
 
-export type PaperResult = { code: string; status: "created" | "already_entered"; receipt: Receipt };
+export type PaperResult = {
+  code: string;
+  status: "created" | "already_entered";
+  /** The slip time as recorded, in the event zone with its abbreviation ("2026-10-23 00:15 PDT"). */
+  opened_at_local: string;
+  receipt: Receipt;
+};
+
+/** "2026-10-23 00:15 PDT": 24-hour wall time in the event zone, the same shape staff typed. */
+function slipClock(d: Date, tz: string) {
+  const p = Object.fromEntries(
+    new Intl.DateTimeFormat("en-US", { timeZone: tz, hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", timeZoneName: "short" })
+      .formatToParts(d)
+      .map((x) => [x.type, x.value]),
+  );
+  return `${p.year}-${p.month}-${p.day} ${p.hour}:${p.minute} ${p.timeZoneName}`;
+}
 
 /**
  * Type in a paper slip. The slip's time goes to paper_original_at; created_at
- * stays the real entry time, so nothing is backdated. Re-entering the same
- * slip (same code + same original time) is a no-op; a different slip with a
+ * stays the real entry time, so nothing is backdated. A slip entered more
+ * than PAPER_LATE_AFTER_MINUTES after its time needs a reason, kept on the
+ * audit row and a staff-only note. Re-entering the same slip (same code +
+ * same original time) is a no-op that writes nothing; a different slip with a
  * used code is a CONFLICT to reconcile by hand.
  */
 export async function addPaperTicket(staffIn: Staff | null, raw: unknown): Promise<PaperResult> {
   const staff = assertHelpStaff(staffIn);
   const input = parse(paperTicketSchema, raw);
   const ev = await getEvent();
-  const eventDate = new Intl.DateTimeFormat("en-CA", { timeZone: ev.timezone, year: "numeric", month: "2-digit", day: "2-digit" }).format(ev.startsAt);
   const tz = ev.timezone;
+  const eventDate = new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(ev.startsAt);
 
-  const times: Record<"opened" | "claimed" | "resolved", { value: string; local: boolean } | null> = {
-    opened: paperTime(input.opened_at, eventDate),
-    claimed: input.claimed_at ? paperTime(input.claimed_at, eventDate) : null,
-    resolved: input.resolved_at ? paperTime(input.resolved_at, eventDate) : null,
+  // The form sends a date and a 24-hour time; a full date-time typed into the time box wins.
+  const openedRaw = input.opened_at ?? (input.opened_time && /^\d{4}-/.test(input.opened_time) ? input.opened_time : [input.opened_date, input.opened_time].filter(Boolean).join(" "));
+  const opened = parsePaperTime(openedRaw ?? "", eventDate);
+  if (!opened.ok) throw new AppError("VALIDATION_FAILED", { userMessage: `Opened time: ${opened.message}` });
+  // Claimed / resolved times without a date are on the slip's own day.
+  const slipDate = opened.local ? opened.value.slice(0, 10) : eventDate;
+  const later = (label: string, v: string | null | undefined) => {
+    if (!v) return null;
+    const t = parsePaperTime(v, slipDate);
+    if (!t.ok) throw new AppError("VALIDATION_FAILED", { userMessage: `${label} time: ${t.message}` });
+    return t;
   };
-  if (!times.opened) throw new AppError("VALIDATION_FAILED", { userMessage: "Opened time not understood. Use 13:05, 1:05 PM or 2026-10-24 13:05." });
-  if (input.claimed_at && !times.claimed) throw new AppError("VALIDATION_FAILED", { userMessage: "Claimed time not understood." });
-  if (input.resolved_at && !times.resolved) throw new AppError("VALIDATION_FAILED", { userMessage: "Resolved time not understood." });
+  const times = { opened, claimed: later("Claimed", input.claimed_at), resolved: later("Resolved", input.resolved_at) };
   // Local slip times are read in the event zone ($4); ISO times with an offset are taken as written.
   const tsExpr = (n: number, t: { local: boolean } | null) => (t?.local ? `($${n}::timestamp at time zone $4::text)` : `$${n}::timestamptz`);
 
   return transaction(async (tx) => {
-    // Resolve times in the DB (the event zone) and refuse slips from the future.
+    // One writer per slip number, so a double-submit can't race past the replay check.
+    await tx.query("select pg_advisory_xact_lock(hashtext('help.paper:' || $1))", [input.code]);
+    // Resolve times in the DB (the event zone, DST-correct) and refuse slips from the future.
     const { rows: tr } = await tx.query<{ opened: Date; claimed: Date | null; resolved: Date | null; now: Date }>(
       `select ${tsExpr(1, times.opened)} as opened, ${tsExpr(2, times.claimed)} as claimed, ${tsExpr(3, times.resolved)} as resolved, now() as now, $4::text as tz`,
-      [times.opened!.value, times.claimed?.value ?? null, times.resolved?.value ?? null, tz],
+      [times.opened.value, times.claimed?.value ?? null, times.resolved?.value ?? null, tz],
     );
     const at = tr[0];
-    const future = (d: Date | null) => d && d.getTime() > at.now.getTime() + 5 * 60_000;
-    if (future(at.opened) || future(at.claimed) || future(at.resolved)) throw new AppError("VALIDATION_FAILED", { userMessage: "A time on the slip is in the future. Check AM/PM." });
-    if (at.claimed && at.claimed < at.opened) throw new AppError("VALIDATION_FAILED", { userMessage: "Claimed before it was opened? Check the times." });
-    if (at.resolved && at.resolved < at.opened) throw new AppError("VALIDATION_FAILED", { userMessage: "Resolved before it was opened? Check the times." });
+    const fmt = (d: Date | null) => (d ? slipClock(d, tz) : "—");
 
     const { rows: existing } = await tx.query<{ id: number; source: string; paper_original_at: Date | null; created_at: Date }>(
       "select id, source, paper_original_at, created_at from help_tickets where upper(code) = $1",
@@ -856,10 +900,24 @@ export async function addPaperTicket(staffIn: Staff | null, raw: unknown): Promi
     if (existing[0]) {
       const e = existing[0];
       if (e.source === "paper" && e.paper_original_at?.getTime() === at.opened.getTime()) {
-        return { code: input.code, status: "already_entered", receipt: { id: input.code, server_time: e.created_at.toISOString() } };
+        return { code: input.code, status: "already_entered", opened_at_local: fmt(e.paper_original_at), receipt: { id: input.code, server_time: e.created_at.toISOString() } };
       }
-      throw new AppError("CONFLICT", { userMessage: `${input.code} is already used by another ticket. Write the portal code on the slip and reconcile by hand.` });
+      throw new AppError("CONFLICT", {
+        userMessage: `${input.code} is already used${e.paper_original_at ? ` by a slip from ${fmt(e.paper_original_at)}` : " by another ticket"}. Check the time on the slip, or write the portal code on it and reconcile by hand.`,
+      });
     }
+
+    const future = (d: Date | null) => d && d.getTime() > at.now.getTime() + 5 * 60_000;
+    if (future(at.opened) || future(at.claimed) || future(at.resolved)) {
+      throw new AppError("VALIDATION_FAILED", { userMessage: `A time on the slip is after now (${fmt(at.now)}). Check the date and AM/PM; times are 24-hour.` });
+    }
+    if (at.claimed && at.claimed < at.opened) throw new AppError("VALIDATION_FAILED", { userMessage: "Claimed before it was opened? Check the times." });
+    if (at.resolved && at.resolved < at.opened) throw new AppError("VALIDATION_FAILED", { userMessage: "Resolved before it was opened? Check the times." });
+    const lateMinutes = Math.floor((at.now.getTime() - at.opened.getTime()) / 60_000);
+    if (lateMinutes >= PAPER_LATE_AFTER_MINUTES && !input.late_reason) {
+      throw new AppError("VALIDATION_FAILED", { userMessage: `The slip is from ${fmt(at.opened)}, ${lateMinutes} minutes ago. Say why it is being entered late (e.g. Wi-Fi outage).` });
+    }
+    const lateReason = input.late_reason ? scrubSecrets(input.late_reason).text : null;
 
     // Link the team (slug, name or id) and participant (P-####) when given.
     let teamId: number | null = null;
@@ -898,11 +956,11 @@ export async function addPaperTicket(staffIn: Staff | null, raw: unknown): Promi
       [input.code, memberId, teamId, input.table_label, input.category, scrubSecrets(input.summary).text, input.tried ? scrubSecrets(input.tried).text : null, input.priority, status, mentorId, input.safe_run_id, at.opened, staff.id, claimedAt, resolvedAt],
     );
     const t = rows[0];
-    const fmt = (d: Date | null) => (d ? d.toISOString() : "—");
     await systemMessage(
       tx,
       t.id,
       `Entered from a paper slip by ${staff.name}${input.staff_initials ? ` (slip initials ${input.staff_initials})` : ""}. Slip opened ${fmt(at.opened)}; claimed ${fmt(at.claimed)}${input.claimed_by ? ` by ${input.claimed_by}` : ""}; resolved ${fmt(at.resolved)}. Entered ${fmt(at.now)}.` +
+        (lateReason ? ` Entered late: ${lateReason}` : "") +
         (input.team && !teamId ? ` Team "${input.team}" not matched.` : "") +
         (input.participant && !memberId ? ` Participant "${input.participant}" not matched.` : ""),
       "staff_only",
@@ -915,13 +973,24 @@ export async function addPaperTicket(staffIn: Staff | null, raw: unknown): Promi
         action: "help.paper_entry",
         resourceType: "help_ticket",
         resourceId: t.id,
-        reason: "Paper ticket reconciliation",
+        reason: lateReason ?? "Paper ticket reconciliation",
         after: { code: t.code, status, source: "paper" },
-        payload: { code: t.code, slip_opened_at: fmt(at.opened), slip_claimed_at: fmt(at.claimed), slip_resolved_at: fmt(at.resolved), entered_at: fmt(at.now), team_matched: !!teamId, participant_matched: !!memberId },
+        payload: {
+          code: t.code,
+          slip_opened_at: at.opened.toISOString(),
+          slip_opened_local: fmt(at.opened),
+          slip_claimed_at: at.claimed?.toISOString() ?? null,
+          slip_resolved_at: at.resolved?.toISOString() ?? null,
+          entered_at: at.now.toISOString(),
+          late_minutes: lateMinutes,
+          late_reason: lateReason,
+          team_matched: !!teamId,
+          participant_matched: !!memberId,
+        },
       },
       tx,
     );
-    return { code: t.code, status: "created", receipt: { id: t.code, server_time: t.created_at.toISOString() } };
+    return { code: t.code, status: "created", opened_at_local: fmt(at.opened), receipt: { id: t.code, server_time: t.created_at.toISOString() } };
   });
 }
 
@@ -994,8 +1063,12 @@ const normStatus = (s: string) => {
 
 export type PaperImportRow = { line: number; code: string; ok: boolean; status?: PaperResult["status"]; error?: string };
 
-/** Import a mentor-queue-template.csv export. Rows are independent: one bad row doesn't stop the rest. */
-export async function importPaperTicketsCsv(staffIn: Staff | null, csv: string): Promise<{ rows: PaperImportRow[]; created: number; skipped: number; failed: number }> {
+/**
+ * Import a mentor-queue-template.csv export. Rows are independent: one bad row
+ * doesn't stop the rest. `lateReason` covers every row entered late; an
+ * optional late_reason column overrides it per row.
+ */
+export async function importPaperTicketsCsv(staffIn: Staff | null, csv: string, lateReason: string | null = null): Promise<{ rows: PaperImportRow[]; created: number; skipped: number; failed: number }> {
   const staff = assertHelpStaff(staffIn);
   if (csv.length > 500_000) throw new AppError("VALIDATION_FAILED", { userMessage: "That CSV is too large; split it up." });
   const all = parseCsv(csv);
@@ -1023,6 +1096,7 @@ export async function importPaperTicketsCsv(staffIn: Staff | null, csv: string):
         resolved_at: col(r, "resolved_at") || undefined,
         status: normStatus(col(r, "status")),
         staff_initials: col(r, "staff_initials") || undefined,
+        late_reason: col(r, "late_reason") || lateReason || undefined,
       });
       out.push({ line: i + 2, code: res.code, ok: true, status: res.status });
     } catch (e) {

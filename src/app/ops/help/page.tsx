@@ -6,6 +6,7 @@ import { PriorityTag, TicketStatus, fmtAge, fmtTime } from "@/app/help/views";
 import DegradedServiceAlert from "@/components/ui/DegradedServiceAlert";
 import FreshnessStamp from "@/components/ui/FreshnessStamp";
 import PageHeader from "@/components/ui/PageHeader";
+import { getEvent } from "@/lib/event";
 import { getStaff, hasRole, type Staff } from "@/server/auth";
 import { helpMetrics, listHelpQueue, slackHealth, type HelpMetric, type HelpTicketStaffView } from "@/server/help";
 import { AdminLogin } from "../parts";
@@ -42,7 +43,10 @@ async function QueueView({ searchParams }: { searchParams: PageProps<"/ops/help"
   if (!hasRole(staff, "mentor", "organizer")) return <p className="font-plex text-sm text-lightgray">The help queue is for mentors and organizers.</p>;
 
   const mine = (await searchParams).mine === "1";
-  const [queue, metrics, slack] = await Promise.all([listHelpQueue(staff, { mine }), helpMetrics().catch(() => []), slackHealth()]);
+  const [queue, metrics, slack, ev] = await Promise.all([listHelpQueue(staff, { mine }), helpMetrics().catch(() => []), slackHealth(), getEvent()]);
+  // Paper slips are written in the event's zone: today's date there, and the zone's abbreviation.
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: ev.timezone, year: "numeric", month: "2-digit", day: "2-digit" }).format(ev.now);
+  const zone = new Intl.DateTimeFormat("en-US", { timeZone: ev.timezone, timeZoneName: "short" }).formatToParts(ev.now).find((p) => p.type === "timeZoneName")?.value ?? ev.timezone;
   const waiting = queue.open.filter((t) => ["new", "triaged", "escalated"].includes(t.status));
   const claimed = queue.open.filter((t) => t.status === "claimed");
   const working = queue.open.filter((t) => t.status === "in_progress");
@@ -127,7 +131,7 @@ async function QueueView({ searchParams }: { searchParams: PageProps<"/ops/help"
         <details className="border border-hairline bg-surface">
           <summary className="flex min-h-11 cursor-pointer items-center px-4 font-plex text-sm text-bright">Add one paper ticket</summary>
           <div className="border-t border-hairline p-4">
-            <PaperTicketForm />
+            <PaperTicketForm today={today} zone={zone} />
           </div>
         </details>
         <details className="border border-hairline bg-surface">

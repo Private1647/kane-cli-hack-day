@@ -139,9 +139,17 @@ export function TicketForm({ defaultTable }: { defaultTable?: string | null }) {
           </div>
         </div>
 
-        <p className="font-plex text-xs text-lightgray">
-          No passwords, API keys, customer data or full logs. Anything that looks like a key is removed before a mentor sees it.
-        </p>
+        <div role="note" aria-label="What not to paste" className="border border-hairline border-l-2 border-l-warning bg-surface p-4 font-plex text-sm">
+          <p className="text-bright">! Don&apos;t paste secrets, private code or face data.</p>
+          <ul className="mt-2 list-disc space-y-1 pl-5 text-lightgray">
+            <li>No passwords, API keys, tokens or .env files.</li>
+            <li>No code from a private repository. Describe it, or show a mentor at your table.</li>
+            <li>No selfies, face photos or face templates/embeddings.</li>
+          </ul>
+          <p className="mt-2 text-xs text-lightgray">
+            Mentors see a redacted copy: anything that looks like one of these is replaced with &ldquo;[redacted: …]&rdquo;. You still see what you wrote.
+          </p>
+        </div>
 
         {state && !state.ok && <FormError message={state.error.message} />}
 
