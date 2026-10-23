@@ -162,7 +162,18 @@ test("joining a team by any route leaves the matchmaking pool", { skip }, async 
   const inv = await m.teams.createInvite(acting((await m.auth.getMemberById(a.id))!), team.teamId, {});
   await m.teams.joinTeam(acting(b), { code: inv.code, confirm: "on" });
   assert.equal((await memberByEmail(email("poolB"))).looking_for_team, false);
-  // Route 3: an organizer forms a team at the cut-off.
+  // Route 3: asking to join a team with open seats, accepted by a teammate.
+  await register("poolE");
+  const e = (await viewer())!;
+  await m.flow.setTeamChoice(e, true);
+  const { requestIntro } = await import("../../src/server/match.ts");
+  await requestIntro(acting(e), { target_team_id: String(team.teamId), message: "hi" });
+  const [intro] = await m.db.query<{ id: number }>("select id from teammate_introductions where requester_id = $1", [e.id]);
+  const answered = await m.flow.answerIntro(acting((await m.auth.getMemberById(a.id))!), intro.id, true);
+  assert.equal(answered.joined, `QA poolE`);
+  assert.equal((await memberByEmail(email("poolE"))).team_id, team.teamId);
+  assert.equal((await memberByEmail(email("poolE"))).looking_for_team, false);
+  // Route 4: an organizer forms a team at the cut-off.
   await register("poolD");
   const d = (await viewer())!;
   await m.flow.setTeamChoice(d, true);

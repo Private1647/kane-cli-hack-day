@@ -75,7 +75,7 @@ export default function HumanCameraCheckpoint({
       return;
     }
     const v = video.current;
-    if (!v || !v.videoWidth) return;
+    if (!v || !v.videoWidth) return setError("The camera is still starting. Try the shutter again in a second.");
     const scale = Math.min(1, MAX_SIDE / Math.max(v.videoWidth, v.videoHeight));
     const c = document.createElement("canvas");
     c.width = Math.round(v.videoWidth * scale);
