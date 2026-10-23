@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { Suspense, type ReactNode } from "react";
 import { Eyebrow } from "@/components/ui/Section";
 import StatusPill from "@/components/ui/StatusPill";
+import { query } from "@/lib/db";
+import { getTeamSession } from "@/lib/session";
 import { AppError } from "@/server/core";
 import { authorizeStudio, getLatestPublished, type ProjectAccess } from "@/server/story";
 
@@ -40,7 +42,8 @@ async function Gated({ params, tab, render }: { params: Promise<{ slug: string }
     ctx = { ...(await authorizeStudio(slug)), slug };
   } catch (e) {
     if (e instanceof AppError && e.code === "NOT_FOUND") notFound();
-    if (e instanceof AppError && (e.code === "UNAUTHENTICATED" || e.code === "FORBIDDEN")) return <SignIn slug={slug} forbidden={e.code === "FORBIDDEN"} />;
+    if (e instanceof AppError && e.code === "FORBIDDEN") return <SignIn slug={slug} state="forbidden" />;
+    if (e instanceof AppError && e.code === "UNAUTHENTICATED") return <SignIn slug={slug} state={(await unlockedWithoutName(slug)) ? "pick_name" : "signed_out"} />;
     throw e;
   }
   const published = await getLatestPublished(ctx.project.id, "ship_page");
@@ -106,21 +109,44 @@ async function Gated({ params, tab, render }: { params: Promise<{ slug: string }
   );
 }
 
-function SignIn({ slug, forbidden }: { slug: string; forbidden: boolean }) {
+/** The team password was entered for this team, but nobody has picked their name in the hub yet. */
+async function unlockedWithoutName(slug: string) {
+  const s = await getTeamSession();
+  if (!s || s.memberId) return false;
+  const [t] = await query<{ id: number }>("select id from teams where slug = $1", [slug]);
+  return t?.id === s.teamId;
+}
+
+const GATE = {
+  forbidden: {
+    title: "This studio belongs to another team",
+    body: "Only members of this team can open its studio. The published Ship Page, if there is one, is public.",
+    cta: null,
+  },
+  pick_name: {
+    title: "Pick your name first",
+    body: "You're signed in to the team, but the studio needs to know which teammate you are. In the team hub, choose your name under “Who are you?”, then come back.",
+    cta: "Pick your name →",
+  },
+  signed_out: {
+    title: "Sign in to your team first",
+    body: "The studio is team-only. Open your team hub, enter the team password and pick your name, then come back.",
+    cta: "Open team hub →",
+  },
+} as const;
+
+function SignIn({ slug, state }: { slug: string; state: keyof typeof GATE }) {
+  const g = GATE[state];
   return (
     <section className="py-20">
       <div className="container-page max-w-lg space-y-5">
         <Eyebrow>Ship studio</Eyebrow>
-        <h1 className="font-display text-3xl text-bright">{forbidden ? "This studio belongs to another team" : "Sign in to your team first"}</h1>
-        <p className="font-plex text-sm text-lightgray">
-          {forbidden
-            ? "Only members of this team can open its studio. The published Ship Page, if there is one, is public."
-            : "The studio is team-only. Open your team hub, enter the team password and pick your name, then come back."}
-        </p>
+        <h1 className="font-display text-3xl text-bright">{g.title}</h1>
+        <p className="font-plex text-sm text-lightgray">{g.body}</p>
         <div className="flex flex-wrap gap-2">
-          {!forbidden && (
+          {g.cta && (
             <Link href={`/t/${slug}`} className="inline-flex min-h-11 items-center bg-bright px-4 font-plex text-sm text-ink hover:bg-lime">
-              Open team hub →
+              {g.cta}
             </Link>
           )}
           <Link href={`/ship/${slug}`} className="inline-flex min-h-11 items-center border border-hairline px-4 font-plex text-sm text-bright hover:border-lime hover:text-lime">
