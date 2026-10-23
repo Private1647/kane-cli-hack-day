@@ -218,6 +218,8 @@ async function Match({ searchParams }: Pick<PageProps<"/match">, "searchParams">
             </Panel>
             <Panel title="Your profile">
               <ProfileForm
+                // Remount after a save: a reset form would otherwise fall back to the first-render values.
+                key={profile.updated_at ? new Date(profile.updated_at).toISOString() : "new"}
                 roles={WORK_ROLES}
                 availability={AVAILABILITY}
                 defaults={{

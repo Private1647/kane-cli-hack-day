@@ -644,6 +644,6 @@ async function txNow(tx: PoolClient) {
 
 /** "React, ci , Agents" or ["react","CI"] → ["react","ci","agents"] (deduped, max 12, 32 chars each). */
 export function normalizeTags(v: string | string[] | undefined | null): string[] {
-  const list = (Array.isArray(v) ? v : (v ?? "").split(/[,\n]/)).map((s) => s.trim().toLowerCase().replace(/\s+/g, " ").slice(0, 32)).filter(Boolean);
+  const list = (Array.isArray(v) ? v : (v ?? "").split(/[,\n]/)).map((s) => s.trim().toLowerCase().replace(/\s+/g, " ").slice(0, 60)).filter(Boolean);
   return [...new Set(list)].slice(0, 12);
 }
