@@ -9,12 +9,16 @@ Event skill for Kane CLI Hack Day (KANE HACK OS). It drives the event MCP tools 
 
 ## Before you start
 
-- The event MCP server `kane-hack-event` (https://www.kaneclihack.sh/mcp) must be connected with this person's token. If a tool call returns `UNAUTHENTICATED`, run `kanehack pair` and reconnect. (No `kanehack` command? Install it with `curl -fsSL https://kaneclihack.sh/install.sh | sh`, or `irm https://kaneclihack.sh/install.ps1 | iex` on Windows. Don't use `npx kanehack`: that name isn't ours on npm.) If the server isn't connected at all, use the web route in **Fallback**.
+- The event MCP server `kane-hack-event` (https://www.kaneclihack.sh/mcp) must be connected with this person's token. If a tool call returns `UNAUTHENTICATED`, pair again and reconnect: in a terminal `kanehack pair`; from an agent with no terminal `kanehack pair --start --json`, give the person the URL and code, then `kanehack pair --wait --json` (exit 4 means not approved yet: run it again). (No `kanehack` command? With the person's OK, install it with `curl -fsSL https://kaneclihack.sh/install.sh | sh -s -- --yes`, or on Windows `& ([scriptblock]::Create((irm https://www.kaneclihack.sh/install.ps1))) -Yes`. Don't use `npx kanehack`: that name isn't ours on npm.) If the server isn't connected at all, use the web route in **Fallback**.
 - For anything about Kane CLI syntax, flags, NDJSON events or exit codes, use the official Kane CLI skill (`npx @testmuai/kane-cli-skill`). This skill does not repeat or override it.
 - Call `event_get_brief` once per session for the server clock, phase and deadlines. Never use your own clock for a deadline.
 
 ## Procedure
 
+0. Not paired yet (no token, or `UNAUTHENTICATED`)? Pair without a terminal:
+   - `kanehack pair --start --json` → show the person `verification_url` and `user_code` and ask them to open it in their own browser, sign in and press Approve. Never ask them to paste a token or password into the chat.
+   - `kanehack pair --wait --json` (waits up to 90 s; `--timeout` to change). Exit 0 = paired, 4 = not approved yet (run it again), 1 = the code expired or was denied (start over), 3 = server unreachable.
+   - Connect the MCP server with the saved token without printing it, e.g. Claude Code: `claude mcp add --transport http kane-hack-event https://www.kaneclihack.sh/mcp --header "Authorization: Bearer $(kanehack token)"`, then start a new session.
 1. Call `participant_get_status`. If `member.checked_in` is false, tell them to check in at the desk first (walk-ins are admitted there) and stop.
 2. Ask only for what's missing: display name, GitHub handle, skills, interests. Save with `participant_update_profile` (`delta` only).
 3. Consent is per category (`selfie_storage`, `photo_publication`, `face_matching`, `social_mention`, `teammate_discovery`, `idea_discovery`, `activity_publication`). Ask about each one separately, in plain words, defaulting to **no**. Send `consent_changes` only after they answer, with `explicit_confirmation: true` once they confirm the summary the tool shows.

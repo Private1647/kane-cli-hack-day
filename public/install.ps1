@@ -1,29 +1,65 @@
-# Kane CLI Hack Day installer for Windows: https://kaneclihack.sh/install.ps1
-# Version: 0.1.1
+# Kane CLI Hack Day installer for Windows: https://www.kaneclihack.sh/install.ps1
+# Version: 0.1.2
 #
 # Read me before you run me. This script checks Node, Git, Chrome, Codex
 # (optional), Kane CLI, Kane auth, the official Kane CLI skill, the hack skills
 # and whether the event API answers. It asks before installing anything, and
 # only installs the `kanehack` helper into %USERPROFILE%\.kanehack and the hack-*
 # skills into your agents' skill folders, each from a tarball whose sha256 is
-# pinned below. No admin rights, no PATH change unless you say yes, no reading
-# your repos or chat history.
+# pinned below. To make `kanehack` a command it puts a small kanehack.cmd shim in
+# npm's global folder (already on your PATH), or offers to add .kanehack\bin to
+# your user PATH. No admin rights, no reading your repos or chat history.
+#
+# No terminal (an AI agent, CI)? Every question is a quiet "no" unless you say yes:
+#   $env:KANEHACK_YES = "1"; irm https://www.kaneclihack.sh/install.ps1 | iex
+#   & ([scriptblock]::Create((irm https://www.kaneclihack.sh/install.ps1))) -Yes
+# Options (or environment variables): -Yes (KANEHACK_YES=1) · -NoPath (KANEHACK_NO_PATH=1)
+# · -NoSkills (KANEHACK_NO_SKILLS=1) · -Site URL (KANEHACK_SITE).
+# A failed download, checksum or install stops with an error (a non-zero exit for
+# `powershell -File` / `pwsh -c`); it never closes your PowerShell window.
+param([switch]$Yes, [switch]$NoPath, [switch]$NoSkills, [string]$Site)
 
 $ErrorActionPreference = "Stop"
-$KanehackVersion = "0.1.1"
-$KanehackSha256 = "0e6d9b879c374955d93fa11c09ba8424ce84d665e8ffb91dff4ede1ae933e5fd"
-$SkillsSha256 = "15908514717814bae5546024b9718db0cf0b2f07001e0b9c163a0286d3719215"
-# The www host directly: Windows PowerShell 5.1 may not follow the apex's 308 redirect.
-$Site = if ($env:KANEHACK_SITE) { $env:KANEHACK_SITE } else { "https://www.kaneclihack.sh" }
-$Prefix = Join-Path $HOME ".kanehack"
+$ProgressPreference = "SilentlyContinue"   # Windows PowerShell 5.1 downloads crawl with the progress bar on
+try { [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12 } catch {}
+$KanehackVersion = "0.1.2"
+$KanehackSha256 = "37334457c5cdf94783f7e3cb5613b04237ac6a9303e8f1193996f3f5338be07f"
+$SkillsSha256 = "6903a221b78f2e9c7789d0dc6545939b4c8523e8f674ab3ed4f6c2bd8ce049b6"
+function EnvOn($name) { $v = [Environment]::GetEnvironmentVariable($name); [bool]($v -and ($v -notmatch '^(0|false|no)$')) }
+$Yes = $Yes -or (EnvOn "KANEHACK_YES")
+$NoPath = $NoPath -or (EnvOn "KANEHACK_NO_PATH")
+$NoSkills = $NoSkills -or (EnvOn "KANEHACK_NO_SKILLS")
+# The www host directly: Windows PowerShell 5.1 doesn't follow the apex's 308 redirect.
+$DefaultSite = "https://www.kaneclihack.sh"
+if (-not $Site) { $Site = if ($env:KANEHACK_SITE) { $env:KANEHACK_SITE } else { $DefaultSite } }
+$Site = $Site.TrimEnd("/")
+# The same home folder kanehack (Node's os.homedir()) uses.
+$UserHome = if ($env:USERPROFILE) { $env:USERPROFILE } else { $HOME }
+$Prefix = Join-Path $UserHome ".kanehack"
 $script:Failed = $false
+$script:NoTtySkips = 0
 
 function Pass($id, $info = "") { Write-Host ("✓ {0,-12} {1}" -f $id, $info) -ForegroundColor Green }
 function Warn($id, $info, $fix) { Write-Host ("! {0,-12} {1} → {2}" -f $id, $info, $fix) -ForegroundColor Yellow }
 function Fail($id, $info, $fix) { Write-Host ("✗ {0,-12} {1} → {2}" -f $id, $info, $fix) -ForegroundColor Red; $script:Failed = $true }
 function Have($cmd) { [bool](Get-Command $cmd -ErrorAction SilentlyContinue) }
 
-Write-Host "Kane CLI Hack Day setup check (installer $KanehackVersion)`n"
+# A person is there only in an interactive host whose input isn't redirected.
+$NonInteractiveArg = [Environment]::GetCommandLineArgs() | Where-Object { $_ -match '^-noni' }
+$CanAsk = [Environment]::UserInteractive -and -not $NonInteractiveArg -and -not $env:CI
+try { if ([Console]::IsInputRedirected) { $CanAsk = $false } } catch {}
+
+function Ask($question) {
+  if ($Yes) { Write-Host "$question [y/N] y (-Yes)"; return $true }
+  if (-not $CanAsk) { $script:NoTtySkips++; return $false }
+  try { $a = Read-Host "$question [y/N]" } catch { $script:NoTtySkips++; return $false }
+  return ($a -match '^(y|yes)$')
+}
+
+Write-Host "Kane CLI Hack Day setup check (installer $KanehackVersion)"
+if ($Yes) { Write-Host "Non-interactive: -Yes answers every install question." }
+elseif (-not $CanAsk) { Write-Host "No terminal: install questions are answered no (re-run with -Yes to install)." }
+Write-Host ""
 Pass "os" "windows-$env:PROCESSOR_ARCHITECTURE"
 
 if (Have node) {
@@ -47,15 +83,19 @@ if (Have kane-cli) {
   Warn "kane_auth" "skipped" "Install Kane CLI first"
 }
 
-$skill = @(".claude\skills\kane-cli", ".agents\skills\kane-cli", ".codex\skills\kane-cli") | Where-Object { Test-Path (Join-Path $HOME "$_\SKILL.md") }
+$skill = @(".claude\skills\kane-cli", ".agents\skills\kane-cli", ".codex\skills\kane-cli") | Where-Object { Test-Path (Join-Path $UserHome "$_\SKILL.md") }
 if ($skill) { Pass "kane_skill" } else { Warn "kane_skill" "not found" "npx @testmuai/kane-cli-skill" }
 
 # Where agents look for personal skills: .agents\skills always, plus Claude Code and Codex when present.
-$skillDirs = @(Join-Path $HOME ".agents\skills")
-if (Test-Path (Join-Path $HOME ".claude")) { $skillDirs += Join-Path $HOME ".claude\skills" }
-if (Test-Path (Join-Path $HOME ".codex")) { $skillDirs += Join-Path $HOME ".codex\skills" }
-$needSkills = @($skillDirs | Where-Object { -not (Test-Path (Join-Path $_ "hack-onboard\SKILL.md")) }).Count -gt 0
-if (-not $needSkills) { Pass "hack_skills" } else { Warn "hack_skills" "not found" "Offered below" }
+$skillDirs = @(Join-Path $UserHome ".agents\skills")
+if (Test-Path (Join-Path $UserHome ".claude")) { $skillDirs += Join-Path $UserHome ".claude\skills" }
+if (Test-Path (Join-Path $UserHome ".codex")) { $skillDirs += Join-Path $UserHome ".codex\skills" }
+function SkillsCurrent($d) {
+  $marker = Join-Path $d "hack-onboard\.bundle-version"
+  (Test-Path (Join-Path $d "hack-onboard\SKILL.md")) -and (Test-Path $marker) -and ((Get-Content $marker -Raw).Trim() -eq $KanehackVersion)
+}
+$needSkills = @($skillDirs | Where-Object { -not (SkillsCurrent $_) }).Count -gt 0
+if (-not $needSkills) { Pass "hack_skills" $KanehackVersion } else { Warn "hack_skills" "not found or older" "Offered below" }
 
 # One unauthenticated request: 401 means the API is up and wants a token.
 try {
@@ -69,61 +109,128 @@ if (@(200, 401, 403) -contains $code) { Pass "api" "$Site (HTTP $code)" } else {
 Write-Host ""
 $bin = Join-Path $Prefix "bin"
 $cmdShim = Join-Path $bin "kanehack.cmd"
-if (-not ((Have node) -and (Have npm))) {
-  Warn "kanehack" "not installed" "Install Node first, then re-run this script"
-} elseif ((Read-Host "Install the kanehack helper $KanehackVersion into $Prefix (no admin)? [y/N]") -match "^(y|yes)$") {
+$entry = Join-Path $Prefix "cli\node_modules\kanehack\bin\kanehack.mjs"
+function InstalledVersion { if (Test-Path $entry) { try { (& node $entry version 2>$null | Select-Object -First 1) } catch { $null } } }
+function WriteShims($dir) {
+  # kanehack.cmd for PowerShell and cmd; an extensionless sh shim for Git Bash (Claude Code's Bash tool on Windows).
+  Set-Content -Path (Join-Path $dir "kanehack.cmd") -Value "@echo off`r`nnode `"$entry`" %*" -Encoding ASCII
+  $posix = $entry -replace '\\', '/'
+  [IO.File]::WriteAllText((Join-Path $dir "kanehack"), "#!/bin/sh`nexec node `"$posix`" `"`$@`"`n")
+}
+
+$wantKh = $false; $wantSkills = $false; $khHave = $false
+$cur = InstalledVersion
+if ($cur -eq $KanehackVersion -and (Test-Path $cmdShim)) { $khHave = $true; Pass "kanehack" "$KanehackVersion already installed in $Prefix" }
+elseif (-not ((Have node) -and (Have npm))) { Warn "kanehack" "not installed" "Install Node (with npm) first, then re-run this script" }
+elseif ($cur -and (Ask "Upgrade the kanehack helper in $Prefix from $cur to $KanehackVersion (no admin)?")) { $wantKh = $true }
+elseif (-not $cur -and (Ask "Install the kanehack helper $KanehackVersion into $Prefix (no admin)?")) { $wantKh = $true }
+else { Warn "kanehack" "skipped" "Re-run this script when you're ready" }
+
+if ($needSkills) {
+  if ($NoSkills) { Warn "hack_skills" "skipped (-NoSkills)" "Re-run without -NoSkills to add them" }
+  elseif (Ask "Install the 12 hack-* skills into $($skillDirs -join ', ')?") { $wantSkills = $true }
+  else { Warn "hack_skills" "skipped" "Re-run this script when you're ready" }
+}
+
+if ($wantKh -or $wantSkills) {
   $tmp = Join-Path ([IO.Path]::GetTempPath()) ("kanehack-" + [guid]::NewGuid())
   New-Item -ItemType Directory -Path $tmp | Out-Null
   try {
+    $bad = $false
     $tgz = Join-Path $tmp "kanehack-$KanehackVersion.tgz"
-    Invoke-WebRequest -Uri "$Site/kanehack-$KanehackVersion.tgz" -OutFile $tgz -UseBasicParsing -TimeoutSec 60
-    $got = (Get-FileHash -Algorithm SHA256 $tgz).Hash.ToLower()
-    if ($got -ne $KanehackSha256) { Fail "kanehack" "checksum mismatch" "Don't use this download; tell the help desk (got $got)"; exit 1 }
-    New-Item -ItemType Directory -Force -Path (Join-Path $Prefix "cli"), $bin | Out-Null
-    npm install --silent --no-audit --no-fund --prefix (Join-Path $Prefix "cli") $tgz | Out-Null
-    $entry = Join-Path $Prefix "cli\node_modules\kanehack\bin\kanehack.mjs"
-    Set-Content -Path $cmdShim -Value "@echo off`r`nnode `"$entry`" %*" -Encoding ASCII
-    Pass "kanehack" "$KanehackVersion → $cmdShim (sha256 verified)"
-  } finally { Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue }
-} else {
-  Warn "kanehack" "skipped" "Re-run this script when you're ready"
-}
-
-if ($needSkills -and ((Read-Host "Install the 12 hack-* skills into $($skillDirs -join ', ')? [y/N]") -match "^(y|yes)$")) {
-  $stmp = Join-Path ([IO.Path]::GetTempPath()) ("hack-skills-" + [guid]::NewGuid())
-  New-Item -ItemType Directory -Path $stmp | Out-Null
-  try {
-    $stgz = Join-Path $stmp "hack-skills-$KanehackVersion.tgz"
-    Invoke-WebRequest -Uri "$Site/hack-skills-$KanehackVersion.tgz" -OutFile $stgz -UseBasicParsing -TimeoutSec 60
-    $got = (Get-FileHash -Algorithm SHA256 $stgz).Hash.ToLower()
-    if ($got -ne $SkillsSha256) { Fail "hack_skills" "checksum mismatch" "Don't use this download; tell the help desk (got $got)" }
-    else {
+    $stgz = Join-Path $tmp "hack-skills-$KanehackVersion.tgz"
+    foreach ($job in @(@($wantKh, "kanehack", "$Site/kanehack-$KanehackVersion.tgz", $tgz, $KanehackSha256), @($wantSkills, "hack_skills", "$Site/hack-skills-$KanehackVersion.tgz", $stgz, $SkillsSha256))) {
+      if (-not $job[0]) { continue }
+      try { Invoke-WebRequest -Uri $job[2] -OutFile $job[3] -UseBasicParsing -TimeoutSec 60 } catch { Fail $job[1] "download failed" "Check your network and re-run ($($job[2]))"; $bad = $true; continue }
+      $got = (Get-FileHash -Algorithm SHA256 $job[3]).Hash.ToLower()
+      if ($got -ne $job[4]) { Fail $job[1] "checksum mismatch" "Don't use this download; tell the help desk (got $got)"; $bad = $true }
+    }
+    if ($bad) { Write-Host "Nothing was installed." -ForegroundColor Red; throw "kanehack installer: a download failed its check; nothing was installed." }
+    if ($wantKh) {
+      New-Item -ItemType Directory -Force -Path (Join-Path $Prefix "cli"), $bin | Out-Null
+      $npmLog = Join-Path $tmp "npm.log"
+      & npm install --silent --no-audit --no-fund --prefix (Join-Path $Prefix "cli") $tgz *> $npmLog
+      if ($LASTEXITCODE -ne 0) { Get-Content $npmLog | Write-Host; Fail "kanehack" "npm install failed" "See the npm output above, or ask at the help desk"; throw "kanehack installer: npm install failed." }
+      WriteShims $bin
+      $khHave = $true
+      Pass "kanehack" "$KanehackVersion → $cmdShim (sha256 verified)"
+    }
+    if ($wantSkills) {
       # tar.exe ships with Windows 10 1803+. Only the hack-* folders are written.
-      foreach ($d in $skillDirs) { New-Item -ItemType Directory -Force -Path $d | Out-Null; tar -xzf $stgz -C $d }
+      foreach ($d in $skillDirs) {
+        New-Item -ItemType Directory -Force -Path $d | Out-Null
+        tar -xzf $stgz -C $d
+        if ($LASTEXITCODE -ne 0) { Fail "hack_skills" "tar failed in $d" "Ask at the help desk"; throw "kanehack installer: tar failed." }
+        Set-Content -Path (Join-Path $d "hack-onboard\.bundle-version") -Value $KanehackVersion -Encoding ASCII
+      }
       Pass "hack_skills" "12 skills → $($skillDirs -join ', ') (sha256 verified). Start a new agent session to load them."
     }
-  } finally { Remove-Item -Recurse -Force $stmp -ErrorAction SilentlyContinue }
-} elseif ($needSkills) { Warn "hack_skills" "skipped" "Re-run this script when you're ready" }
+  } finally { Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue }
+}
 
-# kanehack lives in .kanehack\bin. If that isn't on PATH, offer to add it (asked, never silent),
-# and print the next steps with the full path so they work right now.
-$kh = "kanehack"
-if ((Test-Path $cmdShim) -and -not ($env:PATH -split ";" | Where-Object { $_ -eq $bin })) {
-  if ((Read-Host "Add $bin to your user PATH? [y/N]") -match "^(y|yes)$") {
-    $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
-    if (-not (($userPath -split ";") -contains $bin)) { [Environment]::SetEnvironmentVariable("Path", (@($bin, $userPath) | Where-Object { $_ }) -join ";", "User") }
-    $env:PATH = "$bin;$env:PATH"
-    Pass "path" "added (this window and new ones)"
-  } else {
-    $kh = "& `"$cmdShim`""
-    Write-Host "kanehack isn't on your PATH. Use the full path below, or run: `$env:PATH = `"$bin;`$env:PATH`"" -ForegroundColor Yellow
+# Point kanehack at this server when it isn't the default one.
+if ($khHave -and $Site -ne $DefaultSite -and $Site -ne "https://kaneclihack.sh") {
+  $cfgPath = Join-Path $Prefix "config.json"
+  $cfg = @{}
+  if (Test-Path $cfgPath) { try { $o = Get-Content $cfgPath -Raw | ConvertFrom-Json; foreach ($p in $o.PSObject.Properties) { $cfg[$p.Name] = $p.Value } } catch {} }
+  $cfg["api"] = $Site
+  [IO.File]::WriteAllText($cfgPath, ($cfg | ConvertTo-Json))
+  Pass "server" "kanehack will talk to $Site"
+}
+
+# Make `kanehack` a command: a shim in npm's global folder (already on PATH), never replacing
+# a different kanehack; else offer to add .kanehack\bin to the user PATH.
+$kh = "& `"$cmdShim`""
+function OnPath($dir) { [bool]($env:PATH -split ";" | Where-Object { $_ -and ($_.TrimEnd("\") -ieq $dir.TrimEnd("\")) }) }
+function IsOurs($path) {
+  if (-not $path -or -not (Test-Path $path)) { return $false }
+  if ((Split-Path $path -Parent).TrimEnd("\") -ieq $bin.TrimEnd("\")) { return $true }
+  try { return ((Get-Content $path -Raw) -like "*$entry*") } catch { return $false }
+}
+function Writable($dir) {
+  try { $t = Join-Path $dir (".kanehack-write-test-" + [guid]::NewGuid()); [IO.File]::WriteAllText($t, ""); Remove-Item $t -Force; return $true } catch { return $false }
+}
+if ($khHave -and (Test-Path $cmdShim)) {
+  $found = Get-Command kanehack -CommandType Application, ExternalScript -ErrorAction SilentlyContinue | Select-Object -First 1
+  $linked = $false; $conflict = $false
+  if ($found -and (IsOurs $found.Source)) { $kh = "kanehack"; $linked = $true; Pass "command" "kanehack → $($found.Source)" }
+  elseif ($NoPath) { Write-Host "-NoPath: kanehack is not linked; use the full path below." }
+  elseif ($found) { $conflict = $true; Warn "command" "another kanehack is on PATH" "$($found.Source) isn't this install; left alone (PATH not changed). Use the full path below" }
+  else {
+    $npmDir = $null
+    if (Have npm) { try { $npmDir = (& npm prefix -g 2>$null | Select-Object -First 1) } catch {} }
+    if ($npmDir -and (Test-Path $npmDir) -and (OnPath $npmDir) -and (Writable $npmDir) -and -not (Test-Path (Join-Path $npmDir "kanehack.cmd"))) {
+      if (Ask "Make ``kanehack`` a command (shim in $npmDir)?") {
+        WriteShims $npmDir
+        $kh = "kanehack"; $linked = $true
+        Pass "command" "kanehack → $(Join-Path $npmDir 'kanehack.cmd') (works in this window now)"
+      }
+    } else { Write-Host "npm's global folder isn't on PATH or isn't writable; offering the user PATH instead." }
   }
+  if (-not $linked -and -not $NoPath -and -not $conflict -and -not (OnPath $bin)) {
+    if (Ask "Add $bin to your user PATH?") {
+      $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+      if (-not (($userPath -split ";") -contains $bin)) { [Environment]::SetEnvironmentVariable("Path", (@($bin, $userPath) | Where-Object { $_ }) -join ";", "User") }
+      $env:PATH = "$bin;$env:PATH"
+      $kh = "kanehack"
+      Pass "path" "added (this window and new ones)"
+    } else {
+      Write-Host "kanehack isn't on your PATH. Use the full path below, or run: `$env:PATH = `"$bin;`$env:PATH`"" -ForegroundColor Yellow
+    }
+  } elseif (-not $linked -and (OnPath $bin)) { $kh = "kanehack" }
 }
 
 Write-Host "`nNext:"
 Write-Host "  1. $kh pair        link this machine to your passport"
+Write-Host "     (AI agent with no terminal: $kh pair --start, approve the code in your browser, then $kh pair --wait)"
 Write-Host "  2. $kh doctor      re-check your setup"
 Write-Host "  3. $kh report -- kane-cli run `"Open $Site and find the schedule`" --agent"
 Write-Host "     (your first Kane run, sent to your team's Proof tab)"
 Write-Host "Web: $Site/passport"
+if ($script:NoTtySkips -gt 0) {
+  $siteArg = if ($Site -ne $DefaultSite) { " -Site $Site" } else { "" }
+  Write-Host ""
+  Write-Host "There was no terminal to ask, so $($script:NoTtySkips) install step(s) were skipped. To install without prompts, run:" -ForegroundColor Yellow
+  Write-Host "  & ([scriptblock]::Create((irm $Site/install.ps1))) -Yes$siteArg"
+}
 if ($script:Failed) { Write-Host "Some checks failed. Fix them with the commands above, or ask at the help desk." -ForegroundColor Yellow }

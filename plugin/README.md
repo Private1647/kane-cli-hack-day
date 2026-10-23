@@ -41,9 +41,35 @@ npx @testmuai/kane-cli-skill
 
 ## Connecting
 
-1. Install the helper: `curl -fsSL https://kaneclihack.sh/install.sh | sh` (Windows: `irm https://kaneclihack.sh/install.ps1 | iex`). Read it first if you like: it's plain text, checks prerequisites and installs `kanehack` into `~/.kanehack` from a checksummed tarball, without sudo. Don't run `npx kanehack`: that npm name isn't ours. Then `kanehack pair`. Pairing stores a token in `~/.kanehack/config.json` (mode 600) and prints it once so you can `export KANEHACK_TOKEN=…`.
+1. Install the helper: `curl -fsSL https://kaneclihack.sh/install.sh | sh` (Windows: `irm https://www.kaneclihack.sh/install.ps1 | iex`). Read it first if you like: it's plain text, checks prerequisites and installs `kanehack` into `~/.kanehack` from a checksummed tarball, without sudo. Don't run `npx kanehack`: that npm name isn't ours. Then `kanehack pair`. Pairing stores a token in `~/.kanehack/config.json` (mode 600) and prints it once so you can `export KANEHACK_TOKEN=…`.
 2. Point your agent at `mcp.json` (Codex: add the server with `bearer_token_env_var = "KANEHACK_TOKEN"`; Claude Code: `claude mcp add --transport http kane-hack-event https://www.kaneclihack.sh/mcp --header "Authorization: Bearer $KANEHACK_TOKEN"`).
 3. In a **new** session, ask "show my Kane Hack OS status". The agent should call `participant_get_status`.
+
+## Running under an AI agent (Claude Code /remote-control, Codex)
+
+The agent runs commands through a tool with no terminal, no stdin and a ~2 minute timeout per command (Claude Code: 10 minutes at most). Everything below works there:
+
+```sh
+# Install (only after the person agrees). Without --yes nothing is installed when there's no terminal,
+# and the summary prints this exact command.
+curl -fsSL https://kaneclihack.sh/install.sh | sh -s -- --yes                 # add --no-path / --no-skills to skip those
+& ([scriptblock]::Create((irm https://www.kaneclihack.sh/install.ps1))) -Yes  # Windows; or $env:KANEHACK_YES=1 before irm | iex
+
+# Pair in two calls. The person approves in their own browser; never paste tokens into the chat.
+kanehack pair --start --json     # prints verification_url + user_code, exits
+kanehack pair --wait --json      # 0 paired · 4 not approved yet (run again) · 1 expired/denied · 3 unreachable
+
+kanehack doctor --json           # exit 1 if a check fails
+kanehack consent yes             # only after the person says yes in the chat
+kanehack report --json -- kane-cli run "…" --agent   # Kane's NDJSON, then one kanehack_report line; exits with Kane's code
+kanehack status --json
+kanehack submit --preflight --json
+
+# MCP server with the saved token, without printing it:
+claude mcp add --transport http kane-hack-event https://www.kaneclihack.sh/mcp --header "Authorization: Bearer $(kanehack token)"
+```
+
+A long Kane run can outlast the default 2 minutes: ask for a longer tool timeout (up to 10 minutes) or run it in the background and read its output when it finishes. On Windows, Claude Code's Bash tool is Git Bash: the installer writes an extensionless `kanehack` shim next to `kanehack.cmd` for it. All exit codes and JSON fields: `packages/kanehack/README.md`.
 
 ## Before announcing (T-PLG-05)
 

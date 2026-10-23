@@ -9,15 +9,15 @@ Event skill for Kane CLI Hack Day (KANE HACK OS). It drives the event MCP tools 
 
 ## Before you start
 
-- The event MCP server `kane-hack-event` (https://www.kaneclihack.sh/mcp) must be connected with this person's token. If a tool call returns `UNAUTHENTICATED`, run `kanehack pair` and reconnect. (No `kanehack` command? Install it with `curl -fsSL https://kaneclihack.sh/install.sh | sh`, or `irm https://kaneclihack.sh/install.ps1 | iex` on Windows. Don't use `npx kanehack`: that name isn't ours on npm.) If the server isn't connected at all, use the web route in **Fallback**.
+- The event MCP server `kane-hack-event` (https://www.kaneclihack.sh/mcp) must be connected with this person's token. If a tool call returns `UNAUTHENTICATED`, pair again and reconnect: in a terminal `kanehack pair`; from an agent with no terminal `kanehack pair --start --json`, give the person the URL and code, then `kanehack pair --wait --json` (exit 4 means not approved yet: run it again). (No `kanehack` command? With the person's OK, install it with `curl -fsSL https://kaneclihack.sh/install.sh | sh -s -- --yes`, or on Windows `& ([scriptblock]::Create((irm https://www.kaneclihack.sh/install.ps1))) -Yes`. Don't use `npx kanehack`: that name isn't ours on npm.) If the server isn't connected at all, use the web route in **Fallback**.
 - For anything about Kane CLI syntax, flags, NDJSON events or exit codes, use the official Kane CLI skill (`npx @testmuai/kane-cli-skill`). This skill does not repeat or override it.
 - Call `event_get_brief` once per session for the server clock, phase and deadlines. Never use your own clock for a deadline.
 
 ## Procedure
 
-1. Run `kanehack doctor --json` (read-only; it prints versions and pass/fail, never secrets). If the kanehack CLI isn't available, check by hand: `node -v`, `git --version`, Chrome present, `kane-cli --version`, `kane-cli whoami`.
+1. Run `kanehack doctor --json` (read-only; it prints versions and pass/fail, never secrets; exit 0 = no failing check, 1 = something to fix). It needs no terminal. Still not installed? Run the installer non-interactively only after the person agrees: `curl -fsSL https://kaneclihack.sh/install.sh | sh -s -- --yes` (Windows: `& ([scriptblock]::Create((irm https://www.kaneclihack.sh/install.ps1))) -Yes`). Without `--yes` it installs nothing when there's no terminal and prints the command to run. If the kanehack CLI isn't available, check by hand: `node -v`, `git --version`, Chrome present, `kane-cli --version`, `kane-cli whoami`.
 2. For each failing check, give the one fix from the doctor output. Install commands are suggestions: run them only after the person agrees, never with `sudo` on their behalf.
-3. Send the results with `readiness_report` (`checks[]` with `id`, `status`, `version`). Statuses and versions only: no paths, no env, no usernames.
+3. Send the results with `readiness_report` (or `kanehack doctor --report --json`, which sends the same statuses and versions) (`checks[]` with `id`, `status`, `version`). Statuses and versions only: no paths, no env, no usernames.
 4. Re-run the doctor after fixes and report again.
 5. If something still fails after one fix attempt, call `help_diagnose`, then offer `$hack-help`.
 

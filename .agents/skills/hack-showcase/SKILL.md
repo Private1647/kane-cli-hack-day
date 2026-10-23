@@ -9,7 +9,7 @@ Event skill for Kane CLI Hack Day (KANE HACK OS). It drives the event MCP tools 
 
 ## Before you start
 
-- The event MCP server `kane-hack-event` (https://www.kaneclihack.sh/mcp) must be connected with this person's token. If a tool call returns `UNAUTHENTICATED`, run `kanehack pair` and reconnect. (No `kanehack` command? Install it with `curl -fsSL https://kaneclihack.sh/install.sh | sh`, or `irm https://kaneclihack.sh/install.ps1 | iex` on Windows. Don't use `npx kanehack`: that name isn't ours on npm.) If the server isn't connected at all, use the web route in **Fallback**.
+- The event MCP server `kane-hack-event` (https://www.kaneclihack.sh/mcp) must be connected with this person's token. If a tool call returns `UNAUTHENTICATED`, pair again and reconnect: in a terminal `kanehack pair`; from an agent with no terminal `kanehack pair --start --json`, give the person the URL and code, then `kanehack pair --wait --json` (exit 4 means not approved yet: run it again). (No `kanehack` command? With the person's OK, install it with `curl -fsSL https://kaneclihack.sh/install.sh | sh -s -- --yes`, or on Windows `& ([scriptblock]::Create((irm https://www.kaneclihack.sh/install.ps1))) -Yes`. Don't use `npx kanehack`: that name isn't ours on npm.) If the server isn't connected at all, use the web route in **Fallback**.
 - For anything about Kane CLI syntax, flags, NDJSON events or exit codes, use the official Kane CLI skill (`npx @testmuai/kane-cli-skill`). This skill does not repeat or override it.
 - Call `event_get_brief` once per session for the server clock, phase and deadlines. Never use your own clock for a deadline.
 
