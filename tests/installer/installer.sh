@@ -145,7 +145,8 @@ if want conflict; then
   mkdir -p "$NPMP/bin" "$H/other"
   printf '#!/bin/sh\necho not-ours\n' > "$H/other/kanehack"; chmod +x "$H/other/kanehack"
   PATH="$H/other:$NPMP/bin:$ORIG_PATH"
-  run_install --yes --no-skills --site "$SITE"; RC=$?
+  TSHELL=/bin/zsh run_install --yes --no-skills --site "$SITE"; RC=$?
+  check "conflict: no profile line that would shadow it" '[ ! -e "$H/.zshrc" ]' "$LOG"
   check "conflict: other kanehack untouched, warned, full path, no link" '[ "$RC" -eq 0 ] && [ "$(cat "$H/other/kanehack" | tail -1)" = "echo not-ours" ] && grep -q "another kanehack is on PATH" "$LOG" && [ ! -e "$NPMP/bin/kanehack" ] && grep -q "^  1. $H/.kanehack/bin/kanehack pair" "$LOG"' "$LOG"
 fi
 
@@ -184,7 +185,7 @@ fi
 if want no-node; then
   fresh no-node
   NB="$H/nonode-bin"; mkdir -p "$NB"
-  for t in sh dash bash zsh busybox curl uname sed grep cut mktemp tar rm mkdir ln cat head git readlink chmod timeout shasum sha256sum openssl env id tr wc ls perl; do
+  for t in sh dash bash zsh busybox gzip curl uname sed grep cut mktemp tar rm mkdir ln cat head git readlink chmod timeout shasum sha256sum openssl env id tr wc ls perl; do
     p="$(command -v "$t" 2>/dev/null || true)"
     case "$p" in /*) ln -s "$p" "$NB/$t" ;; esac
   done

@@ -35,6 +35,8 @@ function Fresh($name) {
 }
 # Run installer code in a child PowerShell with the test home. Returns the exit code.
 function RunPS($code, [switch]$Interactive) {
+  # The child's stderr must not become a terminating error here (Windows PowerShell 5.1).
+  $ErrorActionPreference = "Continue"
   $saved = @{ USERPROFILE = $env:USERPROFILE; HOME = $env:HOME; NPM_CONFIG_PREFIX = $env:NPM_CONFIG_PREFIX; KANEHACK_SITE = $env:KANEHACK_SITE }
   # KANEHACK_SITE so `irm | iex` runs talk to the test server, never production.
   $env:USERPROFILE = $script:H; $env:HOME = $script:H; $env:NPM_CONFIG_PREFIX = $script:Npm; $env:KANEHACK_SITE = $Site
@@ -81,7 +83,7 @@ if (Test-Path $bash) {
   Check "yes: ``kanehack`` runs from Git Bash (Claude Code's Bash tool)" ($v -eq $Version) $Log
 } else { Write-Host "# skip Git Bash: not installed" }
 $rc = RunPS "$Sb -Yes -Site '$Site'"
-Check "re-run: idempotent (already installed, already a command, skills current)" ($rc -eq 0 -and (LogHas "already installed") -and (LogHas "kanehack →") -and -not (LogHas "y (-Yes)")) $Log
+Check "re-run: idempotent (already installed, already a command, skills current)" ($rc -eq 0 -and (LogHas "already installed") -and (LogHas ("kanehack " + [char]0x2192)) -and -not (LogHas "y (-Yes)")) $Log
 Set-Content -Path (Join-Path $Work "installed-home.txt") -Value $H
 
 # 3. KANEHACK_YES=1 with irm | iex, npm prefix not on PATH: the user PATH offer (auto-yes) instead.
@@ -97,7 +99,7 @@ $other = Join-Path $H "other"; New-Item -ItemType Directory -Force -Path $other,
 Set-Content -Path (Join-Path $other "kanehack.cmd") -Value "@echo not-ours" -Encoding ASCII
 $env:PATH = "$other;$Npm;$OrigPath"
 $rc = RunPS "$Sb -Yes -NoSkills -Site '$Site'"
-Check "conflict: warned, other kanehack untouched, no shim, full path" ($rc -eq 0 -and (LogHas "another kanehack is on PATH") -and ((Get-Content (Join-Path $other "kanehack.cmd")) -eq "@echo not-ours") -and -not (Test-Path (Join-Path $Npm "kanehack.cmd")) -and (LogHas '& "')) $Log
+Check "conflict: warned, other kanehack untouched, no shim, full path" ($rc -eq 0 -and (LogHas "another kanehack is on PATH") -and ((Get-Content (Join-Path $other "kanehack.cmd")) -eq "@echo not-ours") -and -not (Test-Path (Join-Path $Npm "kanehack.cmd")) -and (LogHas '& "') -and -not (LogHas "added (this window")) $Log
 
 # 5. -NoPath.
 Fresh "nopath"
