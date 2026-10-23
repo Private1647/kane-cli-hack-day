@@ -411,6 +411,66 @@ await soft("draftpost kit", async () => {
   await gtm.generateKit(access, {});
 });
 
+// ── Ship Page (t-96..t-100) ──────────────────────────────────────────────────
+// Swift: finalized with a public Ship Page (finalize publishes story v1), then a
+// saved but unpublished v2 whose one proof claim is "verified", bound to Swift's
+// verified run and its verified sealed report. The tests edit, publish and
+// switch templates on this project; projects are 1:1 with teams, so every
+// ship_*_slug that goes with ship_team_name is demo-swift.
+await submission("swift", "finalized");
+await soft("ship swift v2", async () => {
+  await actAs(F.captainOf("swift").email);
+  const access = await story.authorizeStudio(slugOf("swift"), { write: true });
+  const v1 = await story.getStory(projectId.swift!);
+  if (!v1) throw new Error("finalize did not save a story version");
+  const [r] = await query<{ id: number; evidence_artifact_id: number }>("select id, evidence_artifact_id from kane_runs where upstream_execution_id = 'demo-run-swift-pass'");
+  const content = {
+    ...v1.content,
+    proof: [{ claim: F.SHIP.approvedClaim, confidence: "verified", source: "", run_id: String(r.id), evidence_id: String(r.evidence_artifact_id), commit_sha: F.SHA.staging }],
+    consent_reviewed: true,
+  };
+  await story.saveStory(access, { content, expected_version: v1.version });
+});
+// Puffin: published with a private marker in its story, then hidden by an organizer.
+await submission("puffin", "finalized");
+await soft("ship puffin hidden", async () => {
+  await actAs(F.captainOf("puffin").email);
+  const access = await story.authorizeStudio(slugOf("puffin"), { write: true });
+  const v1 = await story.getStory(projectId.puffin!);
+  if (!v1) throw new Error("finalize did not save a story version");
+  const content = { ...v1.content, what_we_built: `Organizer-hidden page. ${F.SHIP.hiddenMarker}`, one_line_pitch: `Puffin (${F.SHIP.hiddenMarker})`, consent_reviewed: true };
+  const saved = await story.saveStory(access, { content, expected_version: v1.version });
+  await story.publishShowcase(access, { story_version: saved.data.version, confirm_phrase: slugOf("puffin") });
+  const showcase = await import("../src/server/showcase.ts");
+  await showcase.moderateShowcase((await staffRow("organizer@demo.test")) as never, { slug: slugOf("puffin"), hide: "on", reason: "Fixture: hidden by moderation" });
+});
+// Martin: a saved, never-published story (showcase stays draft) that carries the private idea marker.
+await soft("ship martin draft", async () => {
+  await actAs(F.captainOf("martin").email);
+  const access = await story.authorizeStudio(slugOf("martin"), { write: true });
+  const content = await story.seedStory(access.project, await story.getTeamPeople(teamId.martin!));
+  content.what_we_built = `Draft only. ${F.PRIVATE_IDEA_MARKER}: notes that must stay private until publishing.`;
+  await story.saveStory(access, { content, expected_version: 0 });
+  await query("update ideas set private_description = $2 where team_id = $1", [teamId.martin, `${F.PRIVATE_IDEA_MARKER}: Martin's private plan.`]);
+});
+for (const [k, want] of [["swift", "public"], ["puffin", "hidden_by_moderation"], ["martin", "draft"]] as const) {
+  const [p] = await query<{ showcase_state: string }>("select showcase_state from projects where id = $1", [projectId[k]]);
+  if (p?.showcase_state !== want) warnings.push(`ship: ${slugOf(k)} is ${p?.showcase_state}, expected ${want}`);
+}
+
+// ── Biometric enrollment (t-93) ──────────────────────────────────────────────
+// Enrolled the way the passport models it: selfie storage and face matching
+// consent, and a stored selfie whose face template is tied to that consent.
+{
+  const m = await memberRow(F.BIOMETRIC_ENROLLED);
+  await query("insert into member_consents (member_id, category, granted, source) values ($1, 'selfie_storage', true, 'web')", [m.id]);
+  const [c] = await query<{ id: number }>("insert into member_consents (member_id, category, granted, source) values ($1, 'face_matching', true, 'web') returning id", [m.id]);
+  await query(
+    "insert into selfies (member_id, object_key, captured_by, approved_at, face_template_key, template_consent_id) values ($1, $2, 'participant', now(), $3, $4)",
+    [m.id, `selfies/demo/pelican-mate.jpg`, `faces/demo/pelican-mate.tpl`, c.id],
+  );
+}
+
 // ── Optional integrations staged as down ─────────────────────────────────────
 await query(
   `update integration_state set status = 'down', last_error_at = now(), last_error_code = 'NOT_CONFIGURED',

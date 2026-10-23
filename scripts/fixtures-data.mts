@@ -7,6 +7,8 @@ export const PERSONAL_PASSWORD = "demo-pass-1234";
 /** Team password shared by every staging submission team (submission_team_password). */
 export const STAGING_PASSWORD = "staging-team-pass";
 export const MILESTONE_PASSWORD = "sparrow-team-pass";
+/** Team password of the Ship Page studio team (ship_team_password). */
+export const SHIP_PASSWORD = "swift-team-pass";
 
 /** The participant every local test signs in as (participant_email). */
 export const P = { name: "Pat Quill", email: "pat@demo.test", display: "Pat Q." };
@@ -67,6 +69,10 @@ export const T = {
   stills: bird("stills", 1, "launch-team-pass", "Launch Stills: screenshots, no recording."),
   draftpost: bird("draftpost", 1, "launch-team-pass", "Launch Draftpost: an unapproved X post."),
   claims: bird("claims", 1, "launch-team-pass", "Launch Claims: a reviewed story for claim checks."),
+  // Ship Page (t-96..t-100): the studio team, a draft page and a moderation-hidden page.
+  swift: bird("swift", 2, SHIP_PASSWORD, "Swift: the Ship Page studio team."),
+  martin: bird("martin", 1, "martin-team-pass", "Martin: a Ship Page that is still a draft."),
+  puffin: bird("puffin", 1, "puffin-team-pass", "Puffin: a Ship Page an organizer hid."),
 } satisfies Record<string, TeamSpec>;
 export type TeamKey = keyof typeof T;
 
@@ -171,6 +177,16 @@ export const RUN_IDS = {
 export const UNSUPPORTED_KPI = "Cut checkout regressions by 87% across 40 paying customers";
 export const UNSUPPORTED_TESTIMONIAL = "\"Kane saved our launch\" - VP Engineering, Acme Corp";
 
+// ── Ship Page ────────────────────────────────────────────────────────────────
+/** Claim texts and markers for the Ship Page tests. No digits, so none reads as a metric. */
+export const SHIP = {
+  approvedClaim: "Swift checkout and signup pass end to end on the submitted commit (SWIFT-APPROVED-CLAIM-KQZ)",
+  unapprovedClaim: "Swift is the only tracker any judge has ever loved (SWIFT-UNAPPROVED-CLAIM-RVM)",
+  noEvidenceClaim: "Swift caught every checkout regression before release (SWIFT-NOEVIDENCE-CLAIM-WXH)",
+  hiddenMarker: "PUFFIN-HIDDEN-PRIVATE-MARKER-TJB",
+  storyChange: "Edited after finalizing: this pitch must not change the submitted snapshot (kane-cli check).",
+};
+
 // ── Photos ───────────────────────────────────────────────────────────────────
 export const PHOTO_DIR = "event/fixtures";
 export const PHOTOS = [
@@ -188,3 +204,5 @@ export const STAFF_BY_VAR = {
   judge_one_time_code: "judge@demo.test",
 } as const;
 export const PHOTOGRAPHER = "photo@demo.test";
+/** Enrolled for biometric matching (selfie stored, face_matching consent): biometric_enrolled_subject_id. */
+export const BIOMETRIC_ENROLLED = "pelican.mate@demo.test";
