@@ -21,6 +21,7 @@ import {
   type SubmissionExtras,
 } from "@/server/showcase";
 import { getPublishedDeck } from "@/server/deck";
+import { listMilestones } from "@/server/kane";
 import { getShipTemplate, getPublishedStory as getPublicStory } from "@/server/story";
 import { kaneComponentLabel, loadDraftForShowcase } from "@/server/submission";
 import Stage, { CopyUrl, type StageVideo } from "./Stage";
@@ -79,6 +80,7 @@ async function Ship({ params }: { params: PageProps<"/ship/[slug]">["params"] })
       return (
         <>
           <ShipTemplate name={template} story={{ ...pub.story, hasDeck: !!deck }} />
+          <PublicMilestones projectId={found.project.id} />
           <div className="container-page pb-16">
             <SubmittedExtras extras={view.extras} />
           </div>
@@ -86,7 +88,43 @@ async function Ship({ params }: { params: PageProps<"/ship/[slug]">["params"] })
       );
     }
   }
-  return <ShipBody view={view} hasDeck={!!deck} />;
+  return (
+    <>
+      <ShipBody view={view} hasDeck={!!deck} />
+      {live && <PublicMilestones projectId={found.project.id} />}
+    </>
+  );
+}
+
+/**
+ * Milestones a teammate approved as Public on the Proof tab (T-KANE-07). Only the
+ * claim and its confidence: no proposer or approver names on a public page.
+ */
+async function PublicMilestones({ projectId }: { projectId: number }) {
+  const rows = await listMilestones(projectId, { publicOnly: true }).catch(() => []);
+  if (!rows.length) return null;
+  return (
+    <section id="milestones" className="border-t border-dashed border-hairline py-16 sm:py-20">
+      <div className="container-page">
+        <p className={eyebrow}>Milestones · approved by the team</p>
+        <ul className="mt-6 space-y-5">
+          {rows.map((m) => (
+            <li key={m.id} className="space-y-1">
+              <div className="flex flex-wrap items-center gap-3">
+                {m.confidence === "verified" ? (
+                  <StatusPill tone="verified">Verified</StatusPill>
+                ) : (
+                  <StatusPill tone="unverified">{m.confidence === "inferred" ? "Inferred" : "Participant reported"}</StatusPill>
+                )}
+                <span className="font-display text-lg text-bright">{m.title}</span>
+              </div>
+              {m.claim && m.claim !== m.title && <p className="max-w-2xl font-plex text-sm text-lightgray">{m.claim}</p>}
+            </li>
+          ))}
+        </ul>
+      </div>
+    </section>
+  );
 }
 
 function Offline() {
