@@ -11,6 +11,7 @@
 // fixtures (ticket codes, receipts, run ids...). With --wave, the wave's variable
 // overrides and clock setting from waves.json are applied too.
 // What each variable maps to: docs/hack-os/TEST_FIXTURES.md.
+import { createHash } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import * as F from "./fixtures-data.mts";
@@ -55,6 +56,20 @@ const codes: Record<string, string> = {};
 for (const [variable, email] of [...Object.entries(F.STAFF_BY_VAR), ["photographer", F.PHOTOGRAPHER]]) {
   const s = await one<{ id: number }>("select id from staff_accounts where email = $1 and active", [email]);
   codes[variable] = await auth.issueStaffLoginCode(s.id, system);
+}
+
+// The privileged incident account (admin role) for the recovery test.
+{
+  const s = await one<{ id: number }>("select id from staff_accounts where email = $1 and active", [F.SUPERADMIN]);
+  codes.superadmin_one_time_code = await auth.issueStaffLoginCode(s.id, system);
+}
+// A second, independent organizer code for the follow-up sign-in in the same test. Issuing a
+// code retires the account's unused ones, so this one is inserted beside the first instead.
+{
+  const s = await one<{ id: number }>("select id from staff_accounts where email = $1 and active", [F.STAFF_BY_VAR.organizer_one_time_code]);
+  const c = `${fresh(4)}-${fresh(4)}`;
+  await query("insert into staff_login_codes (staff_id, code_hash, expires_at) values ($1, $2, now() + interval '3 days')", [s.id, createHash("sha256").update(c.toUpperCase().replace(/[^0-9A-Z]/g, "")).digest("hex")]);
+  codes.organizer_followup_one_time_code = c;
 }
 
 const pat = await one<{ id: number; guest_id: number }>("select id, guest_id from members where email = $1", [F.P.email]);
@@ -155,6 +170,7 @@ const ticketBy = async (summary: string) => (await one<{ code: string }>("select
 const runBy = async (upstream: string) => (await one<{ id: number }>("select id from kane_runs where upstream_execution_id = $1", [upstream])).id;
 const receiptOf = async (k: F.TeamKey) =>
   (await one<{ receipt_code: string }>("select s.receipt_code from submissions s join teams t on t.id = s.team_id where t.slug = $1 and s.status in ('finalized','locked')", [F.slugOf(k)])).receipt_code;
+const displayOf = async (email: string) => (await one<{ name: string }>("select coalesce(display_name, name) as name from members where email = $1", [email])).name;
 const olu = await one<{ public_code: string }>("select public_code from members where email = $1", [F.O.email]);
 const unlisted = await one<{ id: number }>("select id from evidence_artifacts where object_key = 'evidence/demo/kestrel/unlisted-report.txt'");
 const deckRow = await one<{ id: number }>("select d.id from deck_versions d join projects p on p.id = d.project_id where p.slug = $1 order by d.version limit 1", [F.slugOf("kestrel")]);
@@ -185,6 +201,14 @@ const tv = {
 // Pat's current public badge (issued if none is live). Rotation tests (t-141) revoke it; re-seed restores one.
 const badge = await passport.getBadgeToken(pat.id, system);
 const enrolled = await one<{ name: string; public_code: string }>("select name, public_code from members where email = $1", [F.BIOMETRIC_ENROLLED]);
+const stagedRows = await query<{ id: number; caption: string }>("select id, caption from event_photos where caption = any($1::text[])", [Object.values(F.STAGED_PHOTOS).map((p) => p.marker)]);
+const staged = Object.fromEntries(
+  Object.entries(F.STAGED_PHOTOS).map(([k, p]) => {
+    const r = stagedRows.find((x) => x.caption === p.marker);
+    if (!r) throw new Error(`issue-test-codes: staged photo ${p.marker} missing. Run scripts/seed-local.mts first.`);
+    return [k, r.id];
+  }),
+) as Record<keyof typeof F.STAGED_PHOTOS, number>;
 const consentedRadar = ["plover", "curlew", "avocet", "lark"].map((k) => F.slugOf(k as F.TeamKey));
 const fixture = (rel: string) => path.join(repo, "tests/fixtures", rel);
 
@@ -219,11 +243,15 @@ const values: Record<string, string> = {
   valid_pair_code: valid.code,
   other_participant_email: F.O.email,
   other_participant_password: F.PERSONAL_PASSWORD,
+  // Match and introductions show display names, never emails.
+  participant_display_name: await displayOf(F.P.email),
+  other_participant_display_name: await displayOf(F.O.email),
   team_one_slug: F.slugOf("kestrel"),
   team_two_slug: F.slugOf("heron"),
   locked_team_slug: F.slugOf("ledger"),
   full_team_slug: F.slugOf("quartet"),
   expired_team_invite: "KH7X-EXP9",
+  full_team_invite_code: F.FULL_TEAM_INVITE,
   invite_team_slug: F.slugOf("inviter"),
   kane_adapter_credential: `Bearer ${token}`,
   invalid_hash_kane_event: kaneJson(invalidHash),
@@ -322,6 +350,33 @@ const values: Record<string, string> = {
   launch_failed_video_captain_password: F.PERSONAL_PASSWORD,
   submission_captain_email: F.captainOf("finch").email,
   submission_captain_password: F.STAGING_PASSWORD,
+  // ── Added for the 2026-10-23 redesign ──
+  double_join_email: "gia@demo.test",
+  double_join_password: F.PERSONAL_PASSWORD,
+  team_one_invite_code: F.TEAM_ONE_INVITE,
+  team_two_invite_code: F.TEAM_TWO_INVITE,
+  photo_unconfirmed_candidate_id: String(staged.candidate),
+  photo_no_consent_id: String(staged.noConsent),
+  photo_no_biometric_enrollment_id: String(staged.noBiometric),
+  photo_unapproved_id: String(staged.unapproved),
+  photo_publishable_id: String(staged.publishable),
+  ship_draft_project_slug: F.slugOf("martin"),
+  ship_hidden_project_slug: F.slugOf("puffin"),
+  ship_no_approval_project_slug: F.slugOf("swift"),
+  ship_no_approval_claim: F.SHIP.unapprovedClaim,
+  ship_no_evidence_project_slug: F.slugOf("swift"),
+  ship_no_evidence_claim: F.SHIP.noEvidenceClaim,
+  ship_finalized_team_slug: F.slugOf("swift"),
+  ship_approved_project_slug: F.slugOf("swift"),
+  ship_approved_claim: F.SHIP.approvedClaim,
+  ship_template_project_slug: F.slugOf("swift"),
+  // Only staff see the staff list on /ops/settings; mentor2's email appears nowhere public.
+  settings_private_marker: "mentor2@demo.test",
+  policy_submission_lock_after: "2026-10-24T17:45",
+  policy_privacy_rule_after: "Local fixture rule (kane-cli test): no recognisable attendee appears in a public photo without verified photo consent.",
+  superadmin_email: F.SUPERADMIN,
+  superadmin_one_time_code: codes.superadmin_one_time_code,
+  organizer_followup_one_time_code: codes.organizer_followup_one_time_code,
 };
 
 // ── Wave: overrides and the server clock ─────────────────────────────────────
@@ -334,6 +389,10 @@ if (waveId) {
     if (!(k in values)) throw new Error(`issue-test-codes: wave ${waveId} overrides unknown variable ${k}`);
     values[k] = v;
   }
+  // A wave that swaps who signs in also swaps the display name the match pages show.
+  const ov = wave.overrides ?? {};
+  if (ov.participant_email && !ov.participant_display_name) values.participant_display_name = await displayOf(ov.participant_email);
+  if (ov.other_participant_email && !ov.other_participant_display_name) values.other_participant_display_name = await displayOf(ov.other_participant_email);
 }
 const [saved] = await query<{ value: string }>("select value from settings where key = 'fixture:submission_locks_at'");
 if (wave?.clock === "submission_locked") {

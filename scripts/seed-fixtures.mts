@@ -104,6 +104,21 @@ await query(
    values ($1, $2, (select captain_id from teams where id = $1), now() - interval '1 day', now() - interval '2 days')`,
   [teamId.inviter, sha(`invite:${EXPIRED_INVITE.replace(/[^0-9A-Z]/g, "")}`)],
 );
+// A valid, unexpired invite to the full Quartet (full_team_invite_code): joining with it
+// must be refused because the team is full, not because the code is missing or bad.
+await query(
+  `insert into invitations (team_id, invite_hash, created_by, expires_at)
+   values ($1, $2, (select captain_id from teams where id = $1), now() + interval '2 days')`,
+  [teamId.quartet, sha(`invite:${F.FULL_TEAM_INVITE.replace(/[^0-9A-Z]/g, "")}`)],
+);
+// Valid invites to team one (Kestrel) and team two (Heron) for the two-team join test.
+for (const [k, inv] of [["kestrel", F.TEAM_ONE_INVITE], ["heron", F.TEAM_TWO_INVITE]] as const) {
+  await query(
+    `insert into invitations (team_id, invite_hash, created_by, expires_at)
+     values ($1, $2, (select captain_id from teams where id = $1), now() + interval '2 days')`,
+    [teamId[k], sha(`invite:${inv.replace(/[^0-9A-Z]/g, "")}`)],
+  );
+}
 
 // ── Roster: approved guests for Pat, Olu and Quinn ───────────────────────────
 for (const [gid, person, member] of [
@@ -383,6 +398,34 @@ for (const ph of F.PHOTOS) {
     [teamId.pelican, pathname, ph.marker, `${ph.marker}: the Pelican team at their table`, ph.status, photographer.id],
   );
   photoIds[ph.marker] = row.id;
+}
+// Private studio photos for the photography tests, one per review state (none is in a gallery).
+{
+  const who = {
+    candidate: [F.BIOMETRIC_ENROLLED, "opted_in_candidate", false],
+    noConsent: [F.LONERS[1].email, "qr_badge", true],
+    noBiometric: null,
+    unapproved: [F.captainOf("pelican").email, "qr_badge", true],
+    publishable: [F.captainOf("pelican").email.replace(".captain@", ".mate@"), "opted_in_candidate", false],
+  } as const;
+  for (const [k, ph] of Object.entries(F.STAGED_PHOTOS) as [keyof typeof F.STAGED_PHOTOS, (typeof F.STAGED_PHOTOS)[keyof typeof F.STAGED_PHOTOS]][]) {
+    const pathname = `${F.PHOTO_DIR}/${ph.file}`;
+    writeFileSync(path.join(photoDir, ph.file), png(ph.rgb));
+    const [row] = await query<{ id: number }>(
+      `insert into event_photos (team_id, photo_key, pathname, width, height, caption, status, photographer_id, source, rights_basis, captured_at)
+       values ($1, $2, $2, 64, 48, $3, $4, $5, 'studio', 'staff_photographer', now() - interval '20 minutes') returning id`,
+      [teamId.pelican, pathname, ph.marker, ph.status, photographer.id],
+    );
+    photoIds[ph.marker] = row.id;
+    const p = who[k];
+    if (p) {
+      await query(
+        `insert into photo_people (photo_id, member_id, match_basis, reviewer_staff_id, confirmed_at)
+         values ($1, (select id from members where email = $2), $3, $4, ${p[2] ? "now()" : "null"})`,
+        [row.id, p[0], p[1], p[2] ? photographer.id : null],
+      );
+    }
+  }
 }
 
 // ── Studio: stories, decks and launch-kit states (production-only tests) ─────

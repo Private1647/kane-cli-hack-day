@@ -9,7 +9,7 @@ Nothing here touches production. Every script refuses a `DATABASE_URL` that is n
 | Step | Command (run from the checkout that serves http://localhost:3100) | What it does |
 |---|---|---|
 | 1. Seed | `node --env-file=$HOME/hackos-local/env --import ./tests/support/register.mjs scripts/seed-local.mts` | Wipes and recreates the demo world: seed-local's own teams, then `scripts/seed-fixtures.mts`. It also writes `tests/fixtures/*.csv` and the placeholder photos under `public/photos/event/fixtures/`, which is gitignored. Safe to re-run. The first seed also records the event row (schedule, phase override, public status, settings) as `fixture:event_baseline`; every later seed restores it. |
-| 2. Codes | `node --env-file=$HOME/hackos-local/env --import ./tests/support/register.mjs scripts/issue-test-codes.mts [--repo <repo with .testmuai>] [--wave Wnn]` | Issues fresh single-use credentials and reads every other value back from the database. Writes all 122 values and keeps each description and `secret` flag. With `--wave`, it also applies that wave's overrides and clock from `tests/fixtures/waves.json`. Exits with code 2 if any value is empty. |
+| 2. Codes | `node --env-file=$HOME/hackos-local/env --import ./tests/support/register.mjs scripts/issue-test-codes.mts [--repo <repo with .testmuai>] [--wave Wnn]` | Issues fresh single-use credentials and reads every other value back from the database. Writes all 125 values and keeps each description and `secret` flag. With `--wave`, it also applies that wave's overrides and clock from `tests/fixtures/waves.json`. Exits with code 2 if any value is empty. |
 | 3. Check | `KANE_CLI_USER_AGENT=… kane-cli testrun run <the live test files> --dry-run < /dev/null` (repo root; never glob `.testmuai/tests`) | The plan must be valid and print no `unresolved_variables` warning. |
 
 `scripts/fixtures-data.mts` holds the names, slugs, markers and passwords that both scripts share.
@@ -27,7 +27,7 @@ The seed and code scripts call the app's own services through the test loader: `
 | Rowan Price `rowan@demo.test` | `demo-pass-1234` | Teamless and registered, but not on the seeded roster. Only the signed Luma CSV adds `gst-rowan`. |
 | `<bird>.captain@demo.test` | `demo-pass-1234`, except staging captains (see below) | The captain of `demo-<bird>`. Solo teams have only a captain. |
 | Staging captains: wren, tern, robin, gannet, egret, dove, finch | personal password = team password `staging-team-pass` | Finalizing is a personal step (captain only, personal sign-in at `/passport/login`). A captain can therefore sign in personally with the same password the test knows. |
-| organizer@, mentor@, mentor2@, judge@, photo@ `demo.test` | one-time codes from `issue-test-codes` | Staff. Codes are single use and last 3 days. Each run of `issue-test-codes` retires the earlier ones. |
+| organizer@, mentor@, mentor2@, judge@, photo@, admin@ `demo.test` | one-time codes from `issue-test-codes` | Staff. Codes are single use and last 3 days. Each run of `issue-test-codes` retires the earlier ones. |
 | Break-glass admin | `ADMIN_PASSWORD` from `.env.local` | `superadmin_credentials`. Use the password field at `/ops/login`. It gives the admin role. |
 
 ## Variable map
@@ -80,6 +80,7 @@ The seed and code scripts call the app's own services through the test loader: `
 | `team_two_slug` | **demo-heron**: Hugo (captain) and Olu, recruiting open. It has a finalized submission for the judge tests. |
 | `locked_team_slug` | **demo-ledger**: Lena (captain) and Leo. Finalized, with `state = roster_locked`. For t-111, `participant_email` is set to `lena@demo.test`. |
 | `full_team_slug` | **demo-quartet**: four members. `max_size` = 4 = `TEAM_SIZE_CAP`. |
+| `full_team_invite_code` | `KH4Q-FUL7`, a valid invite to demo-quartet that expires in two days. Joining with it is refused because the team is full (`TEAM_FULL`), not because the code is bad. |
 | `invite_team_slug`, `expired_team_invite` | **demo-inviter**. The invite `KH7X-EXP9` expired a day ago. Only its hash is stored, as the app does. |
 
 ### Kane
@@ -137,6 +138,7 @@ These are word-overlap labels. No AI key is set locally, and the seed checks the
 |---|---|
 | `match_strength_fixture` … `match_learning_goal_fixture` | "Playwright-to-Kane test migration", "accessibility audits", "all-day", "Kane CLI testrun suites in CI". Dana's profile carries the same values, so Pat gets a complementary suggestion. |
 | `non_opted_in_profile_identifier` | `Olu Bankole (P-####)`, Olu's display name and public code. |
+| `participant_display_name`, `other_participant_display_name` | The display names `/match` shows for `participant_email` and `other_participant_email` (Pat Q., Olu Bankole by default). A wave that overrides either email gets the matching display name, for example Dana C. |
 | `matching_population_fixture` | Computed from the database on every run: who is opted in (discoverable profile and `teammate_discovery` consent), who of them is teamless, and how many people are not opted in. |
 | `private_phone_fixture` | `+1 415 555 0142`. See the approximations below. |
 
@@ -212,3 +214,21 @@ Projects are 1:1 with teams, and `/studio/<slug>` only opens for the signed-in t
 14. **t-43 imports t-42**, so one test signs in with the organizer code twice. The second sign-in only works if the session from the imported steps is still active.
 15. **Team login on `/help`:** `/help`'s "Sign in" link goes to `/login` (team name + team password). The older help tests told the agent to sign in there with `participant_email`/`participant_password`, a person's email and personal password, so the team login refuses them. No fixture value can be both a team name and Pat's sign-in email for the 30 other tests. The fix belongs in the app: point that link at `/passport/login?next=/help`, which opens Pat's hub since b226f17. t-157's team-hub step (`complete_submission_team_slug` + `submission_team_password`) does work at `/login`: the slug slugifies to itself.
 16. **Studio photo uploads need Blob.** `/photo` uploads go to private Vercel Blob (`createStudioPhoto` → `put`), and `BLOB_READ_WRITE_TOKEN` is empty locally, so the upload steps of t-91–t-95 cannot store a new photo here. Face-match suggestions are also only created by the pipeline import, never from the studio page.
+
+### Added for the 2026-10-23 redesign
+
+| Variable | Maps to |
+|---|---|
+| `superadmin_email`, `superadmin_one_time_code` | `admin@demo.test` (Ada Admin, role admin), created by seed-fixtures. Fresh code. |
+| `organizer_followup_one_time_code` | A second organizer code inserted beside `organizer_one_time_code`, for the follow-up sign-in in the privileged recovery test. |
+| `double_join_email`, `double_join_password` | Gia (`gia@demo.test`, `demo-pass-1234`), teamless. |
+| `team_one_invite_code`, `team_two_invite_code` | `KH1K-JOIN` (demo-kestrel) and `KH2H-JOIN` (demo-heron), valid for two days after each seed. |
+| `photo_unconfirmed_candidate_id` | Private studio photo `PELICAN-STAGED-CANDIDATE` (identity_review): Pelican Mate (face-match enrolled) suggested, not confirmed. |
+| `photo_no_consent_id` | `PELICAN-STAGED-NOCONSENT` (identity_review): Rowan identified by badge; Rowan never answered photo publication. |
+| `photo_no_biometric_enrollment_id` | `PELICAN-STAGED-NOBIOMETRIC` (captured): nobody identified; Olu (not enrolled) is looked up by hand. |
+| `photo_unapproved_id` | `PELICAN-STAGED-UNAPPROVED` (identity_review): the Pelican captain (photo consent granted) identified by badge. |
+| `photo_publishable_id` | `PELICAN-STAGED-PUBLISHABLE` (identity_review): Pelican Mate (consented) suggested by face matching, ready to confirm, check, caption, approve and publish. |
+| `ship_*_project_slug`, `ship_finalized_team_slug` | demo-swift, except `ship_draft_project_slug` = demo-martin and `ship_hidden_project_slug` = demo-puffin. Ship tests sign in as `swift.captain@demo.test` (wave override). |
+| `ship_no_approval_claim`, `ship_no_evidence_claim`, `ship_approved_claim` | The Swift story's unapproved, evidence-less and approved claim markers. |
+| `settings_private_marker` | `mentor2@demo.test`: it appears only in the staff list on `/ops/settings`. |
+| `policy_submission_lock_after`, `policy_privacy_rule_after` | `2026-10-24T17:45` and the local fixture privacy rule. The next seed restores both. |

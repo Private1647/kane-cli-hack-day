@@ -155,6 +155,8 @@ export const MATCH = {
 };
 /** No phone field exists in the app: this number lives only in private free text (see TEST_FIXTURES.md). */
 export const PRIVATE_PHONE = "+1 415 555 0142";
+/** A valid invite to the full four-person Quartet (full_team_invite_code). */
+export const FULL_TEAM_INVITE = "KH4Q-FUL7";
 
 // ── Kane ─────────────────────────────────────────────────────────────────────
 export const SHA = {
@@ -198,7 +200,28 @@ export const PHOTOS = [
 ];
 
 /** Staff, beyond the four seed-local creates. */
-export const STAFF2 = [{ email: "mentor2@demo.test", name: "Mina Mentor", role: "mentor" as const }];
+export const STAFF2 = [
+  { email: "mentor2@demo.test", name: "Mina Mentor", role: "mentor" as const },
+  // superadmin_email: the privileged incident account for the recovery test (t-169).
+  { email: "admin@demo.test", name: "Ada Admin", role: "admin" as const },
+];
+export const SUPERADMIN = "admin@demo.test";
+/** Private studio photos staged for the photography tests (uc-9), each in one review state. */
+export const STAGED_PHOTOS = {
+  // photo_unconfirmed_candidate_id: an enrolled attendee suggested by face matching, not yet confirmed.
+  candidate: { file: "pelican-staged-candidate.png", marker: "PELICAN-STAGED-CANDIDATE", status: "identity_review" as const, rgb: [120, 90, 160] as const },
+  // photo_no_consent_id: Rowan (never answered photo publication) identified by badge.
+  noConsent: { file: "pelican-staged-noconsent.png", marker: "PELICAN-STAGED-NOCONSENT", status: "identity_review" as const, rgb: [160, 120, 60] as const },
+  // photo_no_biometric_enrollment_id: nobody identified yet; Olu (not enrolled) is looked up by hand.
+  noBiometric: { file: "pelican-staged-nobiometric.png", marker: "PELICAN-STAGED-NOBIOMETRIC", status: "captured" as const, rgb: [60, 140, 160] as const },
+  // photo_unapproved_id: the Pelican captain (consented) identified by badge; not approved.
+  unapproved: { file: "pelican-staged-unapproved.png", marker: "PELICAN-STAGED-UNAPPROVED", status: "identity_review" as const, rgb: [90, 160, 90] as const },
+  // photo_publishable_id: the consented Pelican mate suggested by face matching, ready for review and release.
+  publishable: { file: "pelican-staged-publishable.png", marker: "PELICAN-STAGED-PUBLISHABLE", status: "identity_review" as const, rgb: [200, 160, 60] as const },
+};
+/** Valid invites for team one and team two (team_one_invite_code, team_two_invite_code). */
+export const TEAM_ONE_INVITE = "KH1K-JOIN";
+export const TEAM_TWO_INVITE = "KH2H-JOIN";
 export const STAFF_BY_VAR = {
   organizer_one_time_code: "organizer@demo.test",
   mentor_one_time_code: "mentor@demo.test",
