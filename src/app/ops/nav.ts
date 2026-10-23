@@ -6,6 +6,8 @@ export const OPS_NAV: { href: string; label: string; roles: StaffRole[] }[] = [
   { href: "/ops", label: "Overview", roles: ["organizer"] },
   { href: "/ops/checkin", label: "Check-in", roles: ["organizer", "mentor"] },
   { href: "/ops/roster", label: "Roster", roles: ["organizer"] },
+  { href: "/ops/matchmaking", label: "Matchmaking", roles: ["organizer"] },
+  { href: "/ops/activation", label: "Activation", roles: ["organizer"] },
   { href: "/ops/help", label: "Help", roles: ["organizer", "mentor"] },
   { href: "/ops/submissions", label: "Submissions", roles: ["organizer"] },
   { href: "/ops/media", label: "Media", roles: ["organizer", "photographer"] },
