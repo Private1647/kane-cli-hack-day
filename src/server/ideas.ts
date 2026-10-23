@@ -346,7 +346,7 @@ type Rule = { strong: RegExp; weak: RegExp };
 
 const RULES: Record<CriterionId, Rule> = {
   functional_deliverable: {
-    strong: /\b(app|application|plugin|extension|cli|tool|pipeline|harness|workflow|bot|dashboard|service|github action|action|agent|sdk|library|gate)\b/i,
+    strong: /\b(app|application|web app|website|site|tracker|game|platform|api|plugin|extension|cli|tool|pipeline|harness|workflow|bot|dashboard|service|github action|action|agent|sdk|library|gate)\b/i,
     weak: /\b(build|make|create|ship|prototype|mvp)\w*/i,
   },
   agent_use: {
@@ -358,11 +358,11 @@ const RULES: Record<CriterionId, Rule> = {
     weak: /\b(kane|testmu|lambdatest|test manager)\b/i,
   },
   repeatability: {
-    strong: /\b(repeatable|reusable|re-?run|regression|ci|cd|on every (pr|push|commit|deploy)|github actions?|pipeline|scheduled|nightly|suite|testmd|_test\.md)\b/i,
+    strong: /\b(repeatable|reusable|repeat\w*|re-?run|regression|ci|cd|on every (pr|push|commit|deploy|change)|github actions?|pipeline|scheduled|nightly|suite|testmd|_test\.md|same (seeded|test|fixture)\w* \w+|seeded (data|tasks?|users?|fixtures?))\b/i,
     weak: /\b(tests?|automat\w*|scripts?)\b/i,
   },
   feedback_loop: {
-    strong: /\b(block\w*|gate\w*|fail the build|release (decision|readiness)|go\/no-?go|diagnos\w*|root cause|auto-?fix\w*|triage\w*|rollback|open\w* (an )?issues?|pr comments?|feedback loop|self-?heal\w*)\b/i,
+    strong: /\b(block\w*|gate\w*|fail the build|release (decision|readiness)|go\/no-?go|diagnos\w*|root cause|auto-?fix\w*|triage\w*|rollback|open\w* (an )?issues?|pr comments?|feedback|self-?heal\w*|guides? the (coding )?agent|next change)\b/i,
     weak: /\b(report\w*|alert\w*|notif\w*|fix\w*|dashboard)\b/i,
   },
   actual_proof: {
@@ -370,11 +370,11 @@ const RULES: Record<CriterionId, Rule> = {
     weak: /\b(demo|show|results?)\b/i,
   },
   engineering_impact: {
-    strong: /\b(faster|minutes|hours|reduc\w*|sav\w*|cut\w*|confidence|fewer (bugs|regressions)|catch\w* [\s\S]{0,30}before|time to (ship|merge|release)|flak\w*|coverage gaps?|mttr|escap\w* defects?)\b/i,
+    strong: /\b(faster|minutes|hours|reduc\w*|sav\w*|cut\w*|confidence|fewer (bugs|regressions)|catch\w* [\s\S]{0,30}before|time to (ship|merge|release)|flak\w*|coverage gaps?|mttr|escap\w* defects?|(decid\w*|choose|prioriti\w*)[\s\S]{0,40}\b(ship|release|fix)\w*)\b/i,
     weak: /\b(quality|reliab\w*|speed|efficien\w*|productiv\w*)\b/i,
   },
   feasible_demo: {
-    strong: /\b(mvp|demo|in (a|one) day|first version|v0|scope|live|today|by 6)\b/i,
+    strong: /\b(mvp|demo|demonstrat\w*|in (a|one) day|first version|v0|scope|live|today|by 6|at the event|on stage)\b/i,
     weak: /./,
   },
 };
@@ -426,7 +426,9 @@ const GENERIC_CHANGES = [
 function quote(text: string, re: RegExp) {
   const m = re.exec(text);
   if (!m) return null;
-  const start = Math.max(text.lastIndexOf(".", m.index) + 1, m.index - 80, 0);
+  let start = Math.max(text.lastIndexOf(".", m.index) + 1, m.index - 80, 0);
+  // Cut back at a word boundary, never mid-word ("how which…" from "show which…").
+  if (start > 0 && /\S/.test(text[start - 1])) start = text.indexOf(" ", start) + 1 || start;
   const endDot = text.indexOf(".", m.index + m[0].length);
   const end = Math.min(endDot === -1 ? text.length : endDot + 1, m.index + m[0].length + 100);
   return `“${text.slice(start, end).trim().replace(/\s+/g, " ")}”`;
@@ -484,7 +486,7 @@ export function ruleAssessment(input: IdeaInput): Omit<Assessment, "assessed_at"
         ? `Covers all eight criteria (${met} clearly). Sharpen the proof and the demo.`
         : verdict === "ineligible"
           ? "As written, there's no clear creation or Kane use yet. Describe what you'll build and what Kane verifies."
-          : `${met} of 8 criteria are clearly covered and ${missing} are missing. Work through the three changes below.`,
+          : `${met} of 8 criteria are clearly covered and ${missing} ${missing === 1 ? "is" : "are"} missing. Work through the three changes below.`,
     criteria,
     changes,
     kane_path: kanePath(text, input.project_type, s),
