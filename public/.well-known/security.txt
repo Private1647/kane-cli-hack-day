@@ -1,0 +1,6 @@
+# Kane CLI Hack Day (kaneclihack.sh) security contact (RFC 9116)
+Contact: https://kaneclihack.sh/help
+Policy: https://kaneclihack.sh/privacy
+Preferred-Languages: en
+Canonical: https://kaneclihack.sh/.well-known/security.txt
+Expires: 2027-04-30T00:00:00.000Z

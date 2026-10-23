@@ -237,7 +237,8 @@ export type PublicStory = {
   preview: boolean;
 };
 
-const safeSrc = (s: string) => /^https:\/\/[^\s"'<>]+$/.test(s) || /^\/[\w./-]+$/.test(s);
+// Same-site paths only: "//host/x" is protocol-relative (another origin), so it's refused.
+const safeSrc = (s: string) => /^https:\/\/[^\s"'<>]+$/.test(s) || /^\/(?!\/)[\w./-]+$/.test(s);
 
 /**
  * Story → public DTO. `credited` is the list of names (and consented handles)

@@ -225,7 +225,7 @@ const deskOverride = (g: Pick<ExistingGuest, "admission_status" | "staff_referen
   g.admission_status === "admitted" && /^(admitted at desk|walk-in admit)/.test(g.staff_reference ?? "");
 
 /** The admission a file row implies for an existing guest (revoked stays revoked; checked-in never silently loses admission). */
-function expectedAdmission(cur: ExistingGuest, approval: ApprovalStatus): AdmissionStatus {
+export function expectedAdmission(cur: ExistingGuest, approval: ApprovalStatus): AdmissionStatus {
   if (cur.admission_status === "revoked") return "revoked";
   if (deskOverride(cur)) return "admitted";
   const target = admissionFor(approval);
