@@ -141,7 +141,12 @@ if ($wantKh -or $wantSkills) {
     $stgz = Join-Path $tmp "hack-skills-$KanehackVersion.tgz"
     foreach ($job in @(@($wantKh, "kanehack", "$Site/kanehack-$KanehackVersion.tgz", $tgz, $KanehackSha256), @($wantSkills, "hack_skills", "$Site/hack-skills-$KanehackVersion.tgz", $stgz, $SkillsSha256))) {
       if (-not $job[0]) { continue }
-      try { Invoke-WebRequest -Uri $job[2] -OutFile $job[3] -UseBasicParsing -TimeoutSec 60 } catch { Fail $job[1] "download failed" "Check your network and re-run ($($job[2]))"; $bad = $true; continue }
+      # Venue Wi-Fi drops requests: try three times before calling it a failure.
+      $ok = $false
+      foreach ($try in 1..3) {
+        try { Invoke-WebRequest -Uri $job[2] -OutFile $job[3] -UseBasicParsing -TimeoutSec 60; $ok = $true; break } catch { if ($try -lt 3) { Start-Sleep -Seconds 2 } }
+      }
+      if (-not $ok) { Fail $job[1] "download failed" "Check your network and re-run ($($job[2]))"; $bad = $true; continue }
       $got = (Get-FileHash -Algorithm SHA256 $job[3]).Hash.ToLower()
       if ($got -ne $job[4]) { Fail $job[1] "checksum mismatch" "Don't use this download; tell the help desk (got $got)"; $bad = $true }
     }

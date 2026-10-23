@@ -165,7 +165,7 @@ if [ -n "$WANT_KH" ] || [ -n "$WANT_SKILLS" ]; then
   BAD=""
   if [ -n "$WANT_KH" ]; then
     TGZ="${TMP}/kanehack-${KANEHACK_VERSION}.tgz"
-    if ! curl -fsSL --max-time 60 -o "$TGZ" "${SITE}/kanehack-${KANEHACK_VERSION}.tgz"; then fail kanehack "download failed" "Check your network and re-run (${SITE}/kanehack-${KANEHACK_VERSION}.tgz)"; BAD=1
+    if ! curl -fsSL --max-time 60 --retry 2 --retry-delay 2 --retry-connrefused -o "$TGZ" "${SITE}/kanehack-${KANEHACK_VERSION}.tgz"; then fail kanehack "download failed" "Check your network and re-run (${SITE}/kanehack-${KANEHACK_VERSION}.tgz)"; BAD=1
     else
       GOT="$(sha256 "$TGZ")"
       if [ "$GOT" != "$KANEHACK_SHA256" ]; then fail kanehack "checksum mismatch" "Don't use this download; tell the help desk (got ${GOT})"; BAD=1; fi
@@ -173,7 +173,7 @@ if [ -n "$WANT_KH" ] || [ -n "$WANT_SKILLS" ]; then
   fi
   if [ -n "$WANT_SKILLS" ]; then
     STGZ="${TMP}/hack-skills-${KANEHACK_VERSION}.tgz"
-    if ! curl -fsSL --max-time 60 -o "$STGZ" "${SITE}/hack-skills-${KANEHACK_VERSION}.tgz"; then fail hack_skills "download failed" "Check your network and re-run"; BAD=1
+    if ! curl -fsSL --max-time 60 --retry 2 --retry-delay 2 --retry-connrefused -o "$STGZ" "${SITE}/hack-skills-${KANEHACK_VERSION}.tgz"; then fail hack_skills "download failed" "Check your network and re-run"; BAD=1
     else
       GOT="$(sha256 "$STGZ")"
       if [ "$GOT" != "$SKILLS_SHA256" ]; then fail hack_skills "checksum mismatch" "Don't use this download; tell the help desk (got ${GOT})"; BAD=1; fi
