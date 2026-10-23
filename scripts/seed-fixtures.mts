@@ -283,12 +283,18 @@ const slugOf = F.slugOf;
 for (const k of ["wren", "tern", "robin", "dove"] as const) await submission(k, "complete");
 await submission("gannet", "no_repo");
 await submission("egret", "no_evidence");
-// Finch's deck exists before it finalizes, for the pinned-deck test.
+// Finch's deck is published before it finalizes, so the receipt pins it (pinned-deck test).
+// Finalize only pins an approved/published deck, and publishing a deck needs a published
+// Ship Page: story → publish page → save + publish deck, the order a team would use.
 await soft("finch deck", async () => {
   await actAs(F.captainOf("finch").email);
   const access = await story.authorizeStudio(slugOf("finch"), { write: true });
+  const content = await story.seedStory(access.project, await story.getTeamPeople(access.project.team_id));
+  const saved = await story.saveStory(access, { content: { ...content, one_line_pitch: content.one_line_pitch || "Finch Relay replays a failing Kane run as a shareable bug report.", what_we_built: content.what_we_built || "A relay that turns a failed Kane run into a bug report a teammate can replay.", consent_reviewed: true }, expected_version: 0 });
+  await story.publishShowcase(access, { story_version: saved.data.version, confirm_phrase: slugOf("finch") });
   const ed = await deck.getEditableDeck(access);
-  await deck.saveDeckVersion(access, { deck: ed.defaultDeck, expected_version: 0, reason: "fixture" });
+  const dv = await deck.saveDeckVersion(access, { deck: ed.defaultDeck, expected_version: 0, reason: "fixture" });
+  await deck.publishDeck(access, { version: dv.data.version, confirm_phrase: "publish deck" });
 });
 for (const k of ["finch", "heron", "ledger"] as const) await submission(k, "finalized");
 // Sparrow (milestones): finalized with a public Ship Page, linking its verified run.
