@@ -1,13 +1,15 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import PageHeader from "@/components/ui/PageHeader";
+import { KANE_CAPABILITIES } from "@/server/kane";
+import CapabilityPicker from "./CapabilityPicker";
 
 export const metadata: Metadata = {
   title: "Docs",
   description: "Kane CLI documentation and the event's own guides, in one place.",
 };
 
-// T-DOC-02 (minimal): the Kane CLI capability catalog, linking only to the
+// T-DOC-02: the Kane CLI capability catalog, linking only to the
 // official pages listed in the blueprint's DOCUMENTATION_INDEX (checked Oct 22
 // 2026), plus this site's own pages. Nothing here describes a command the
 // official reference doesn't publish. Version and plan entitlements vary:
@@ -54,6 +56,7 @@ export default function DocsPage() {
         intro="The official Kane CLI docs and this event's own guides. Features like remote grids, real devices and assurance depend on your CLI version and plan."
         jumps={[
           { href: "#kane", label: "Kane CLI" },
+          { href: "#versions", label: "By version and plan" },
           { href: "#event", label: "This event" },
         ]}
       />
@@ -70,6 +73,13 @@ export default function DocsPage() {
               </li>
             ))}
           </ul>
+        </div>
+      </section>
+      <section id="versions" className="scroll-mt-24 border-t border-dashed border-hairline py-12">
+        <div className="container-page space-y-6">
+          <h2 className="font-display text-2xl tracking-[-0.02em] text-bright sm:text-3xl">What your version and plan unlock</h2>
+          <p className="max-w-3xl font-plex text-sm text-lightgray">The same catalog your agent gets from the event MCP server (harness_get_capabilities). Pick one to see what it needs and a workflow to start from.</p>
+          <CapabilityPicker capabilities={KANE_CAPABILITIES} />
         </div>
       </section>
       <section id="event" className="scroll-mt-24 border-t border-dashed border-hairline py-12">

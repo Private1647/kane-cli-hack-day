@@ -1162,12 +1162,44 @@ export async function ingestGithubPush(deliveryId: string, payload: PushPayload)
  * doctor), not here. Docs links point to the official Kane CLI docs.
  */
 export const KANE_CAPABILITIES = [
-  { id: "run", command: "kane-cli run \"<objective>\" --agent", proves: "One browser objective; run_end + exit code", completion: "run_end" },
-  { id: "testmd", command: "kane-cli testmd run <file>_test.md --agent", proves: "A saved, replayable test", completion: "test_md_done" },
-  { id: "testrun", command: "kane-cli testrun run <selection> --agent", proves: "A suite with per-test pass/fail", completion: "testrun_done" },
-  { id: "testrun_remote", command: "kane-cli testrun run <selection> --remote --agent", proves: "The suite on the cloud grid (needs a HyperExecute plan)", completion: "remote_done" },
-  { id: "design", command: "kane-cli design tests --mode agent", proves: "A requirement-linked suite designed from your spec", completion: "done" },
-  { id: "cover", command: "kane-cli cover --mode agent", proves: "Designed vs proven coverage per use case", completion: "done" },
-  { id: "evidence", command: "kane-cli evidence serve <pack>", proves: "The sealed evidence pack for a run", completion: "n/a" },
-  { id: "mobile", command: "kane-cli run \"<objective>\" --target emulator|simulator --agent", proves: "Native app flows (macOS Apple Silicon or --remote)", completion: "run_end" },
+  {
+    id: "run", label: "One-shot browser run", command: "kane-cli run \"<objective>\" --agent", proves: "One browser objective; run_end + exit code", completion: "run_end",
+    needs: "Any signed-in Kane CLI", doc: "https://www.testmuai.com/docs/kane-cli-cli-reference",
+    workflow: ["kane-cli login", "kane-cli run \"Open https://your.app, sign in with {{user}} and verify the dashboard shows your name\" --agent"],
+  },
+  {
+    id: "testmd", label: "Saved, replayable test", command: "kane-cli testmd run <file>_test.md --agent", proves: "A saved, replayable test", completion: "test_md_done",
+    needs: "Any signed-in Kane CLI", doc: "https://www.testmuai.com/docs/kane-cli-generate",
+    workflow: ["kane-cli run \"<objective>\" --name checkout --agent   # recorded as a _test.md while it runs", "kane-cli testmd run checkout_test.md --agent"],
+  },
+  {
+    id: "testrun", label: "Local suite", command: "kane-cli testrun run <selection> --agent", proves: "A suite with per-test pass/fail", completion: "testrun_done",
+    needs: "Any signed-in Kane CLI", doc: "https://www.testmuai.com/docs/kane-cli-testrun",
+    workflow: ["kane-cli testrun run tests/ --dry-run < /dev/null", "kane-cli testrun run tests/ --parallel 4 < /dev/null"],
+  },
+  {
+    id: "testrun_remote", label: "Suite on the cloud grid", command: "kane-cli testrun run <selection> --remote --agent", proves: "The suite on the cloud grid (needs a HyperExecute plan)", completion: "remote_done",
+    needs: "A HyperExecute plan and the remote-execution plugin", doc: "https://www.testmuai.com/docs/kane-cli-remote-execution",
+    workflow: ["kane-cli plugin install remote-execution", "kane-cli testrun run tests/ --remote --dry-run < /dev/null", "kane-cli testrun run tests/ --remote < /dev/null"],
+  },
+  {
+    id: "design", label: "Assurance: tests from your spec", command: "kane-cli design tests --mode agent", proves: "A requirement-linked suite designed from your spec", completion: "done",
+    needs: "Kane CLI 0.6.1 or newer (some assurance features need newer releases)", doc: "https://www.testmuai.com/docs/kane-cli-assurance-design",
+    workflow: ["kane-cli context ingest requirements/spec.md --mode agent", "kane-cli design tests --mode agent", "kane-cli testrun run <designed tests> < /dev/null"],
+  },
+  {
+    id: "cover", label: "Assurance: coverage", command: "kane-cli cover --mode agent", proves: "Designed vs proven coverage per use case", completion: "done",
+    needs: "Kane CLI 0.6.1 or newer, after a design run", doc: "https://www.testmuai.com/docs/kane-cli-assurance-coverage",
+    workflow: ["kane-cli testrun run <designed tests> < /dev/null", "kane-cli cover --mode agent"],
+  },
+  {
+    id: "evidence", label: "Evidence packs", command: "kane-cli evidence serve <pack>", proves: "The sealed evidence pack for a run", completion: "n/a",
+    needs: "Any signed-in Kane CLI", doc: "https://www.testmuai.com/docs/kane-cli-evidence",
+    workflow: ["kane-cli run \"<objective>\" --agent   # prints the pack path on stderr", "kane-cli evidence serve <pack>.evidence"],
+  },
+  {
+    id: "mobile", label: "Native mobile app", command: "kane-cli run \"<objective>\" --target emulator|simulator --agent", proves: "Native app flows (macOS Apple Silicon or --remote)", completion: "run_end",
+    needs: "macOS on Apple Silicon for a local emulator or simulator; otherwise --remote; real devices are plan dependent", doc: "https://www.testmuai.com/docs/kane-cli-mobile-real-device",
+    workflow: ["kane-cli devices list --target emulator", "kane-cli run \"Open the app and verify the home screen loads\" --target emulator --app <build.apk> --agent"],
+  },
 ] as const;
