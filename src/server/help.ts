@@ -420,13 +420,26 @@ export async function createHelpTicket(who: HelpRequester, raw: unknown): Promis
     if (load.recent >= MAX_CREATED_PER_15_MIN) throw new AppError("RATE_LIMITED");
 
     return transaction(async (tx) => {
-      const { rows } = await tx.query<TicketRow>(
-        `insert into help_tickets (member_id, team_id, table_label, category, summary, details, tried, priority, safe_run_id, source, idempotency_key)
-         values ($1, $2, coalesce($3, (select table_label from teams where id = $2)), $4, $5, $6, $7, $8, $9, $10, $11)
-         returning *`,
-        [who.member.id, who.member.team_id, input.table_label, input.category, summary, details, tried, input.priority, safeRun, who.source, input.idempotency_key ?? null],
-      );
-      const t = rows[0];
+      // Paper slips can carry any H- number, so the sequence may land on one
+      // already entered from paper. Skip taken codes instead of failing the
+      // participant's ticket (a savepoint keeps the transaction usable).
+      let t: TicketRow | undefined;
+      for (let attempt = 0; !t; attempt++) {
+        await tx.query("savepoint help_code");
+        try {
+          const { rows } = await tx.query<TicketRow>(
+            `insert into help_tickets (member_id, team_id, table_label, category, summary, details, tried, priority, safe_run_id, source, idempotency_key)
+             values ($1, $2, coalesce($3, (select table_label from teams where id = $2)), $4, $5, $6, $7, $8, $9, $10, $11)
+             returning *`,
+            [who.member.id, who.member.team_id, input.table_label, input.category, summary, details, tried, input.priority, safeRun, who.source, input.idempotency_key ?? null],
+          );
+          t = rows[0];
+        } catch (e) {
+          const pg = e as { code?: string; constraint?: string };
+          if (attempt >= 5 || pg.code !== "23505" || pg.constraint !== "help_tickets_code_key") throw e;
+          await tx.query("rollback to savepoint help_code");
+        }
+      }
       await writeAudit(
         who.actor,
         { action: "help.create", resourceType: "help_ticket", resourceId: t.id, after: { code: t.code, category: t.category, priority: t.priority, source: t.source }, payload: { code: t.code } },

@@ -136,7 +136,7 @@ export default function SettingsPage() {
                           </p>
                           <p className="text-xs break-all text-lightgray">{s.email}</p>
                           <p className="mt-1 text-xs text-lightgray">
-                            {s.active ? <StatusPill tone="accent">Active</StatusPill> : <StatusPill tone="unverified">Inactive</StatusPill>} · last sign-in {fmtTime(s.last_login_at)}
+                            {s.active ? <StatusPill tone="neutral">Active</StatusPill> : <StatusPill tone="unverified">Inactive</StatusPill>} · last sign-in {fmtTime(s.last_login_at)}
                           </p>
                         </div>
                         <div>{s.active && <IssueCode id={s.id} name={s.name} />}</div>

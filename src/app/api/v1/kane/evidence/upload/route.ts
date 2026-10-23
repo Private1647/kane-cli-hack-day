@@ -1,7 +1,7 @@
 import { handleUpload, type HandleUploadBody } from "@vercel/blob/client";
 import { AppError, toAppError } from "@/server/core";
 import { SIGNED_PREFIX, projectFor, resolveCaller } from "@/server/kane";
-import { MAX_SIGNED_BYTES } from "@/server/kane-evidence";
+import { EVIDENCE_CONTENT_TYPES, MAX_SIGNED_BYTES } from "@/server/kane-evidence";
 
 // Signed client uploads for evidence over 4 MB (the Proof tab uses this via
 // @vercel/blob/client `upload()`). The token only allows a private upload
@@ -20,6 +20,8 @@ export async function POST(request: Request) {
         if (!pathname.startsWith(`${SIGNED_PREFIX}${project.id}/`) || pathname.includes("..")) throw new AppError("FORBIDDEN", { userMessage: "Uploads must go to your own project folder." });
         return {
           maximumSizeInBytes: MAX_SIGNED_BYTES,
+          // Same types inspectEvidence accepts; the bytes are still checked when the file is claimed.
+          allowedContentTypes: EVIDENCE_CONTENT_TYPES,
           addRandomSuffix: true,
           validUntil: Date.now() + 10 * 60_000,
         };

@@ -42,6 +42,9 @@ const RULES: Record<EvidenceKind, Rule> = {
   other: { exts: ["txt", "json"], types: ["text/plain", "application/json"], text: true },
 };
 
+/** Every content type some evidence kind accepts: the signed-upload token allows only these. */
+export const EVIDENCE_CONTENT_TYPES = [...new Set(Object.values(RULES).flatMap((r) => r.types))];
+
 const EXEC_EXT = /\.(exe|dll|so|dylib|sh|bash|zsh|bat|cmd|ps1|psm1|vbs|js|mjs|jar|scr|msi|com|app|command|apk|ipa|pkg|deb|rpm)$/i;
 
 export type EvidenceVerdict =

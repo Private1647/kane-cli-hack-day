@@ -55,7 +55,7 @@ async function Body({ searchParams }: Pick<PageProps<"/pair">, "searchParams">) 
     return (
       <div className="space-y-4 font-plex text-sm">
         <p className="flex flex-wrap items-center gap-3 text-bright">
-          <StatusPill tone="accent">Approved</StatusPill> Go back to your terminal; it will finish by itself.
+          <StatusPill tone="neutral">Approved</StatusPill> Go back to your terminal; it will finish by itself.
         </p>
         <Link href="/passport#devices" className="inline-flex min-h-11 items-center text-bright underline underline-offset-4 hover:text-lime">
           See paired devices →

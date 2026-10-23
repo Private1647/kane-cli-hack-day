@@ -25,11 +25,13 @@ const PLACEHOLDERS: Record<string, string> = {
 
 export const PROGRESS_ITEMS: ProgressItem[] = [
   {
+    // Id kept for existing progress rows. D2: the team hub, not Devpost, is the
+    // official record, so this is "the idea is saved here".
     id: "devpost-idea",
-    label: "Devpost idea",
+    label: "Idea saved in the hub",
     kind: "idea",
     deadline: submissions.idea.deadline,
-    placeholder: "https://devpost.com/software/…",
+    placeholder: "One line: what you're building",
   },
   ...submissions.final.minimum.map((label) => ({
     id: slug(label),

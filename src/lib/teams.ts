@@ -129,8 +129,12 @@ function toRegistrationError(err: unknown) {
   return err;
 }
 
+/** A team slug is also the team's /ship/{slug}, so a project slug or a ship redirect blocks it too. */
 export async function isSlugTaken(slug: string) {
-  const rows = await query("select 1 from teams where slug = $1", [slug]);
+  const rows = await query(
+    "select 1 from teams where slug = $1 union all select 1 from projects where slug = $1 union all select 1 from project_slug_redirects where old_slug = $1",
+    [slug],
+  );
   return rows.length > 0;
 }
 

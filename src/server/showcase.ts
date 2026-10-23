@@ -538,8 +538,10 @@ export async function renameShipSlug(staff: Staff, input: unknown) {
     const { rows } = await tx.query<{ id: number }>("select id from projects where slug = $1 for update", [slug]);
     const p = rows[0];
     if (!p) throw new AppError("NOT_FOUND");
+    // Another team's slug is reserved for that team's own /ship page (registerTeam/ensureProject).
     const { rows: taken } = await tx.query(
-      "select 1 from projects where slug = $1 union all select 1 from project_slug_redirects where old_slug = $1 and project_id <> $2",
+      `select 1 from projects where slug = $1 union all select 1 from project_slug_redirects where old_slug = $1 and project_id <> $2
+       union all select 1 from teams where slug = $1 and id <> (select team_id from projects where id = $2)`,
       [new_slug, p.id],
     );
     if (taken.length) throw new AppError("CONFLICT", { userMessage: "That slug is taken (or reserved by a redirect)." });

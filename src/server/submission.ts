@@ -278,8 +278,15 @@ async function progressDone(db: Db, teamId: number) {
 async function ensureProject(teamId: number): Promise<ProjectRow> {
   const existing = await getProjectByTeam(teamId);
   if (existing) return existing;
+  // The team slug may already be someone else's /ship slug (an organizer
+  // rename): fall back to a suffixed slug rather than failing every submit.
   await query(
-    `insert into projects (team_id, name, slug) select id, name, slug from teams where id = $1 on conflict (team_id) do nothing`,
+    `insert into projects (team_id, name, slug)
+     select t.id, t.name,
+            case when exists (select 1 from projects p where p.slug = t.slug) or exists (select 1 from project_slug_redirects r where r.old_slug = t.slug)
+                 then left(t.slug, 56) || '-' || t.id else t.slug end
+       from teams t where t.id = $1
+     on conflict do nothing`,
     [teamId],
   );
   const p = await getProjectByTeam(teamId);

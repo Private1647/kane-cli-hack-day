@@ -183,7 +183,7 @@ export function parseRosterCsv(csv: string, opts: { sourceVersion?: string | nul
 
 // ── Diff ─────────────────────────────────────────────────────────────────────
 
-export type DiffChange = { field: "name" | "approval_status" | "email"; from: string | null; to: string | null };
+export type DiffChange = { field: "name" | "approval_status" | "email" | "admission_status"; from: string | null; to: string | null };
 
 export type DiffRow = {
   lumaGuestId: string;
@@ -217,11 +217,24 @@ type ExistingGuest = {
   email_hash: string | null;
   email_hint: string | null;
   checked_in_at: Date | null;
+  staff_reference: string | null;
 };
+
+/** An organizer admitted this person at the desk (or as a walk-in) over the file: imports never undo that. */
+const deskOverride = (g: Pick<ExistingGuest, "admission_status" | "staff_reference">) =>
+  g.admission_status === "admitted" && /^(admitted at desk|walk-in admit)/.test(g.staff_reference ?? "");
+
+/** The admission a file row implies for an existing guest (revoked stays revoked; checked-in never silently loses admission). */
+function expectedAdmission(cur: ExistingGuest, approval: ApprovalStatus): AdmissionStatus {
+  if (cur.admission_status === "revoked") return "revoked";
+  if (deskOverride(cur)) return "admitted";
+  const target = admissionFor(approval);
+  return cur.checked_in_at && target !== "admitted" ? "needs_reconciliation" : target;
+}
 
 async function loadLumaGuests(db: Db) {
   const { rows } = await db.query<ExistingGuest>(
-    `select id, luma_guest_id, name, approval_status, admission_status, email_hash, email_hint, checked_in_at
+    `select id, luma_guest_id, name, approval_status, admission_status, email_hash, email_hint, checked_in_at, staff_reference
        from roster_guests where event_id = current_event_id() and luma_guest_id is not null`,
   );
   return new Map(rows.map((r) => [r.luma_guest_id, r]));
@@ -244,6 +257,10 @@ function diffAgainst(parsed: ParsedRoster, existing: Map<string, ExistingGuest>)
     if (cur.name !== r.name) changes.push({ field: "name", from: cur.name, to: r.name });
     if (cur.approval_status !== r.approval) changes.push({ field: "approval_status", from: cur.approval_status, to: r.approval });
     if (r.email && cur.email_hash !== emailHash(r.email)) changes.push({ field: "email", from: cur.email_hint, to: hint });
+    // A guest dropped by an earlier "mark missing" import and back in this file
+    // has the same name/approval/email, but their admission must be restored.
+    const want = expectedAdmission(cur, r.approval);
+    if (cur.admission_status !== want) changes.push({ field: "admission_status", from: cur.admission_status, to: want });
     if (!changes.length) {
       unchanged++;
       continue;
@@ -334,9 +351,7 @@ export async function commitRosterImport(
     for (const c of diff.changed) {
       const r = byId.get(c.lumaGuestId)!;
       const cur = existing.get(c.lumaGuestId)!;
-      const target = admissionFor(r.approval);
-      const admission: AdmissionStatus =
-        cur.admission_status === "revoked" ? "revoked" : cur.checked_in_at && target !== "admitted" ? "needs_reconciliation" : target;
+      const admission = expectedAdmission(cur, r.approval);
       await tx.query(
         `update roster_guests
             set name = $2, approval_status = $3, admission_status = $4,
@@ -669,11 +684,23 @@ export async function admitWalkIn(
     withAudit(actor, "checkin.walk_in", "roster_guest", async (tx) => {
       await tx.query("select pg_advisory_xact_lock(hashtext($1))", [`walkin:${hash}`]);
       const note = input.note?.trim() || null;
-      const { rows: ms } = await tx.query<{ id: number; name: string; guest_id: number | null; public_code: string | null }>(
-        "select id, name, guest_id, public_code from members where lower(email) = lower($1) and deleted_at is null for update",
+      const { rows: ms } = await tx.query<{ id: number; name: string; guest_id: number | null; public_code: string | null; admission_state: string | null }>(
+        "select id, name, guest_id, public_code, admission_state from members where lower(email) = lower($1) and deleted_at is null for update",
         [input.email.trim()],
       );
       let member = ms[0] ?? null;
+      // Walk-in admission is for people we've never heard of. Admitting someone
+      // the roster says is declined, waitlisted, removed or revoked is an
+      // override: organizer only, with a reason (same rule as checkInGuest).
+      const isOrganizer = staff.role === "organizer" || staff.role === "admin";
+      const needOverride = (status: string) => {
+        if (!isOrganizer) {
+          throw new AppError("FORBIDDEN", {
+            userMessage: `This person is on the roster as ${status.replace(/_/g, " ")}. Only an organizer can admit them; ask one to come to the desk.`,
+          });
+        }
+        if (!note) throw new AppError("VALIDATION_FAILED", { userMessage: `They are on the roster as ${status.replace(/_/g, " ")}. Add a reason in the note to override.` });
+      };
       const { rows: gs } = await tx.query<{ id: number; admission_status: AdmissionStatus; member_id: number | null; name: string }>(
         `select id, admission_status, member_id, name from roster_guests
           where event_id = current_event_id() and (email_hash = $1 or id = $2 or member_id = $3)
@@ -684,6 +711,8 @@ export async function admitWalkIn(
       let createdGuest = false;
       let createdMember = false;
       let reason: string | null = note;
+      if (guest && guest.admission_status !== "admitted") needOverride(guest.admission_status);
+      else if (!guest && member && member.admission_state && !["admitted", "unknown"].includes(member.admission_state)) needOverride(member.admission_state);
       if (guest) {
         if (guest.admission_status !== "admitted") {
           reason = `walk-in admit over ${guest.admission_status}${note ? `: ${note}` : ""}`;
@@ -699,9 +728,9 @@ export async function admitWalkIn(
         createdGuest = true;
       }
       if (!member) {
-        const { rows } = await tx.query<{ id: number; name: string; guest_id: number | null; public_code: string | null }>(
+        const { rows } = await tx.query<{ id: number; name: string; guest_id: number | null; public_code: string | null; admission_state: string | null }>(
           `insert into members (team_id, name, email, email_hash, display_name, admission_state, checked_in_at, guest_id)
-           values (null, $1, $2, $3, $4, 'admitted', now(), $5) returning id, name, guest_id, public_code`,
+           values (null, $1, $2, $3, $4, 'admitted', now(), $5) returning id, name, guest_id, public_code, admission_state`,
           [input.name.trim(), input.email.trim().toLowerCase(), hash, input.displayName?.trim() || null, guest.id],
         );
         member = rows[0];

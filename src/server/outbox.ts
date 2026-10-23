@@ -1,5 +1,5 @@
 import "server-only";
-import { del } from "@vercel/blob";
+import { del, list } from "@vercel/blob";
 import { query } from "@/lib/db";
 import { writeAudit } from "./core";
 import { log } from "./log";
@@ -153,6 +153,7 @@ export async function runRetention(): Promise<RetentionResult> {
     rateLimitWindows: await pruneRateLimits(),
     selfiesDue: 0,
     selfiesDeleted: 0,
+    incomingDeleted: 0,
   };
   try {
     const due = await query<{ id: number; object_key: string }>("select id, object_key from selfies where deletion_due_at < now() and deleted_at is null limit 100");
@@ -171,6 +172,27 @@ export async function runRetention(): Promise<RetentionResult> {
     }
   } catch (err) {
     log.warn("retention.selfies_unavailable", { err });
+  }
+  // Signed evidence uploads that were never claimed (POST /api/v1/kane/evidence
+  // moves the ones that count) are deleted after an hour, so the private store
+  // can't be used as free storage.
+  if (process.env.BLOB_READ_WRITE_TOKEN) {
+    try {
+      const cutoff = Date.now() - 60 * 60_000;
+      let cursor: string | undefined;
+      for (let page = 0; page < 10; page++) {
+        const r = await list({ prefix: "evidence-incoming/", cursor, limit: 500 });
+        const stale = r.blobs.filter((b) => new Date(b.uploadedAt).getTime() < cutoff).map((b) => b.url);
+        if (stale.length) {
+          await del(stale);
+          res.incomingDeleted += stale.length;
+        }
+        if (!r.hasMore) break;
+        cursor = r.cursor;
+      }
+    } catch (err) {
+      log.warn("retention.incoming_sweep_failed", { err });
+    }
   }
   return res;
 }

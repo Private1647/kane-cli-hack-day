@@ -327,7 +327,17 @@ export async function idempotent<T>(key: string | null | undefined, scope: strin
   if (claimed.length === 0) {
     const [row] = await query<{ status: string; response: T }>("select status, response from idempotency_keys where scope = $1 and key = $2", [scope, key]);
     if (row?.status === "done") return { result: row.response, replayed: true };
-    throw new AppError("CONFLICT", { userMessage: "That request is still being processed. Try again in a moment." });
+    // A claim left 'pending' by a crash or timeout between fn() and the 'done'
+    // update would block every retry forever. After 60s, take it over and run
+    // fn again; callers that use this (finalize, help create) are naturally
+    // idempotent inside fn, so a re-run returns the original result.
+    const stale = await query<{ key: string }>(
+      `update idempotency_keys set created_at = now()
+        where scope = $1 and key = $2 and status = 'pending' and created_at < now() - interval '60 seconds'
+        returning key`,
+      [scope, key],
+    );
+    if (!stale.length) throw new AppError("CONFLICT", { userMessage: "That request is still being processed. Try again in a moment." });
   }
   try {
     const result = await fn();

@@ -22,7 +22,7 @@ const FILTERS: { id: RosterFilter; label: string }[] = [
 ];
 
 const ADMISSION: Record<string, { tone: PillTone; label: string }> = {
-  admitted: { tone: "accent", label: "Admitted" },
+  admitted: { tone: "neutral", label: "Admitted" },
   not_admitted: { tone: "unverified", label: "Not admitted" },
   needs_reconciliation: { tone: "pending", label: "Reconcile" },
   revoked: { tone: "danger", label: "Revoked" },

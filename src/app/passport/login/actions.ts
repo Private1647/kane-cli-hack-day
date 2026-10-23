@@ -1,7 +1,8 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { formObject, parse, toAppError, z } from "@/server/core";
+import { formObject, parse, sha256, toAppError, z } from "@/server/core";
+import { clientKey, rateLimit } from "@/server/ratelimit";
 import { memberLoginWithCode, memberLoginWithPassword } from "@/server/pairing";
 
 export type PersonalLoginState = { error?: string; email?: string } | null;
@@ -20,6 +21,12 @@ const safeNext = (s?: string) => (s && /^\/(passport|activate|pair|readiness)(\/
 // team password (or a personal password), or email + a one-time code.
 export async function personalLogin(_prev: PersonalLoginState, form: FormData): Promise<PersonalLoginState> {
   const input = parse(schema, formObject(form));
+  // Throttle per client and per email, so team passwords and one-time codes can't be guessed here.
+  const [byClient, byEmail] = await Promise.all([
+    rateLimit(`member-login:${await clientKey()}`, { limit: 10, windowSec: 300 }),
+    rateLimit(`member-login-email:${sha256(input.email)}`, { limit: 10, windowSec: 900 }),
+  ]);
+  if (!byClient.ok || !byEmail.ok) return { error: "Too many tries. Wait a few minutes and try again.", email: input.email };
   try {
     if (input.code) await memberLoginWithCode(input.email, input.code);
     else if (input.password) await memberLoginWithPassword(input.email, input.password);

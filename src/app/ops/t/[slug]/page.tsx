@@ -114,7 +114,7 @@ async function Detail({ params }: Pick<PageProps<"/ops/t/[slug]">, "params">) {
         <div>
           <p className={label}>
             Progress · {done.size}/{PROGRESS_ITEMS.length}
-            {shippedMinimum(done) && <span className="ml-2 text-lime">shipped</span>}
+            {shippedMinimum(done) && <span className="ml-2 text-bright">· shipped</span>}
           </p>
           <ul className="border-t border-dashed border-hairline">
             {PROGRESS_ITEMS.map((item) => {
@@ -122,7 +122,7 @@ async function Detail({ params }: Pick<PageProps<"/ops/t/[slug]">, "params">) {
               return (
                 <li key={item.id} className="border-b border-dashed border-hairline py-3 font-plex text-sm">
                   <div className="flex justify-between gap-3">
-                    <span className={row?.done ? "text-lime" : "text-bright"}>
+                    <span className={row?.done ? "text-bright" : "text-lightgray"}>
                       {row?.done ? "■" : "□"} {item.label}
                     </span>
                     {row?.updated_by_name && (

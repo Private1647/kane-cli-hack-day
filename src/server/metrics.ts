@@ -674,6 +674,10 @@ export async function readFeed(opts: { limit?: number; afterId?: number } = {}):
       where f.event_id = (select id from hack_events order by id limit 1)
         and f.id > $1 and ($2::boolean = false or f.is_demo = false)
         and f.occurred_at > now() - interval '24 hours'
+        -- Project items follow the project's *current* visibility: a page an
+        -- organizer hid, or a team switched off, drops out of /live too.
+        and (f.href is null or f.href not like '/ship/%'
+             or exists (select 1 from projects p where p.team_id = f.team_id and p.showcase_state = 'public'))
       order by f.occurred_at desc, f.id desc
       limit 200`,
     [opts.afterId ?? 0, production],
@@ -764,6 +768,9 @@ const PUBLIC_SYSTEMS: Record<string, string> = {
 const snapshotCache = new Map<string, { at: number; snap: LiveSnapshot }>();
 
 /** Everything /live needs, from the projection. Cached 4s per instance (TVs poll; SSE fans out). */
+/** Last successfully read metrics per board, held through a failed read (per instance). */
+const lastGoodMetrics = new Map<string, { metrics: LiveSnapshot["metrics"]; as_of: string | null }>();
+
 export async function getLiveSnapshot(opts: { ops?: boolean } = {}): Promise<LiveSnapshot> {
   const key = opts.ops ? "ops" : "public";
   const hit = snapshotCache.get(key);
@@ -829,14 +836,17 @@ export async function getLiveSnapshot(opts: { ops?: boolean } = {}): Promise<Liv
     const state: LiveBanner["state"] = s.status === "down" ? "offline" : "delayed";
     banners.push({ state, system: label ?? s.system, detail: s.paused ? "Paused by an organizer." : "Numbers may lag; last values are held." });
   }
-  if (!m) banners.unshift({ state: "offline", system: "Live metrics", detail: "Can't read the projection. Showing the last values received." });
+  // Hold the last good values when the read fails (never reset tiles to "—" or 0).
+  const held = !m ? lastGoodMetrics.get(key) : undefined;
+  if (m) lastGoodMetrics.set(key, { metrics: m.metrics, as_of: m.as_of });
+  if (!m) banners.unshift({ state: "offline", system: "Live metrics", detail: held ? "Can't read the projection. Showing the last values received." : "Can't read the projection yet." });
   else if (m.freshness_state !== "fresh" && m.as_of) {
     banners.unshift({ state: m.freshness_state === "offline" ? "offline" : m.freshness_state, system: "Live metrics", detail: "Holding the last values; they are not reset to zero." });
   }
 
   const snap: LiveSnapshot = {
     server_time: e.now.toISOString(),
-    as_of: m?.as_of ?? null,
+    as_of: m?.as_of ?? held?.as_of ?? null,
     freshness_state: m?.freshness_state ?? "offline",
     event: {
       name: e.name,
@@ -851,7 +861,7 @@ export async function getLiveSnapshot(opts: { ops?: boolean } = {}): Promise<Liv
       is_demo: e.isDemo,
       fallback: e.fallback,
     },
-    metrics: m?.metrics ?? {},
+    metrics: m?.metrics ?? held?.metrics ?? {},
     // One banner per system: the freshness banner (first) wins over integration_state.
     banners: banners.filter((b, i) => banners.findIndex((x) => x.system === b.system) === i),
     announcements: announcements.map((a) => ({ id: a.id, title: a.title, body: a.body, href: a.href, at: new Date(a.send_at).toISOString() })),
@@ -863,7 +873,8 @@ export async function getLiveSnapshot(opts: { ops?: boolean } = {}): Promise<Liv
     ops,
   };
   if (e.fallback) snap.banners.unshift({ state: "offline", system: "Event database", detail: "Using the published schedule; live numbers are held." });
-  snapshotCache.set(key, { at: Date.now(), snap });
+  // A snapshot whose metrics read failed isn't cached, so the next poll retries.
+  if (m) snapshotCache.set(key, { at: Date.now(), snap });
   return snap;
 }
 

@@ -107,7 +107,9 @@ export default function LiveTV({
   const base = ops ? "?ops=1" : "";
   const accept = useCallback((s: LiveSnapshot) => {
     const at = Date.now(); // receipt time, for the offset and client-side staleness only
-    setSnap(s);
+    // An empty metrics object means the server couldn't read them: keep the
+    // last values on screen (the snapshot's banner says they are held).
+    setSnap((prev) => (prev && Object.keys(s.metrics ?? {}).length === 0 && Object.keys(prev.metrics ?? {}).length > 0 ? { ...s, metrics: prev.metrics, as_of: prev.as_of } : s));
     setOffset(new Date(s.server_time).getTime() - at);
     setLastOk(at);
     setFailingSince(null);

@@ -100,7 +100,7 @@ export function Result({ state, render }: { state: OpsState; render?: (s: NonNul
   }
   return (
     <p role="status" className="flex flex-wrap items-center gap-2 font-plex text-sm text-bright">
-      <StatusPill tone="accent">Done</StatusPill>
+      <StatusPill tone="neutral">Done</StatusPill>
       <span>{state.message}</span>
       {state.receipt && (
         <span className="text-xs text-lightgray">
