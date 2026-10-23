@@ -1,7 +1,7 @@
 "use client";
 
 import SmartLink from "@/components/ui/SmartLink";
-import { useEffect, useState } from "react";
+import { useOptimistic, useTransition } from "react";
 import { setup, setupDeadline } from "@/data/hackday";
 import { Fold, SectionHeading } from "@/components/ui/Section";
 import CopyField from "@/components/ui/CopyField";
@@ -9,30 +9,30 @@ import Reveal from "@/components/ui/Reveal";
 import Statue from "@/components/art/Statue";
 import Caption from "@/components/art/Caption";
 
-const STORAGE_KEY = "hackday:setup";
 const COUNT_WORDS: Record<number, string> = { 3: "Three", 4: "Four", 5: "Five", 6: "Six", 7: "Seven", 8: "Eight" };
 
-// The setup steps as a checklist. Ticks are remembered on this device only.
-export default function Setup() {
-  const [done, setDone] = useState<string[]>([]);
+// The setup steps as a checklist. Ticks are saved per member, so they follow
+// you across devices; without onToggle (an admin looking) they're read-only.
+export default function Setup({
+  initialDone,
+  onToggle,
+}: {
+  initialDone: string[];
+  onToggle?: (step: string, done: boolean) => Promise<void>;
+}) {
+  const [, startTransition] = useTransition();
+  const [done, setOptimistic] = useOptimistic(initialDone, (prev: string[], { id, on }: { id: string; on: boolean }) =>
+    on ? [...prev, id] : prev.filter((d) => d !== id),
+  );
 
-  useEffect(() => {
-    try {
-      const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "[]");
-      // Reading browser storage has to wait until after hydration.
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      if (Array.isArray(saved)) setDone(saved);
-    } catch {}
-  }, []);
-
-  const toggle = (id: string) =>
-    setDone((prev) => {
-      const next = prev.includes(id) ? prev.filter((d) => d !== id) : [...prev, id];
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-      } catch {}
-      return next;
+  const toggle = (id: string) => {
+    if (!onToggle) return;
+    const on = !done.includes(id);
+    startTransition(async () => {
+      setOptimistic({ id, on });
+      await onToggle(id, on);
     });
+  };
 
   return (
     <Fold id="setup">
@@ -69,6 +69,7 @@ export default function Setup() {
                   aria-checked={checked}
                   aria-label={`Mark “${step.title}” done`}
                   onClick={() => toggle(step.id)}
+                  disabled={!onToggle}
                   className={`grid h-5 w-5 place-items-center border transition-colors ${
                     checked ? "border-lime bg-lime text-ink" : "border-hairline text-transparent hover:border-lime"
                   }`}

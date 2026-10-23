@@ -2,49 +2,34 @@ import Link from "next/link";
 import { event } from "@/data/hackday";
 
 // Link columns over a giant dot-matrix wordmark, as in gradium.ai's footer.
+// Public links go to the home page; team links go through /resources, /submit
+// and friends, which send you to your hub (or to log in first).
 const columns = [
   {
     title: "The day",
     links: [
-      { href: "/#setup", label: "Do this first" },
       { href: "/#schedule", label: "Schedule" },
       { href: "/#challenge", label: "The challenge" },
       { href: "/#prizes", label: "Prizes" },
+      { href: "/#judges", label: "Judges" },
       { href: "/#rules", label: "Rules" },
     ],
   },
   {
-    title: "Submit",
+    title: "Your team",
     links: [
-      { href: "/submit#team", label: "Team registration" },
-      { href: "/submit#idea", label: "Idea submission" },
-      { href: "/submit#final", label: "Final submission" },
+      { href: "/register", label: "Register" },
+      { href: "/login", label: "Log in" },
+      { href: "/me", label: "Team hub" },
+    ],
+  },
+  {
+    title: "In the hub",
+    links: [
+      { href: "/resources", label: "Resources" },
+      { href: "/submit", label: "Submit" },
       { href: "/content-hour", label: "Content hour" },
-    ],
-  },
-  {
-    title: "Judging",
-    links: [
-      { href: "/judging#mid", label: "Mid evaluation" },
-      { href: "/judging#final", label: "Final evaluation" },
-      { href: "/judging#rubric", label: "Rubric" },
-      { href: "/judging#stage", label: "Stage demos" },
-    ],
-  },
-  {
-    title: "Resources",
-    links: [
-      { href: "/resources#kane-cli", label: "Kane CLI" },
-      { href: "/resources#assurance-loop", label: "Assurance loop" },
-      { href: "/resources#openai", label: "OpenAI" },
-      { href: "/resources#content-skills", label: "Content skills" },
-    ],
-  },
-  {
-    title: "Help",
-    links: [
-      { href: "/#help", label: "Help desk" },
-      { href: "/#share", label: "Share you’re here" },
+      { href: "/judging", label: "Judging" },
     ],
   },
 ];
@@ -53,7 +38,7 @@ export default function Footer() {
   return (
     <footer className="border-t border-hairline bg-gradient-to-t from-[#0f1011] to-ink pt-16">
       <div className="container-page">
-        <div className="grid grid-cols-2 gap-10 sm:grid-cols-3 lg:grid-cols-[auto_repeat(5,minmax(0,1fr))]">
+        <div className="grid grid-cols-2 gap-10 sm:grid-cols-3 lg:grid-cols-[auto_repeat(3,minmax(0,1fr))]">
           {/* The Kane CLI mascot, drawn in ASCII. */}
           {/* eslint-disable-next-line @next/next/no-img-element -- static artwork */}
           <img

@@ -1,10 +1,9 @@
-import Button from "@/components/ui/Button";
 import { Fold, SectionHeading } from "@/components/ui/Section";
 import ThemisScale from "@/components/machines/ThemisScale";
 import { judging } from "@/data/hackday";
 
 // How projects are scored: the 100-point rubric weighed on the scale of Themis,
-// with the stage format alongside. The plain rubric bars live on /judging.
+// with the stage format alongside. The plain rubric bars follow below it.
 export default function JudgingTeaser() {
   return (
     <Fold id="judging">
@@ -21,9 +20,6 @@ export default function JudgingTeaser() {
               <dd className="mt-2 font-display text-lg text-bright">{judging.stage.qa}</dd>
             </div>
           </dl>
-          <Button href="/judging" variant="secondary" className="mt-8">
-            How evaluation works →
-          </Button>
         </div>
         <ThemisScale className="mx-auto" />
       </div>

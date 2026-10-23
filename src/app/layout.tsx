@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Doto, IBM_Plex_Mono, Inter_Tight, Silkscreen } from "next/font/google";
 import "./globals.css";
+import { Suspense } from "react";
+import Account, { SignedOut } from "@/components/Account";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { event } from "@/data/hackday";
@@ -45,7 +47,13 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       className={`${display.variable} ${dots.variable} ${plex.variable} ${pixel.variable} h-full scroll-smooth antialiased`}
     >
       <body className="flex min-h-full flex-col">
-        <Navbar />
+        <Navbar
+          account={
+            <Suspense fallback={<SignedOut />}>
+              <Account />
+            </Suspense>
+          }
+        />
         <div className="flex-1">{children}</div>
         <Footer />
       </body>

@@ -9,15 +9,14 @@ export const event = {
   supporter: "OpenAI",
   tagline: "Build with OpenAI. Test with Kane CLI. Ship by 6.",
   // ISO date of the event day; schedule times below are local to it.
-  date: "2026-11-14",
+  date: "2026-10-24",
   timezone: "America/Los_Angeles",
   hashtag: "#KaneCLIHackDay",
 };
 
 export const ctas = {
-  submitIdea: { label: "Submit idea", href: "/submit#idea" },
-  submitProject: { label: "Submit project", href: "/submit#final" },
-  helpDesk: { label: "Help desk", href: "/#help" },
+  register: { label: "Register your team", href: "/register" },
+  login: { label: "Log in", href: "/login" },
 } satisfies Record<string, Link>;
 
 // ── Do this first ────────────────────────────────────────────────────────────
@@ -57,20 +56,22 @@ export type Slot = {
   /** A hard cut-off attendees must hit. */
   deadline?: boolean;
   href?: string;
+  /** Shown on the public home page; the full day lives in the team hub. */
+  key?: boolean;
 };
 
 export const schedule: Slot[] = [
-  { start: "09:30", end: "10:15", title: "Check-in, breakfast" },
-  { start: "10:15", end: "11:00", title: "Kickoff", note: "Kane CLI x OpenAI loop demo" },
-  { start: "11:00", title: "Team registration closes. Hackathon begins", deadline: true, href: "/submit#team" },
+  { start: "09:30", end: "10:15", title: "Check-in, breakfast", key: true },
+  { start: "10:15", end: "11:00", title: "Kickoff", note: "Kane CLI x OpenAI loop demo", key: true },
+  { start: "11:00", title: "Team registration closes. Hackathon begins", deadline: true, href: "/submit#team", key: true },
   { start: "12:00", title: "Idea submission locks", deadline: true, href: "/submit#idea" },
   { start: "13:00", end: "14:00", title: "Working lunch" },
   { start: "14:00", title: "Mid evaluation", note: "Feedback only", href: "/judging#mid" },
   { start: "16:00", end: "17:00", title: "Final evaluation at your table", note: "Scored", href: "/judging#final" },
   { start: "17:00", end: "18:00", title: "Content hour", note: "Devpost locks at 6:00", href: "/content-hour" },
-  { start: "18:00", title: "Devpost locks", deadline: true, href: "/submit#final" },
-  { start: "18:00", end: "19:00", title: "Demo round", note: "Top 7 teams", href: "/judging#stage" },
-  { start: "19:30", title: "Prizes and closing" },
+  { start: "18:00", title: "Devpost locks", deadline: true, href: "/submit#final", key: true },
+  { start: "18:00", end: "19:00", title: "Demo round", note: "Top 7 teams", href: "/judging#stage", key: true },
+  { start: "19:30", title: "Prizes and closing", key: true },
 ];
 
 export const onGroundHelp = "[name], [number]";
@@ -232,7 +233,7 @@ export const rules: { title: string; body: string; link?: Link }[] = [
 export const submissions = {
   team: {
     deadline: "11:00",
-    form: { label: "Team registration form", href: "[link]" },
+    form: { label: "Register your team", href: "/register" },
     needs: ["Team name", "Members and emails", "Track", "One-line idea"],
     solo: "Solo? Come to speed matching at the front of the room, 10:45.",
   },
@@ -283,7 +284,21 @@ export const judging = {
     { label: "Craft", points: 10 },
   ],
   shippedNote: "Shipped prize: complete bundle, no scoring.",
-  judges: ["[name]", "[name]", "[name]", "[name]"],
+  judges: [
+    {
+      name: "Mayank Bhola",
+      role: "Co-Founder and Head of Products, TestMu AI",
+      photo: "/judges/mayank-bhola.jpg",
+      linkedin: "https://www.linkedin.com/in/mayankbhola/",
+      x: "https://x.com/Mayankbhola",
+    },
+    {
+      name: "Anurag Sharma",
+      role: "Senior Vice President of Engineering, TestMu AI",
+      photo: "/judges/anurag-sharma.jpg",
+      linkedin: "https://www.linkedin.com/in/anurag-sharma-xyz-abc/",
+    },
+  ] as { name: string; role: string; photo?: string; linkedin?: string; x?: string }[],
 };
 
 // ── Content hour ─────────────────────────────────────────────────────────────
@@ -380,17 +395,29 @@ export const resources: ResourceGroup[] = [
   },
 ];
 
-// ── Share & help ─────────────────────────────────────────────────────────────
+// ── Help ───────────────────────────────────────────────────────────────────
 
-export const share = {
-  card: { label: "“I’m building at Kane CLI Hack Day SF” card", href: "[download]" },
-  caption: "[text]",
-  tags: ["@testmuai", "[OpenAI handle pending]", "#KaneCLIHackDay"],
-  shippedCard: "“We shipped it” card unlocks after 7:30.",
-};
-
-export const help = [
-  { title: "Help desk", body: "[location]" },
-  { title: "Kane CLI questions", body: "[engineer names]" },
-  { title: "Credits and WiFi", body: "[name]" },
+export const mentors: { name: string; role: string; photo: string; linkedin?: string; x?: string }[] = [
+  {
+    name: "Sparsh Kesari",
+    role: "Developer Relations Manager, TestMu AI",
+    photo: "/mentors/sparsh-kesari.jpg",
+    linkedin: "https://www.linkedin.com/in/sparshk98/",
+    x: "https://x.com/sparsh_kesari_",
+  },
+  {
+    name: "Siddhant Sinha",
+    role: "Lead Member, Technical Staff, TestMu AI",
+    photo: "/mentors/siddhant-sinha.jpg",
+    linkedin: "https://www.linkedin.com/in/sid573/",
+    x: "https://x.com/siddhantcx",
+  },
+  {
+    name: "Shravan Mahajan",
+    role: "Software Engineer, TestMu AI",
+    photo: "/mentors/shravan-mahajan.jpg",
+    linkedin: "https://www.linkedin.com/in/shvn/",
+    x: "https://x.com/shvnmahajan",
+  },
 ];
+

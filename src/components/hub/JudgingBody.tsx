@@ -1,30 +1,13 @@
-import type { Metadata } from "next";
 import Rubric from "@/components/judging/Rubric";
-import PageHeader from "@/components/ui/PageHeader";
 import { Fold, SectionHeading } from "@/components/ui/Section";
 import StepBlock, { Checklist } from "@/components/ui/StepBlock";
 import { evaluations, judging } from "@/data/hackday";
 
-export const metadata: Metadata = { title: "Judging" };
-
-export default function JudgingPage() {
+// Both table rounds, the rubric, and the stage format.
+export default function JudgingBody() {
   const { mid, final } = evaluations;
   return (
-    <main>
-      <PageHeader
-        eyebrow="Judging"
-        dim="Two rounds at your table,"
-        bright="One on stage."
-        intro="Mentors give feedback at 2:00, judges score at 4:00, and the top 7 demo on stage at 6:00."
-        jumps={[
-          { href: "#mid", label: "Mid evaluation" },
-          { href: "#final", label: "Final evaluation" },
-          { href: "#rubric", label: "Rubric" },
-          { href: "#stage", label: "Stage demos" },
-          { href: "#judges", label: "Judges" },
-        ]}
-      />
-
+    <>
       <StepBlock id="mid" kicker="Round 1 · Feedback only" time={mid.time} tag="Not scored" title={mid.title}>
         <p>{mid.body}</p>
         <Checklist label="Mentors check for" items={mid.checks} />
@@ -58,19 +41,6 @@ export default function JudgingPage() {
         </div>
       </Fold>
 
-      <Fold id="judges">
-        <SectionHeading eyebrow="Judges" dim="Who’s" bright="Scoring." />
-        <ul className="mt-12 grid grid-cols-2 gap-6 md:grid-cols-4">
-          {judging.judges.map((j, i) => (
-            <li key={i} className="brackets p-4">
-              {/* Placeholder portrait until real photos are added. */}
-              <div className="aspect-square bg-surface [background-image:radial-gradient(#2a2a2a_1px,transparent_1.5px)] [background-size:8px_8px]" />
-              <p className="mt-4 font-display text-lg text-bright">{j}</p>
-              <p className="font-plex text-xs text-lightgray">[role, company]</p>
-            </li>
-          ))}
-        </ul>
-      </Fold>
-    </main>
+    </>
   );
 }

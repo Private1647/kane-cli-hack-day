@@ -3,6 +3,7 @@ import { Fold, SectionHeading } from "@/components/ui/Section";
 import Reveal from "@/components/ui/Reveal";
 import Statue from "@/components/art/Statue";
 import Caption from "@/components/art/Caption";
+import { artworks } from "@/data/art";
 
 // "$3,000 OpenAI credits" → "$3,000" and "OpenAI credits".
 const creditAmount = (c: string) => c.split(" ")[0];
@@ -36,6 +37,7 @@ export default function Prizes() {
             <div className="mb-6 flex h-40 items-end">
               <Statue name={p.art} ink="#141414" paper="#f2f2f2" alt={`${p.prize}, printed as a halftone`} className={PRIZE_WIDTH[p.art]} />
             </div>
+            <PhotoCredit art={p.art} />
             <p className="font-dots text-7xl leading-none font-black text-bright sm:text-8xl">{p.place}</p>
             <p className="mt-6 font-display text-2xl text-bright">{p.prize}</p>
             {/* The OpenAI credits get equal billing with the hardware. */}
@@ -60,5 +62,18 @@ export default function Prizes() {
         </Reveal>
       </div>
     </Fold>
+  );
+}
+
+// The licence-required photo credit, kept small under the prize image.
+function PhotoCredit({ art }: { art: (typeof prizes.podium)[number]["art"] }) {
+  const a = artworks.find((w) => w.prize === art);
+  if (!a) return null;
+  return (
+    <p className="-mt-4 mb-6 font-plex text-[10px] text-lightgray">
+      <a href={a.href} target="_blank" rel="noreferrer" className="hover:text-[#141414]">
+        {a.credit}, {a.license}
+      </a>
+    </p>
   );
 }

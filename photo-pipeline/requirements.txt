@@ -1,0 +1,12 @@
+# Face recognition (InsightFace builds a small C extension from source on macOS: needs Xcode CLT)
+insightface>=0.7.3
+onnxruntime>=1.17
+opencv-python-headless>=4.9
+numpy>=1.26,<3
+pillow>=10.3
+# Optional: HEIC support for iPhone shots. Safe to remove if it fails to install.
+pillow-heif>=0.16
+anthropic>=0.70
+flask>=3.0
+requests>=2.31
+python-dotenv>=1.0

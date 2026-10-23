@@ -2,22 +2,21 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
-import { ctas, event } from "@/data/hackday";
+import { Suspense, useState, type ReactNode } from "react";
+import { event } from "@/data/hackday";
 
+// Public sections of the home page; everything else lives in the team hub.
 const links = [
   { href: "/#schedule", label: "Schedule" },
   { href: "/#challenge", label: "Challenge" },
   { href: "/#prizes", label: "Prizes" },
-  { href: "/submit", label: "Submit" },
-  { href: "/judging", label: "Judging" },
-  { href: "/resources", label: "Resources" },
+  { href: "/#judges", label: "Judges" },
+  { href: "/#rules", label: "Rules" },
 ];
 
-export default function Navbar() {
+/** `account` is the server-rendered Log in / Register or My team control. */
+export default function Navbar({ account }: { account: ReactNode }) {
   const [open, setOpen] = useState(false);
-  const pathname = usePathname();
-  const active = (href: string) => !href.startsWith("/#") && pathname.startsWith(href);
 
   return (
     <header id="nav-bar" className="sticky top-0 z-50 border-b border-hairline bg-ink/85 backdrop-blur">
@@ -31,27 +30,15 @@ export default function Navbar() {
         <ul className="hidden items-center gap-6 lg:flex">
           {links.map((l) => (
             <li key={l.href}>
-              <Link
-                href={l.href}
-                className={`font-plex text-sm transition-colors hover:text-lime ${active(l.href) ? "text-lime" : "text-bright"}`}
-              >
-                {l.label}
-              </Link>
+              {/* The pathname is runtime data on dynamic routes (/t/[slug]), so only the highlight waits for it. */}
+              <Suspense fallback={<DesktopLink {...l} active={false} />}>
+                <ActiveDesktopLink {...l} />
+              </Suspense>
             </li>
           ))}
         </ul>
 
-        <div className="hidden items-center gap-4 lg:flex">
-          <Link href={ctas.helpDesk.href} className="font-plex text-sm text-bright transition-colors hover:text-lime">
-            Help
-          </Link>
-          <Link
-            href={ctas.submitProject.href}
-            className="bg-bright px-3 py-1.5 font-plex text-sm text-ink transition-colors hover:bg-lime"
-          >
-            {ctas.submitProject.label}
-          </Link>
-        </div>
+        <div className="hidden items-center gap-4 lg:flex">{account}</div>
 
         <button
           type="button"
@@ -69,7 +56,7 @@ export default function Navbar() {
       {open && (
         <div className="border-t border-dashed border-hairline lg:hidden">
           <ul className="container-page flex flex-col py-3">
-            {[...links, { href: ctas.helpDesk.href, label: "Help" }].map((l) => (
+            {links.map((l) => (
               <li key={l.href}>
                 <Link
                   href={l.href}
@@ -81,17 +68,24 @@ export default function Navbar() {
               </li>
             ))}
           </ul>
-          <div className="container-page pb-4">
-            <Link
-              href={ctas.submitProject.href}
-              onClick={() => setOpen(false)}
-              className="block bg-bright py-2.5 text-center font-plex text-sm text-ink"
-            >
-              {ctas.submitProject.label}
-            </Link>
+          <div className="container-page pb-4" onClick={() => setOpen(false)}>
+            {account}
           </div>
         </div>
       )}
     </header>
+  );
+}
+
+function ActiveDesktopLink({ href, label }: { href: string; label: string }) {
+  const pathname = usePathname();
+  return <DesktopLink href={href} label={label} active={!href.startsWith("/#") && pathname.startsWith(href)} />;
+}
+
+function DesktopLink({ href, label, active }: { href: string; label: string; active: boolean }) {
+  return (
+    <Link href={href} className={`font-plex text-sm transition-colors hover:text-lime ${active ? "text-lime" : "text-bright"}`}>
+      {label}
+    </Link>
   );
 }

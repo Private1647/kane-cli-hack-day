@@ -51,12 +51,9 @@ export default function Hero() {
 
         <p className="mt-8 max-w-md font-plex text-sm leading-relaxed text-lightgray">{event.tagline}</p>
         <div className="mt-6 flex flex-wrap justify-center gap-3">
-          <Button href={ctas.submitIdea.href} variant="secondary">
-            {ctas.submitIdea.label}
-          </Button>
-          <Button href={ctas.submitProject.href}>{ctas.submitProject.label}</Button>
-          <Button href={ctas.helpDesk.href} variant="secondary">
-            {ctas.helpDesk.label}
+          <Button href={ctas.register.href}>{ctas.register.label}</Button>
+          <Button href={ctas.login.href} variant="secondary">
+            {ctas.login.label}
           </Button>
         </div>
       </div>

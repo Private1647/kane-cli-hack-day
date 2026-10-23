@@ -1,0 +1,72 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//TestMu AI//Kane CLI Hack Day SF//EN
+CALSCALE:GREGORIAN
+METHOD:PUBLISH
+BEGIN:VTIMEZONE
+TZID:America/Los_Angeles
+X-LIC-LOCATION:America/Los_Angeles
+BEGIN:DAYLIGHT
+TZOFFSETFROM:-0800
+TZOFFSETTO:-0700
+TZNAME:PDT
+DTSTART:19700308T020000
+RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=2SU
+END:DAYLIGHT
+BEGIN:STANDARD
+TZOFFSETFROM:-0700
+TZOFFSETTO:-0800
+TZNAME:PST
+DTSTART:19701101T020000
+RRULE:FREQ=YEARLY;BYMONTH=11;BYDAY=1SU
+END:STANDARD
+END:VTIMEZONE
+BEGIN:VEVENT
+UID:kane-cli-hack-day-sf-20261024@testmu.ai
+DTSTAMP:20261022T001600Z
+DTSTART;TZID=America/Los_Angeles:20261024T093000
+DTEND;TZID=America/Los_Angeles:20261024T200000
+SUMMARY:Kane CLI Hack Day SF\, supported by OpenAI
+LOCATION:Frontier Tower\, 995 Market St\, San Francisco\, CA 94103
+GEO:37.7822672;-122.4099607
+URL:https://kane-cli-hack-day.vercel.app
+ORGANIZER;CN=Sparsh Kesari:mailto:sparshk@testmu.ai
+STATUS:CONFIRMED
+TRANSP:OPAQUE
+SEQUENCE:1
+DESCRIPTION:You are in. Build with OpenAI\, test with Kane CLI\, ship by 6.
+ \n\nKane CLI Hack Day SF\, by TestMu AI\, supported by OpenAI.\nSaturday 2
+ 4 October 2026 at Frontier Tower\, 995 Market St (at 6th)\, San Francisco.
+ \n\nDoors open 9:30 AM. Be in by 10:00 for check-in\, breakfast\, tool set
+ up with credits and a Kane CLI demo. Hacking starts at 11:00 sharp.\n\nTHE
+  DAY\n9:30  Check-in\, breakfast\, setup\n10:15 Kickoff and Kane CLI x Ope
+ nAI loop demo\n11:00 Hackathon begins. Team registration closes\n18:00 Pro
+ ject submission. Demo round\, top teams\n19:30 Prizes and closing\n\nGETTI
+ NG THERE\nBART / Muni: Powell St station\, 3 minutes on foot.\nCaltrain: N
+  or T from 4th and King to Powell.\nBus: F\, 5\, 6\, 7\, 9\, 14\, 19\, 21 
+ at Market and 6th.\nRideshare: drop at the Market Street entrance. Skip dr
+ iving.\nMap: https://www.google.com/maps/search/?api=1&query=37.7822672%2C
+ -122.4099607&query_place_id=ChIJFwoupK-BhYARMWbdafFyOtc\nCheck in at the l
+ obby with a photo ID and ask for Kane CLI Hack Day.\n\nBEFORE SATURDAY\n1.
+  Sign up on TestMu AI with the same email you registered with: https://tes
+ tmuai.com/register\n2. Read the Kane CLI intro and the Assurance loop:\nht
+ tps://www.testmuai.com/docs/kane-cli-introduction\nhttps://www.testmuai.co
+ m/docs/kane-cli-assurance\n\nBRING\nYour laptop\, charged. We cover WiFi\,
+  breakfast\, lunch\, snacks\, coffee\, OpenAI credits and KaneAI Pro.\n\nQ
+ UESTIONS\nsparshk@testmu.ai\nWhatsApp +91 79753 21737: https://wa.me/91797
+ 5321737\nLinkedIn: https://www.linkedin.com/in/sparshk98/\n\n#KaneCLIHackD
+ ay
+BEGIN:VALARM
+ACTION:DISPLAY
+DESCRIPTION:1 day to go. Kane CLI Hack Day SF is tomorrow at Frontier Tower
+ . Laptop charged? Signed up on testmuai.com/register?
+TRIGGER:-P1D
+END:VALARM
+BEGIN:VALARM
+ACTION:DISPLAY
+DESCRIPTION:2 hours to go. Doors open at 9:30 at Frontier Tower\, 995 Marke
+ t St. Hacking starts at 11:00.
+TRIGGER:-PT2H
+END:VALARM
+END:VEVENT
+END:VCALENDAR

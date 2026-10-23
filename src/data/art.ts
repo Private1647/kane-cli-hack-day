@@ -1,7 +1,17 @@
 // Artworks used across the site, numbered as they appear. Licences that need
-// attribution (CC BY / CC BY-SA) are credited in the footnotes on the home page.
+// attribution (CC BY / CC BY-SA) are credited in the footnotes on the home page,
+// except the prize photos, which carry their credit right under the image.
 
-export type Artwork = { n: number; title: string; detail: string; credit: string; license: string; href: string };
+export type Artwork = {
+  n: number;
+  title: string;
+  detail: string;
+  credit: string;
+  license: string;
+  href: string;
+  /** Credited inline under this prize image instead of in the footnotes. */
+  prize?: "visionpro" | "macmini" | "ipad";
+};
 
 export const artworks: Artwork[] = [
   {
@@ -47,6 +57,7 @@ export const artworks: Artwork[] = [
   {
     n: 6,
     title: "Apple Vision Pro",
+    prize: "visionpro",
     detail: "Facing left.",
     credit: "Photo: Hay Kranen",
     license: "CC BY 4.0",
@@ -55,6 +66,7 @@ export const artworks: Artwork[] = [
   {
     n: 7,
     title: "Mac mini (2024)",
+    prize: "macmini",
     detail: "Front view.",
     credit: "Photo: Seasider53",
     license: "CC BY 4.0",
@@ -63,6 +75,7 @@ export const artworks: Artwork[] = [
   {
     n: 8,
     title: "iPad Air 11-inch (M2)",
+    prize: "ipad",
     detail: "Back side.",
     credit: "Photo: 茅野ふたば",
     license: "CC BY-SA 4.0",

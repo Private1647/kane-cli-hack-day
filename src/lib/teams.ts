@@ -1,0 +1,220 @@
+import "server-only";
+import { pool, query } from "./db";
+import { hashPassword } from "./password";
+
+export const MAX_MEMBERS = 5;
+
+export const slugify = (s: string) =>
+  s
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 48);
+
+export type Member = { id: number; name: string; email: string };
+export type Team = {
+  id: number;
+  slug: string;
+  name: string;
+  track: string;
+  idea: string;
+  is_solo: boolean;
+  created_at: Date;
+};
+export type ProgressRow = {
+  item: string;
+  value: string;
+  done: boolean;
+  updated_at: Date;
+  updated_by_name: string | null;
+};
+export type ActivityRow = { id: number; action: string; created_at: Date; member_name: string | null };
+
+// ── Settings ────────────────────────────────────────────────────────────────
+
+export async function isRegistrationOpen() {
+  const [row] = await query<{ value: string }>("select value from settings where key = 'registration_open'");
+  return row?.value !== "false";
+}
+
+export async function setRegistrationOpen(open: boolean) {
+  await query(
+    "insert into settings (key, value) values ('registration_open', $1) on conflict (key) do update set value = excluded.value",
+    [String(open)],
+  );
+}
+
+// ── Registration ────────────────────────────────────────────────────────────
+
+export class RegistrationError extends Error {}
+
+export async function registerTeam(input: {
+  name: string;
+  track: string;
+  idea: string;
+  isSolo: boolean;
+  password: string;
+  photoUrl: string | null;
+  /** The registrant's own answer; teammates are asked when they open the hub. */
+  captainConsent: boolean;
+  members: { name: string; email: string; photoUrl: string | null; linkedin: string | null; xHandle: string | null }[];
+}) {
+  const slug = slugify(input.name);
+  const passwordHash = await hashPassword(input.password);
+  const client = await pool.connect();
+  try {
+    await client.query("begin");
+    const { rows } = await client.query<{ id: number }>(
+      `insert into teams (slug, name, track, idea, is_solo, password_hash, photo_url)
+       values ($1, $2, $3, $4, $5, $6, $7) returning id`,
+      [slug, input.name, input.track, input.idea, input.isSolo, passwordHash, input.photoUrl],
+    );
+    const teamId = rows[0].id;
+    for (const [i, m] of input.members.entries()) {
+      // The first member is the person registering: theirs is the only answer we have.
+      const consent = i === 0 ? input.captainConsent : null;
+      await client.query(
+        `insert into members (team_id, name, email, photo_url, linkedin, x_handle, consent_social, consent_at)
+         values ($1, $2, $3, $4, $5, $6, $7::boolean, case when $7::boolean is not null then now() end)`,
+        [teamId, m.name, m.email, m.photoUrl, m.linkedin, m.xHandle, consent],
+      );
+    }
+    await client.query("insert into activity (team_id, action) values ($1, 'Team registered')", [teamId]);
+    await client.query("commit");
+    return { teamId, slug };
+  } catch (err) {
+    await client.query("rollback");
+    throw toRegistrationError(err);
+  } finally {
+    client.release();
+  }
+}
+
+function toRegistrationError(err: unknown) {
+  const e = err as { code?: string; constraint?: string };
+  if (e.code === "23505" && e.constraint === "teams_slug_key")
+    return new RegistrationError("That team name is taken. Try another.");
+  if (e.code === "23505" && e.constraint === "members_email_idx")
+    return new RegistrationError("One of those emails is already registered on another team.");
+  return err;
+}
+
+export async function isSlugTaken(slug: string) {
+  const rows = await query("select 1 from teams where slug = $1", [slug]);
+  return rows.length > 0;
+}
+
+// ── Team reads ──────────────────────────────────────────────────────────────
+
+export async function getTeamBySlug(slug: string) {
+  const [team] = await query<Team & { password_hash: string }>("select * from teams where slug = $1", [slug]);
+  return team ?? null;
+}
+
+export async function getMembers(teamId: number) {
+  return query<Member>("select id, name, email from members where team_id = $1 order by id", [teamId]);
+}
+
+export async function getProgress(teamId: number) {
+  return query<ProgressRow>(
+    `select p.item, p.value, p.done, p.updated_at, m.name as updated_by_name
+       from progress p left join members m on m.id = p.updated_by
+      where p.team_id = $1`,
+    [teamId],
+  );
+}
+
+export async function getActivity(teamId: number, limit = 30) {
+  return query<ActivityRow>(
+    `select a.id, a.action, a.created_at, m.name as member_name
+       from activity a left join members m on m.id = a.member_id
+      where a.team_id = $1 order by a.created_at desc limit $2`,
+    [teamId, limit],
+  );
+}
+
+// ── Team writes ─────────────────────────────────────────────────────────────
+
+export async function logActivity(teamId: number, memberId: number | null, action: string) {
+  await query("insert into activity (team_id, member_id, action) values ($1, $2, $3)", [teamId, memberId, action]);
+}
+
+export async function saveProgress(teamId: number, memberId: number, item: string, value: string, done: boolean) {
+  await query(
+    `insert into progress (team_id, item, value, done, updated_by, updated_at)
+     values ($1, $2, $3, $4, $5, now())
+     on conflict (team_id, item) do update
+       set value = excluded.value, done = excluded.done,
+           updated_by = excluded.updated_by, updated_at = now()`,
+    [teamId, item, value, done, memberId],
+  );
+}
+
+export async function addMember(teamId: number, name: string, email: string) {
+  try {
+    const [row] = await query<{ id: number }>(
+      "insert into members (team_id, name, email) values ($1, $2, $3) returning id",
+      [teamId, name, email],
+    );
+    return row.id;
+  } catch (err) {
+    throw toRegistrationError(err);
+  }
+}
+
+// ── Admin ───────────────────────────────────────────────────────────────────
+
+export type TeamSummary = Team & {
+  member_count: number;
+  member_names: string[];
+  done_items: string[];
+  last_activity: Date | null;
+};
+
+export async function listTeams() {
+  return query<TeamSummary>(
+    `select t.id, t.slug, t.name, t.track, t.idea, t.is_solo, t.created_at,
+            (select count(*)::int from members m where m.team_id = t.id) as member_count,
+            (select coalesce(array_agg(m.name order by m.id), '{}') from members m where m.team_id = t.id) as member_names,
+            (select coalesce(array_agg(p.item), '{}') from progress p where p.team_id = t.id and p.done) as done_items,
+            (select max(a.created_at) from activity a where a.team_id = t.id) as last_activity
+       from teams t
+      order by t.created_at`,
+  );
+}
+
+export async function listAllMembers() {
+  return query<Member & { team_name: string; team_slug: string; track: string }>(
+    `select m.id, m.name, m.email, t.name as team_name, t.slug as team_slug, t.track
+       from members m join teams t on t.id = m.team_id
+      order by t.created_at, m.id`,
+  );
+}
+
+export async function listAllProgress() {
+  return query<{ team_id: number; item: string; value: string; done: boolean }>(
+    "select team_id, item, value, done from progress",
+  );
+}
+
+export async function getTeamById(id: number) {
+  const [team] = await query<Pick<Team, "id" | "slug" | "name">>("select id, slug, name from teams where id = $1", [id]);
+  return team ?? null;
+}
+
+// ── Setup ticks ─────────────────────────────────────────────────────────────
+
+export async function getSetupTicks(memberId: number) {
+  const rows = await query<{ step: string }>("select step from setup_ticks where member_id = $1", [memberId]);
+  return rows.map((r) => r.step);
+}
+
+export async function setSetupTick(memberId: number, step: string, done: boolean) {
+  if (done) {
+    await query("insert into setup_ticks (member_id, step) values ($1, $2) on conflict do nothing", [memberId, step]);
+  } else {
+    await query("delete from setup_ticks where member_id = $1 and step = $2", [memberId, step]);
+  }
+}

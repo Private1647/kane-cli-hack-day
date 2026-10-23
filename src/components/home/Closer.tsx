@@ -1,14 +1,12 @@
-import { ctas, setup } from "@/data/hackday";
+import { ctas } from "@/data/hackday";
 import Button from "@/components/ui/Button";
-import CopyField from "@/components/ui/CopyField";
 import Decode from "@/components/ui/Decode";
 import Statue from "@/components/art/Statue";
 import Caption from "@/components/art/Caption";
 
-// Giant sign-off, like gradium.ai's "Start building": the line, the submit
-// buttons and the install command, beside the Winged Victory on her ship's prow.
+// Giant sign-off, like gradium.ai's "Start building": the line and the way in,
+// beside the Winged Victory on her ship's prow.
 export default function Closer() {
-  const install = setup.find((s) => s.id === "install")?.value ?? "";
   return (
     <section className="relative isolate overflow-hidden border-t border-dashed border-hairline py-24 sm:py-32">
       <div
@@ -21,12 +19,11 @@ export default function Closer() {
             <Decode text="Ship by 6" />
           </h2>
           <div className="mt-10 flex flex-wrap justify-center gap-3">
-            <Button href={ctas.submitIdea.href} variant="secondary">
-              {ctas.submitIdea.label}
+            <Button href={ctas.register.href}>{ctas.register.label}</Button>
+            <Button href={ctas.login.href} variant="secondary">
+              {ctas.login.label}
             </Button>
-            <Button href={ctas.submitProject.href}>{ctas.submitProject.label}</Button>
           </div>
-          {install && <CopyField value={install} className="mt-8 w-full max-w-md text-left" />}
         </div>
         {/* Nike, goddess of victory, landing on a warship's prow: ship it, and win. */}
         <figure className="mx-auto w-64">

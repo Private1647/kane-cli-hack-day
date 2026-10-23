@@ -9,8 +9,12 @@ import Antikythera from "@/components/machines/Antikythera";
 
 // The run of the day as a dashed-rule table (like Phonon's model table), with
 // hard deadlines tagged and the current slot lit while the event is live.
-export default function Schedule() {
+// The public page shows only the key times, unlinked; the hub shows the full day.
+export default function Schedule({ keyOnly = false }: { keyOnly?: boolean }) {
   const day = useDayState();
+  const slots = keyOnly ? schedule.filter((s) => s.key) : schedule;
+  // Public rows aren't links: the pages they point at are behind the team login.
+  const linkOf = (s: Slot) => (keyOnly ? undefined : s.href);
   const isNow = (s: Slot) => day?.phase === "during" && day.current === s;
   const isPast = (s: Slot) =>
     day?.phase === "after" || (day?.phase === "during" && toMinutes(s.end ?? s.start) <= day.minutes && day.current !== s);
@@ -26,8 +30,17 @@ export default function Schedule() {
             intro={
               <>
                 Deadlines are marked <span className="text-lime">Lock</span>. They don’t move.
-                <br />
-                On-ground help: {onGroundHelp}
+                {keyOnly ? (
+                  <>
+                    <br />
+                    Key times only. Log in for the full day.
+                  </>
+                ) : (
+                  <>
+                    <br />
+                    On-ground help: {onGroundHelp}
+                  </>
+                )}
               </>
             }
           />
@@ -36,13 +49,13 @@ export default function Schedule() {
         </div>
 
         <ol className="border-t border-dashed border-hairline">
-          {schedule.map((s, i) => {
+          {slots.map((s, i) => {
             const now = isNow(s);
             const row = (
               <div
                 className={`grid grid-cols-[6.5rem_minmax(0,1fr)_auto] items-baseline gap-4 border-b border-dashed border-hairline px-2 py-4 transition-colors sm:grid-cols-[8rem_minmax(0,1fr)_auto] ${
                   now ? "bg-lime text-ink" : isPast(s) ? "opacity-45" : ""
-                } ${s.href ? `group ${now ? "" : "hover:bg-surface"}` : ""}`}
+                } ${linkOf(s) ? `group ${now ? "" : "hover:bg-surface"}` : ""}`}
               >
                 <span className={`font-plex text-sm tabular-nums ${now ? "" : "text-lightgray"}`}>{slotLabel(s)}</span>
                 <span>
@@ -60,14 +73,14 @@ export default function Schedule() {
                       Lock
                     </span>
                   )}
-                  {s.href && <span className="font-plex text-sm text-lightgray group-hover:text-lime">→</span>}
+                  {linkOf(s) && <span className="font-plex text-sm text-lightgray group-hover:text-lime">→</span>}
                 </span>
               </div>
             );
             return (
               <li key={`${s.start}-${i}`}>
-                {s.href ? (
-                  <Link href={s.href} className="block">
+                {linkOf(s) ? (
+                  <Link href={linkOf(s)!} className="block">
                     {row}
                   </Link>
                 ) : (
