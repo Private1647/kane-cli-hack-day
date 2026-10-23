@@ -1,26 +1,22 @@
 "use client";
 
-import { useActionState, useMemo, useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { FormError, SubmitButton, inputCls } from "@/components/forms/fields";
-import { adminLogin, adminLogout, toggleRegistration, type AdminState } from "./actions";
+import { inputCls } from "@/components/forms/fields";
+import { adminLogout, toggleRegistration } from "./actions";
 
-export function AdminLogin() {
-  const [state, action] = useActionState<AdminState, FormData>(adminLogin, null);
+/** Shown to signed-out visitors on any /ops page. Sign-in lives at /ops/login. */
+export function AdminLogin({ next = "/ops" }: { next?: string }) {
   return (
-    <form action={action} className="max-w-sm space-y-4">
-      <input
-        name="password"
-        type="password"
-        aria-label="Admin password"
-        required
-        autoFocus
-        placeholder="Admin password"
-        className={inputCls}
-      />
-      <FormError message={state?.error} />
-      <SubmitButton pending="Checking…">Sign in →</SubmitButton>
-    </form>
+    <div className="max-w-sm space-y-4">
+      <p className="font-plex text-sm text-lightgray">Staff only. Sign in with your staff email and one-time code.</p>
+      <Link
+        href={`/ops/login?next=${encodeURIComponent(next)}`}
+        className="inline-flex min-h-11 items-center bg-bright px-4 py-2.5 font-plex text-sm text-ink transition-colors hover:bg-lime"
+      >
+        Staff sign in →
+      </Link>
+    </div>
   );
 }
 
@@ -37,13 +33,13 @@ export function AdminBar({ registrationOpen }: { registrationOpen: boolean }) {
           Registration {registrationOpen ? "open · close it" : "closed · reopen it"}
         </button>
       </form>
-      <Link href="/admin/nudges" className="border border-hairline px-3 py-2 font-plex text-xs text-bright hover:border-lime hover:text-lime">
+      <Link href="/ops/nudges" className="border border-hairline px-3 py-2 font-plex text-xs text-bright hover:border-lime hover:text-lime">
         Nudges
       </Link>
-      <a href="/admin/export?type=teams" className="border border-hairline px-3 py-2 font-plex text-xs text-bright hover:border-lime hover:text-lime">
+      <a href="/ops/export?type=teams" className="border border-hairline px-3 py-2 font-plex text-xs text-bright hover:border-lime hover:text-lime">
         Teams CSV
       </a>
-      <a href="/admin/export?type=members" className="border border-hairline px-3 py-2 font-plex text-xs text-bright hover:border-lime hover:text-lime">
+      <a href="/ops/export?type=members" className="border border-hairline px-3 py-2 font-plex text-xs text-bright hover:border-lime hover:text-lime">
         Members CSV
       </a>
       <form action={adminLogout}>
@@ -129,7 +125,7 @@ export function TeamsTable({ rows, tracks }: { rows: TeamRow[]; tracks: string[]
             {shown.map((r) => (
               <tr key={r.slug} className="border-b border-dashed border-hairline align-top last:border-0">
                 <td className="px-3 py-3">
-                  <Link href={`/admin/t/${r.slug}`} className="text-bright hover:text-lime">
+                  <Link href={`/ops/t/${r.slug}`} className="text-bright hover:text-lime">
                     {r.name}
                   </Link>
                   <span className="block text-xs text-lightgray">

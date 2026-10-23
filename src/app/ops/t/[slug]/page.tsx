@@ -11,7 +11,7 @@ import { AdminLogin } from "../../parts";
 
 export const metadata: Metadata = { title: "Admin · Team", robots: { index: false } };
 
-export default function AdminTeamPage({ params }: PageProps<"/admin/t/[slug]">) {
+export default function AdminTeamPage({ params }: PageProps<"/ops/t/[slug]">) {
   return (
     <main className="py-16 sm:py-20">
       <div className="container-page">
@@ -29,7 +29,7 @@ const stamp = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric",
 
 const label = "mb-3 font-pixel text-[10px] uppercase tracking-[0.2em] text-lightgray";
 
-async function Detail({ params }: Pick<PageProps<"/admin/t/[slug]">, "params">) {
+async function Detail({ params }: Pick<PageProps<"/ops/t/[slug]">, "params">) {
   if (!(await isAdmin())) return <AdminLogin />;
   const { slug } = await params;
   const team = await getTeamBySlug(slug);
@@ -51,7 +51,7 @@ async function Detail({ params }: Pick<PageProps<"/admin/t/[slug]">, "params">) 
   return (
     <div className="space-y-12">
       <div>
-        <Link href="/admin" className="font-plex text-xs text-lightgray hover:text-lime">
+        <Link href="/ops" className="font-plex text-xs text-lightgray hover:text-lime">
           ← All teams
         </Link>
         <h1 className="mt-4 font-display text-4xl text-bright">{team.name}</h1>

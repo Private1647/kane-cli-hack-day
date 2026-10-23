@@ -1,0 +1,30 @@
+"use server";
+
+import { redirect } from "next/navigation";
+import { adminPasswordLogin, staffLoginWithCode } from "@/server/auth";
+import { formObject, parse, toAppError, z } from "@/server/core";
+
+export type StaffLoginState = { error?: string; email?: string } | null;
+
+const schema = z.object({
+  email: z.string().trim().max(200).optional(),
+  code: z.string().trim().max(40).optional(),
+  password: z.string().max(200).optional(),
+  next: z.string().max(200).optional(),
+});
+
+/** Only same-site /ops paths, so ?next= can't bounce anyone off-site. */
+const safeNext = (s?: string) => (s && /^\/ops(\/[\w\-/]*)?$/.test(s) ? s : "/ops");
+
+// Email + one-time code from an organizer, or the break-glass ADMIN_PASSWORD.
+export async function staffLogin(_prev: StaffLoginState, form: FormData): Promise<StaffLoginState> {
+  const input = parse(schema, formObject(form));
+  try {
+    if (input.password) await adminPasswordLogin(input.password);
+    else if (input.email && input.code) await staffLoginWithCode(input.email, input.code);
+    else return { error: "Enter your staff email and code.", email: input.email };
+  } catch (e) {
+    return { error: toAppError(e).userMessage, email: input.email };
+  }
+  redirect(safeNext(input.next));
+}

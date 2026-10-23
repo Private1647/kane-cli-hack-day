@@ -39,7 +39,7 @@ async function NudgesView() {
 
   return (
     <div className="space-y-12">
-      <Link href="/admin" className="font-plex text-xs text-lightgray hover:text-lime">
+      <Link href="/ops" className="font-plex text-xs text-lightgray hover:text-lime">
         ← All teams
       </Link>
 

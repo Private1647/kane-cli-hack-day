@@ -1,5 +1,6 @@
 import "server-only";
 import { pool, query } from "./db";
+import { emailHash } from "@/server/core";
 import { hashPassword } from "./password";
 
 export const MAX_MEMBERS = 5;
@@ -75,12 +76,26 @@ export async function registerTeam(input: {
     for (const [i, m] of input.members.entries()) {
       // The first member is the person registering: theirs is the only answer we have.
       const consent = i === 0 ? input.captainConsent : null;
-      await client.query(
-        `insert into members (team_id, name, email, photo_url, linkedin, x_handle, consent_social, consent_at)
-         values ($1, $2, $3, $4, $5, $6, $7::boolean, case when $7::boolean is not null then now() end)`,
-        [teamId, m.name, m.email, m.photoUrl, m.linkedin, m.xHandle, consent],
+      const { rows: added } = await client.query<{ id: number }>(
+        `insert into members (team_id, name, email, email_hash, photo_url, linkedin, x_handle, consent_social, consent_at)
+         values ($1, $2, $3, $4, $5, $6, $7, $8::boolean, case when $8::boolean is not null then now() end) returning id`,
+        [teamId, m.name, m.email, emailHash(m.email), m.photoUrl, m.linkedin, m.xHandle, consent],
       );
+      const memberId = added[0].id;
+      // Hack OS: membership history, captain, and per-person consent rows.
+      await client.query("insert into team_memberships (team_id, member_id, role) values ($1, $2, $3)", [teamId, memberId, i === 0 ? "captain" : "member"]);
+      if (i === 0) await client.query("update teams set captain_id = $2, state = 'formed' where id = $1", [teamId, memberId]);
+      if (consent !== null) {
+        await client.query(
+          `insert into member_consents (member_id, category, granted, source)
+           select $1, c, $2, 'web' from unnest(array['photo_publication','social_mention']) c`,
+          [memberId, consent],
+        );
+      }
     }
+    // Reserve the showcase slug (/ship/{slug}) and seed the private idea.
+    await client.query("insert into projects (team_id, name, slug) values ($1, $2, $3) on conflict do nothing", [teamId, input.name, slug]);
+    await client.query("insert into ideas (team_id, title, private_description) values ($1, $2, $3) on conflict do nothing", [teamId, input.name.slice(0, 120), input.idea]);
     await client.query("insert into activity (team_id, action) values ($1, 'Team registered')", [teamId]);
     await client.query("commit");
     return { teamId, slug };
@@ -155,8 +170,10 @@ export async function saveProgress(teamId: number, memberId: number, item: strin
 export async function addMember(teamId: number, name: string, email: string) {
   try {
     const [row] = await query<{ id: number }>(
-      "insert into members (team_id, name, email) values ($1, $2, $3) returning id",
-      [teamId, name, email],
+      `with m as (insert into members (team_id, name, email, email_hash) values ($1, $2, $3, $4) returning id),
+            h as (insert into team_memberships (team_id, member_id) select $1, id from m)
+       select id from m`,
+      [teamId, name, email, emailHash(email)],
     );
     return row.id;
   } catch (err) {

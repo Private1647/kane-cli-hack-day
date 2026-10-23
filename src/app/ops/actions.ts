@@ -1,29 +1,14 @@
 "use server";
 
-import { createHash, timingSafeEqual } from "node:crypto";
 import { refresh } from "next/cache";
-import { clearAdminSession, isAdmin, setAdminSession } from "@/lib/session";
+import { isAdmin } from "@/lib/session";
+import { staffLogout } from "@/server/auth";
 import { deleteNotification, eventTime, notify, seedScheduleNudges } from "@/lib/notifications";
 import { setRegistrationOpen } from "@/lib/teams";
 import { teamExists } from "./queries";
 
-export type AdminState = { error?: string } | null;
-
-// Hash both sides so the comparison is constant-time regardless of length.
-const digest = (s: string) => createHash("sha256").update(s).digest();
-
-export async function adminLogin(_prev: AdminState, form: FormData): Promise<AdminState> {
-  const expected = process.env.ADMIN_PASSWORD;
-  if (!expected) return { error: "ADMIN_PASSWORD is not configured." };
-  const given = String(form.get("password") ?? "");
-  if (!timingSafeEqual(digest(given), digest(expected))) return { error: "Wrong password." };
-  await setAdminSession();
-  refresh();
-  return null;
-}
-
 export async function adminLogout() {
-  await clearAdminSession();
+  await staffLogout();
   refresh();
 }
 
