@@ -11,6 +11,46 @@ const nextConfig: NextConfig = {
       { source: "/admin/:path*", destination: "/ops/:path*", permanent: true },
     ];
   },
+  // Security headers (T-SEC-01). CSP keeps 'unsafe-inline' for scripts because
+  // the App Router inlines its bootstrap; everything else is same-origin only.
+  // Images/connect allow https (Vercel Blob uploads and photos). HSTS only in
+  // production and without includeSubDomains until every subdomain is HTTPS.
+  async headers() {
+    const prod = process.env.VERCEL_ENV === "production";
+    const dev = process.env.NODE_ENV !== "production";
+    const csp = [
+      "default-src 'self'",
+      `script-src 'self' 'unsafe-inline'${dev ? " 'unsafe-eval'" : ""} https://vercel.live`,
+      "style-src 'self' 'unsafe-inline'",
+      "img-src 'self' data: blob: https:",
+      "font-src 'self' data:",
+      "connect-src 'self' https: wss:",
+      "media-src 'self' blob: https:",
+      "worker-src 'self' blob:",
+      "frame-src 'self' https://vercel.live",
+      "frame-ancestors 'self'",
+      "object-src 'none'",
+      "base-uri 'self'",
+      "form-action 'self'",
+      ...(prod ? ["upgrade-insecure-requests"] : []),
+    ].join("; ");
+    const common = [
+      { key: "Content-Security-Policy", value: csp },
+      { key: "X-Content-Type-Options", value: "nosniff" },
+      { key: "X-Frame-Options", value: "SAMEORIGIN" },
+      { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+      // Camera stays available to this origin for selfies and badge scanning.
+      { key: "Permissions-Policy", value: "camera=(self), microphone=(), geolocation=(), payment=(), usb=()" },
+      { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
+      ...(prod ? [{ key: "Strict-Transport-Security", value: "max-age=63072000" }] : []),
+    ];
+    return [
+      { source: "/:path*", headers: common },
+      // Staff pages and paper copies stay out of search engines.
+      { source: "/ops/:path*", headers: [{ key: "X-Robots-Tag", value: "noindex" }] },
+      { source: "/print/:path*", headers: [{ key: "X-Robots-Tag", value: "noindex" }] },
+    ];
+  },
   turbopack: {
     rules: {
       "*.css": {

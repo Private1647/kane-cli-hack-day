@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Kane CLI Hack Day · Mission Control (offline)</title>
+<!-- Static TV fallback (fallback/10 step 2, T-FB-04). Put it on the screen when
+     /live or the backend is down. Staff set the last verified sync time in the
+     URL: tv-fallback.html#sync=14:05 . Nothing here is live data. -->
+<style>
+  :root { --ink:#000; --bright:#f2f2f2; --gray:#7e7e7e; --hair:#37383a; --lime:#daff52; --warn:#ffb020; --warn-deep:#2b1f05; }
+  * { box-sizing:border-box; }
+  html, body { height:100%; }
+  body { margin:0; background:var(--ink); color:var(--bright); font:16px/1.5 "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace; display:flex; flex-direction:column; }
+  .banner { background:var(--warn-deep); color:var(--warn); border-bottom:2px solid var(--warn); padding:1.2vw 3vw; font-size:clamp(14px, 1.8vw, 34px); letter-spacing:.12em; text-transform:uppercase; }
+  main { flex:1; display:grid; grid-template-columns:1.4fr 1fr; gap:4vw; padding:4vw; align-items:center; }
+  .eyebrow { color:var(--gray); letter-spacing:.25em; text-transform:uppercase; font-size:clamp(12px, 1.1vw, 22px); }
+  h1 { font:700 clamp(36px, 6vw, 128px)/1 "Inter Tight", system-ui, sans-serif; margin:1.5vw 0; }
+  .lock { font-size:clamp(28px, 4.5vw, 96px); color:var(--bright); font-weight:700; }
+  .lock small { display:block; font-size:clamp(12px, 1.2vw, 24px); color:var(--gray); font-weight:400; letter-spacing:.2em; text-transform:uppercase; }
+  ul { list-style:none; padding:0; margin:0; border-top:1px dashed var(--hair); }
+  li { border-bottom:1px dashed var(--hair); padding:1.1vw 0; font-size:clamp(14px, 1.6vw, 32px); color:var(--gray); }
+  li strong { color:var(--bright); font-weight:500; }
+  .stale { display:inline-block; border:1px solid var(--warn); color:var(--warn); padding:.2em .6em; font-size:.8em; letter-spacing:.2em; }
+  @media (max-width: 760px) { main { grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+  <div class="banner" role="status">! Online event records delayed · Staff desk active · Last verified sync <span id="sync">—</span> <span class="stale">STALE</span></div>
+  <main>
+    <section>
+      <p class="eyebrow">Kane CLI Hack Day · Mission Control</p>
+      <h1>The deadline still stands.</h1>
+      <p class="lock"><small>Official submission lock</small>6:00 PM PDT</p>
+    </section>
+    <section aria-label="What still works">
+      <ul>
+        <li><strong>Check-in</strong> · check-in desk, paper roster</li>
+        <li><strong>Help</strong> · help desk, numbered paper tickets</li>
+        <li><strong>Submission</strong> · supervised receipt desk, signed and time-stamped</li>
+        <li>Numbers on this screen are paused. Nothing is lost.</li>
+      </ul>
+    </section>
+  </main>
+<script>
+  // Only reads the URL fragment staff typed; no network, no storage.
+  (function () {
+    var m = /sync=([0-9]{1,2}:[0-9]{2})/.exec(location.hash);
+    if (m) document.getElementById("sync").textContent = m[1];
+  })();
+</script>
+</body>
+</html>

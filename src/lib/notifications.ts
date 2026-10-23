@@ -24,7 +24,7 @@ export async function getFeed(teamId: number, memberId: number | null, limit = 3
   const rows = await query<Omit<Notice, "unread">>(
     `select id, kind, title, body, href, image_path, send_at
        from notifications
-      where (team_id = $1 or team_id is null) and send_at <= now()
+      where (team_id = $1 or team_id is null) and send_at <= now() and visibility in ('hub', 'both')
       order by send_at desc limit $2`,
     [teamId, limit],
   );

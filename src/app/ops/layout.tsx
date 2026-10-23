@@ -15,7 +15,7 @@ export const metadata: Metadata = { title: { template: "%s · Ops", default: "Op
 export default function OpsLayout({ children }: LayoutProps<"/ops">) {
   return (
     <div>
-      <div className="border-b border-hairline bg-surface">
+      <div className="no-print border-b border-hairline bg-surface">
         <div className="container-page pt-6">
           <Suspense fallback={<OpsBar />}>
             <StaffBar />

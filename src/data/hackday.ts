@@ -68,8 +68,8 @@ export const schedule: Slot[] = [
   { start: "13:00", end: "14:00", title: "Working lunch" },
   { start: "14:00", title: "Mid evaluation", note: "Feedback only", href: "/judging#mid" },
   { start: "16:00", end: "17:00", title: "Final evaluation at your table", note: "Scored", href: "/judging#final" },
-  { start: "17:00", end: "18:00", title: "Content hour", note: "Devpost locks at 6:00", href: "/content-hour" },
-  { start: "18:00", title: "Devpost locks", deadline: true, href: "/submit#final", key: true },
+  { start: "17:00", end: "18:00", title: "Content hour", note: "Submissions lock at 6:00", href: "/content-hour" },
+  { start: "18:00", title: "Submissions lock", deadline: true, href: "/submit#final", key: true },
   { start: "18:00", end: "19:00", title: "Demo round", note: "Top 7 teams", href: "/judging#stage", key: true },
   { start: "19:30", title: "Prizes and closing", key: true },
 ];
@@ -79,7 +79,8 @@ export const onGroundHelp = "[name], [number]";
 // ── Challenge ────────────────────────────────────────────────────────────────
 
 export const challenge = {
-  statement: "Build a product with OpenAI in the loop. Run Kane CLI against it while you build. Demo it live.",
+  statement:
+    "Build anything with an AI coding agent and OpenAI in the loop: a product, an agent, a plugin, a CI pipeline, or a validation harness itself. Run Kane CLI against it while you build. Demo it live.",
   barsIntro: "By 6:00 your project clears three bars.",
   bars: [
     {
@@ -97,6 +98,24 @@ export const challenge = {
   ],
   tracks: ["Web App", "Mobile App", "AI Agent and Voice", "Data and Dashboards", "Wildcard"],
   tracksNote: "Same rubric for every track.",
+};
+
+// The blueprint's challenge brief (BRIEF.md), for pages that want the longer
+// framing. A standalone validation harness is a valid entry on its own.
+export const brief = {
+  headline: "Build anything. Engineer the confidence to ship it.",
+  name: "The Kane CLI Agentic Shipping Challenge",
+  intro:
+    "AI agents have made creating software much faster. Shipping it faster takes more than writing code faster. Build anything with an AI coding agent, then use Kane CLI to design verification and shipping workflows that make delivery faster, more reliable and backed by evidence.",
+  harnessNote: "You don't need to build a separate app. Your creation can be the assurance or validation system itself.",
+  expectations: [
+    { title: "Create a working deliverable", body: "A product, plugin, workflow or harness made with an AI coding agent." },
+    { title: "Use Kane meaningfully", body: "Verify the behavior that matters, not one isolated test." },
+    { title: "Close the feedback loop", body: "Let results drive diagnosis, fixes, regression runs, coverage or the release decision." },
+    { title: "Show honest proof", body: "A real run against real or representative software, with reproducible evidence and its limits." },
+  ],
+  closer: "Build fast. Validate intelligently. Ship with proof.",
+  mediaNote: "Ship Page, deck and video are optional support. A media render failure never disqualifies a valid entry.",
 };
 
 // ── Assurance loop ───────────────────────────────────────────────────────────
@@ -223,7 +242,7 @@ export const rules: { title: string; body: string; link?: Link }[] = [
     body: "Code written today. Templates, boilerplates and libraries are fine. Pre-built projects are not.",
   },
   { title: "Both tools", body: "OpenAI and Kane CLI are both required. Use only one and you cannot place." },
-  { title: "One entry", body: "One Devpost entry per team. The Kane CLI run report is mandatory." },
+  { title: "One entry", body: "One submission per team, finalized in your team hub. The Kane CLI run report is mandatory." },
   { title: "Any stack", body: "Any stack, any framework, any deployment." },
   { title: "Code of conduct", body: "Be kind, be safe.", link: { label: "Read it", href: "[link]" } },
 ];

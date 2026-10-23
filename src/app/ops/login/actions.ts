@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { adminPasswordLogin, staffLoginWithCode } from "@/server/auth";
 import { formObject, parse, toAppError, z } from "@/server/core";
+import { clientKey, enforceRateLimit } from "@/server/ratelimit";
 
 export type StaffLoginState = { error?: string; email?: string } | null;
 
@@ -20,6 +21,7 @@ const safeNext = (s?: string) => (s && /^\/ops(\/[\w\-/]*)?$/.test(s) ? s : "/op
 export async function staffLogin(_prev: StaffLoginState, form: FormData): Promise<StaffLoginState> {
   const input = parse(schema, formObject(form));
   try {
+    await enforceRateLimit(`staff-login:${await clientKey()}`, { limit: 10, windowSec: 300 });
     if (input.password) await adminPasswordLogin(input.password);
     else if (input.email && input.code) await staffLoginWithCode(input.email, input.code);
     else return { error: "Enter your staff email and code.", email: input.email };
