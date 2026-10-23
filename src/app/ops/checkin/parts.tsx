@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { inputCls } from "@/components/forms/fields";
 import StatusPill from "@/components/ui/StatusPill";
 import ActionForm, { TextField } from "../_kit/ActionForm";
-import { admitMemberAction, checkInAction, signInCodeAction, walkInAction } from "./actions";
+import { activationCodeAction, admitMemberAction, checkInAction, signInCodeAction, walkInAction } from "./actions";
 import { admissionLabel } from "./labels";
 
 // Check-in desk client pieces: search box with an optional camera scanner,
@@ -157,6 +157,7 @@ export type Hit = {
   emailHint: string | null;
   checkedInAt: string | null;
   checkedInLabel: string | null;
+  activated: boolean;
   admissionBasis: string | null;
   admittedByName: string | null;
   admittedAt: string | null;
@@ -250,7 +251,18 @@ export function HitRow({ hit, canOverride }: { hit: Hit; canOverride: boolean })
       </div>
 
       {!hit.checkedInAt && hit.guestId && hit.admission === "admitted" && (
-        <ActionForm action={checkInAction} submit={`Check in ${hit.name.split(" ")[0]} →`} pending="Checking in…" className="mt-3">
+        <ActionForm
+          action={checkInAction}
+          submit={`Check in ${hit.name.split(" ")[0]} →`}
+          pending="Checking in…"
+          className="mt-3"
+          render={(s) => (
+            <div className="space-y-1 border-l-2 border-verified pl-3 font-plex text-sm">
+              <p className="text-bright">{s.message}</p>
+              <ActivationSlip activation={(s.data as { activation?: Activation } | undefined)?.activation} />
+            </div>
+          )}
+        >
           <input type="hidden" name="guest_id" value={hit.guestId} />
         </ActionForm>
       )}
@@ -276,12 +288,36 @@ export function HitRow({ hit, canOverride }: { hit: Hit; canOverride: boolean })
       )}
 
       {!hit.checkedInAt && !hit.guestId && hit.memberId && (
-        <ActionForm action={admitMemberAction} submit="Admit as walk-in and check in" pending="Admitting…" variant="secondary" className="mt-3">
+        <ActionForm
+          action={admitMemberAction}
+          submit="Admit as walk-in and check in"
+          pending="Admitting…"
+          variant="secondary"
+          className="mt-3"
+          render={(s) => (
+            <div className="space-y-1 border-l-2 border-verified pl-3 font-plex text-sm">
+              <p className="text-bright">{s.message}</p>
+              <ActivationSlip activation={(s.data as { activation?: Activation } | undefined)?.activation} />
+            </div>
+          )}
+        >
           <input type="hidden" name="member_id" value={hit.memberId} />
         </ActionForm>
       )}
 
-      {hit.memberId && (
+      {hit.checkedInAt && !hit.activated && (hit.memberId || hit.guestId) && (
+        <ActionForm
+          action={activationCodeAction}
+          submit="Activation code"
+          pending="Making code…"
+          className="mt-3"
+          render={(s) => <ActivationSlip activation={(s.data as { activation?: Activation } | undefined)?.activation} />}
+        >
+          {hit.memberId ? <input type="hidden" name="member_id" value={hit.memberId} /> : <input type="hidden" name="guest_id" value={hit.guestId ?? ""} />}
+        </ActionForm>
+      )}
+
+      {hit.memberId && hit.activated && (
         <ActionForm
           action={signInCodeAction}
           submit="One-time sign-in code"
@@ -299,6 +335,22 @@ export function HitRow({ hit, canOverride }: { hit: Hit; canOverride: boolean })
         </ActionForm>
       )}
     </li>
+  );
+}
+
+type Activation = { code: string; url: string; expires_at: string } | null | undefined;
+
+/** The code a participant types at kaneclihack.sh/activate: it signs them in as themselves. */
+function ActivationSlip({ activation }: { activation: Activation }) {
+  if (!activation) return null;
+  return (
+    <div className="mt-2 space-y-1 border border-dashed border-hairline p-3">
+      <p className="font-pixel text-[10px] uppercase tracking-[0.2em] text-lightgray">Activation code · give it to them</p>
+      <p className="font-dots text-4xl tracking-[0.1em] text-bright">{activation.code}</p>
+      <p className="text-xs text-lightgray">
+        On their laptop: kaneclihack.sh/activate, this code and their Luma email. Signs them in as themselves; works once, for 24 hours.
+      </p>
+    </div>
   );
 }
 
@@ -325,6 +377,7 @@ export function WalkInForm() {
                 </Link>
               </p>
             )}
+            <ActivationSlip activation={(s.data as { activation?: Activation } | undefined)?.activation} />
             {s.receipt && <p className="text-xs text-lightgray">Receipt {s.receipt.id}</p>}
           </div>
         );

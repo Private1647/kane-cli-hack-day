@@ -114,14 +114,14 @@ function SignedOut({ code }: { code: string }) {
         title="Enter your activation code"
         intro={
           <>
-            Got a code from the check-in desk, or a link from <span className="text-bright">kanehack</span>? Enter it here. Registered with your team? You don’t need a code.
+            The check-in desk gave you a code with your badge. Enter it here with your Luma email: it signs you in as yourself and starts your passport.
           </>
         }
       >
         <CodeForm initialCode={code} />
         <div className="mt-8 grid gap-3 border-t border-dashed border-hairline pt-6 font-plex text-sm sm:grid-cols-2">
           <Link href="/passport/login?next=/activate" className="inline-flex min-h-11 items-center text-bright underline decoration-hairline underline-offset-4 hover:text-lime">
-            Registered with a team? Sign in personally →
+            Already have a personal password? Sign in →
           </Link>
           <p className="text-lightgray">Not registered at all? Go to the check-in desk; walk-ins are welcome.</p>
         </div>

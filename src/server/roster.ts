@@ -517,6 +517,8 @@ export type CheckinHit = {
   memberAdmission: string | null;
   emailHint: string | null;
   checkedInAt: Date | null;
+  /** The member has finished activation (has a personal account). */
+  activated: boolean;
 } & Provenance;
 
 /** How a roster row was admitted and how its check-in was taken: two separate facts. */
@@ -586,11 +588,12 @@ export async function searchCheckin(raw: string, limit = 25): Promise<CheckinHit
     admission_state: string | null;
     email_hint: string | null;
     checked_in_at: Date | null;
+    activated: boolean;
   } & ProvenanceCols>(
     `with hits as (
        select g.id as guest_id, m.id as member_id, coalesce(m.name, g.name) as name, m.display_name, m.public_code,
               t.name as team_name, t.slug as team_slug, g.source, g.approval_status, g.admission_status, m.admission_state,
-              g.email_hint, coalesce(g.checked_in_at, m.checked_in_at) as checked_in_at, ${PROVENANCE_SQL}
+              g.email_hint, coalesce(g.checked_in_at, m.checked_in_at) as checked_in_at, (m.activated_at is not null) as activated, ${PROVENANCE_SQL}
          from roster_guests g
          left join members m on m.id = coalesce(g.member_id, (select x.id from members x where x.guest_id = g.id limit 1)) and m.deleted_at is null
          left join teams t on t.id = m.team_id
@@ -602,7 +605,7 @@ export async function searchCheckin(raw: string, limit = 25): Promise<CheckinHit
                   or lower(coalesce(m.display_name, '')) like $3 escape '\\' or g.luma_guest_id = $4 or lower(coalesce(t.name, '')) like $3 escape '\\')) )
        union all
        select null, m.id, m.name, m.display_name, m.public_code, t.name, t.slug, 'registration', null, null, m.admission_state,
-              null, m.checked_in_at, null, null, null, null, null, null, null, null
+              null, m.checked_in_at, (m.activated_at is not null), null, null, null, null, null, null, null, null
          from members m left join teams t on t.id = m.team_id
         where m.deleted_at is null and m.guest_id is null and m.role = 'participant'
           and not exists (select 1 from roster_guests g where g.member_id = m.id)
@@ -629,6 +632,7 @@ export async function searchCheckin(raw: string, limit = 25): Promise<CheckinHit
     memberAdmission: r.admission_state,
     emailHint: r.email_hint,
     checkedInAt: r.checked_in_at,
+    activated: r.activated,
     ...provenance(r),
   }));
 }

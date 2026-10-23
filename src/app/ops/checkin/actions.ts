@@ -2,6 +2,9 @@
 
 import { AppError, formObject, parse, z, zx } from "@/server/core";
 import { staffActor } from "@/server/auth";
+import { issueActivationCode } from "@/server/activation";
+import { query } from "@/lib/db";
+import type { Staff } from "@/server/auth";
 import { issueMemberLoginCode } from "@/server/pairing";
 import { admitRegisteredMember, admitWalkIn, checkInGuest } from "@/server/roster";
 import { act } from "../_kit/act";
@@ -11,6 +14,20 @@ import type { OpsState } from "../_kit/state";
 // guest who isn't approved is organizer-only (enforced in the service).
 
 const DESK = ["organizer", "mentor"] as const;
+
+/**
+ * Everyone arrives on the day with nothing set up, so check-in hands them an
+ * activation code: entered at /activate it signs them in as themselves (matched
+ * to their Luma email) and starts their passport. Skipped once they're active.
+ */
+async function deskActivation(target: { memberId: number | null; guestId?: number | null }, staff: Staff) {
+  if (target.memberId) {
+    const [m] = await query<{ activated_at: Date | null }>("select activated_at from members where id = $1", [target.memberId]);
+    if (m?.activated_at) return null;
+    return issueActivationCode({ memberId: target.memberId }, staffActor(staff));
+  }
+  return target.guestId ? issueActivationCode({ guestId: target.guestId }, staffActor(staff)) : null;
+}
 
 const checkInSchema = z.object({
   guest_id: zx.id,
@@ -26,10 +43,11 @@ export async function checkInAction(_prev: OpsState, form: FormData): Promise<Op
       throw new AppError("VALIDATION_FAILED", { userMessage: "Say why this guest is being admitted (it goes in the audit log)." });
     }
     const r = await checkInGuest({ guestId: input.guest_id, override: input.override ? { reason: input.reason! } : null, idempotencyKey: input.idempotency_key }, staff);
+    const activation = await deskActivation({ memberId: r.memberId, guestId: input.guest_id }, staff);
     return {
       message: r.alreadyCheckedIn ? `${r.name} was already checked in.` : `${r.name} is checked in${r.publicCode ? ` · ${r.publicCode}` : ""}.`,
       receipt: { id: r.id, server_time: r.checkedInAt },
-      data: r,
+      data: { ...r, activation },
     };
   });
 }
@@ -47,7 +65,8 @@ export async function walkInAction(_prev: OpsState, form: FormData): Promise<Ops
     const input = parse(walkInSchema, formObject(form));
     const r = await admitWalkIn({ name: input.name, email: input.email, displayName: input.display_name, note: input.note, idempotencyKey: input.idempotency_key }, staff);
     const what = r.createdMember ? "New walk-in admitted" : r.createdGuest ? "Registered member admitted as walk-in" : "Existing roster row admitted";
-    return { message: `${what}: ${r.name}${r.publicCode ? ` · ${r.publicCode}` : ""}.`, receipt: { id: r.id, server_time: r.checkedInAt }, data: r };
+    const activation = await deskActivation({ memberId: r.memberId ?? null }, staff);
+    return { message: `${what}: ${r.name}${r.publicCode ? ` · ${r.publicCode}` : ""}.`, receipt: { id: r.id, server_time: r.checkedInAt }, data: { ...r, activation } };
   });
 }
 
@@ -57,7 +76,8 @@ export async function admitMemberAction(_prev: OpsState, form: FormData): Promis
   return act([...DESK], form, async (staff) => {
     const input = parse(admitMemberSchema, formObject(form));
     const r = await admitRegisteredMember({ memberId: input.member_id, note: input.note, idempotencyKey: input.idempotency_key }, staff);
-    return { message: `${r.name} admitted at the desk and checked in${r.publicCode ? ` · ${r.publicCode}` : ""}.`, receipt: { id: r.id, server_time: r.checkedInAt }, data: r };
+    const activation = await deskActivation({ memberId: input.member_id }, staff);
+    return { message: `${r.name} admitted at the desk and checked in${r.publicCode ? ` · ${r.publicCode}` : ""}.`, receipt: { id: r.id, server_time: r.checkedInAt }, data: { ...r, activation } };
   });
 }
 
@@ -73,5 +93,17 @@ export async function signInCodeAction(_prev: OpsState, form: FormData): Promise
     const input = parse(signInCodeSchema, formObject(form));
     const code = await issueMemberLoginCode(input.member_id, staffActor(staff));
     return { message: "One-time sign-in code. Show it only to this person; it works once, at /passport/login.", data: { code } };
+  });
+}
+
+const activationCodeSchema = z.object({ member_id: zx.id.optional(), guest_id: zx.id.optional(), idempotency_key: zx.idempotencyKey });
+
+/** Show (or re-issue) a checked-in person's activation code from their row. */
+export async function activationCodeAction(_prev: OpsState, form: FormData): Promise<OpsState> {
+  return act([...DESK], form, async (staff) => {
+    const input = parse(activationCodeSchema, formObject(form));
+    const activation = await deskActivation({ memberId: input.member_id ?? null, guestId: input.guest_id ?? null }, staff);
+    if (!activation) throw new AppError("CONFLICT", { userMessage: "Already activated: use a one-time sign-in code instead." });
+    return { message: "Activation code", data: { activation } };
   });
 }
