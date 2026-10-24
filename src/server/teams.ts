@@ -426,7 +426,7 @@ export async function updateTeamSettings(who: ActingMember, teamId: number, inpu
     const team = await lockTeam(tx, teamId);
     assertCaptain(team, who.member.id);
     await tx.query(
-      `update teams set recruiting_open = $2::boolean and not $5::boolean, summary_public = $3::text, table_label = coalesce($4::text, table_label) where id = $1`,
+      `update teams set recruiting_open = $2::boolean and not $5::boolean, summary_public = coalesce($3::text, summary_public), table_label = coalesce($4::text, table_label) where id = $1`,
       [teamId, data.recruiting_open, data.summary_public, data.table_label, team.locked],
     );
     await tx.query(

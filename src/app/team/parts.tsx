@@ -188,7 +188,7 @@ export function SettingsForm({
   locked,
 }: {
   slug: string;
-  defaults: { recruiting_open: boolean; summary_public: string; table_label: string; repo_url: string; seeking_skills: string };
+  defaults: { recruiting_open: boolean; seeking_skills: string };
   locked: boolean;
 }) {
   const [state, action] = useActionState<TeamFormState, FormData>(updateSettingsAction.bind(null, slug), null);
@@ -202,28 +202,8 @@ export function SettingsForm({
         description={locked ? "The roster is locked, so the team is no longer listed." : "List the team in the matchmaker with its open seats."}
       />
       <div>
-        <Label htmlFor="s-seeking" hint="Comma separated">
-          Skills you&apos;re looking for
-        </Label>
-        <input id="s-seeking" name="seeking_skills" defaultValue={defaults.seeking_skills} className={inputCls} placeholder="ci, playwright, mobile" />
-      </div>
-      <div>
-        <Label htmlFor="s-summary" hint="Public">
-          Public summary
-        </Label>
-        <textarea id="s-summary" name="summary_public" defaultValue={defaults.summary_public} maxLength={280} rows={3} className={inputCls} />
-      </div>
-      <div className="grid gap-5 sm:grid-cols-2">
-        <div>
-          <Label htmlFor="s-table">Table</Label>
-          <input id="s-table" name="table_label" defaultValue={defaults.table_label} maxLength={24} className={inputCls} placeholder="B4" />
-        </div>
-        <div>
-          <Label htmlFor="s-repo" hint="https://">
-            Repository
-          </Label>
-          <input id="s-repo" name="repo_url" type="url" defaultValue={defaults.repo_url} className={inputCls} placeholder="https://github.com/you/project" />
-        </div>
+        <Label htmlFor="s-seeking">Skills you&apos;re looking for</Label>
+        <TagInput id="s-seeking" name="seeking_skills" defaultValue={defaults.seeking_skills} options={SKILL_SUGGESTIONS} placeholder="Start typing: fr… → frontend" />
       </div>
       <ActionNote state={state} ok="Team settings saved." />
       <SubmitButton pending="Saving…" className="min-h-11">

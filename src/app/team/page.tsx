@@ -255,7 +255,7 @@ async function Personal({ searchParams }: Pick<PageProps<"/team">, "searchParams
               <SettingsForm
                 slug={team.slug}
                 locked={team.locked}
-                defaults={{ recruiting_open: team.recruiting_open, summary_public: team.summary_public ?? "", table_label: team.table_label ?? "", repo_url: team.repo_url ?? "", seeking_skills: team.seeking_skills.join(", ") }}
+                defaults={{ recruiting_open: team.recruiting_open, seeking_skills: team.seeking_skills.join(", ") }}
               />
             </Panel>
           )}
