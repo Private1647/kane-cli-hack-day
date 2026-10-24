@@ -1,7 +1,7 @@
 // The /activate checklist: copy and links in one place.
 //
 // PLACEHOLDERS still to fill in before the event (search for "[" in this file):
-//   [CODEX_REDEEM_INSTRUCTIONS]  how to redeem an OpenAI Codex credit code
+//   CODEX_REDEEM_INSTRUCTIONS    generic until the organizer sends the real steps
 //   [CODEX_REDEEM_URL]           where to redeem it
 // The TestMu AI plan is claimed server-side (src/server/event-activation.ts),
 // so step 2 has no link of its own.
@@ -11,7 +11,7 @@ export type ActivationStepId = "testmu_signup" | "testmu_plan" | "codex_credits"
 export const TESTMU_SIGNUP_URL = "https://www.testmuai.com";
 
 /** Shown under the Codex credit code once it is assigned. */
-export const CODEX_REDEEM_INSTRUCTIONS = "[CODEX_REDEEM_INSTRUCTIONS] Copy your code, open the redemption page, sign in to OpenAI, and paste the code.";
+export const CODEX_REDEEM_INSTRUCTIONS = "Copy your code, open the redemption page, sign in to OpenAI, and paste the code.";
 export const CODEX_REDEEM_URL = "[CODEX_REDEEM_URL]";
 
 /** True while a value above is still a placeholder (the UI then hides a dead link). */
