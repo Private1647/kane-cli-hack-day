@@ -429,14 +429,16 @@ for (const ph of F.PHOTOS) {
 }
 
 // ── Studio: stories, decks and launch-kit states (production-only tests) ─────
-async function studioStory(k: F.TeamKey, opts: { deck?: boolean } = {}) {
+async function studioStory(k: F.TeamKey, opts: { deck?: boolean; publish?: boolean } = {}) {
   return soft(`studio ${k}`, async () => {
     await actAs(F.captainOf(k).email);
     const access = await story.authorizeStudio(slugOf(k), { write: true });
     const people = await story.getTeamPeople(teamId[k]!);
     const content = await story.seedStory(access.project, people);
-    const saved = await story.saveStory(access, { content, expected_version: 0 });
+    const saved = await story.saveStory(access, { content: opts.publish ? { ...content, one_line_pitch: content.one_line_pitch || `${F.T[k].name} turns a reviewed story into a factual launch kit.`, what_we_built: content.what_we_built || "A web app whose release flows Kane CLI verifies on every change.", consent_reviewed: true } : content, expected_version: 0 });
     await query("update project_stories set reviewed_by = $2, reviewed_at = now() where project_id = $1", [projectId[k], (await memberRow(F.captainOf(k).email)).id]);
+    // A complete launch kit needs a published Ship Page (the GTM page refuses to approve without one).
+    if (opts.publish) await story.publishShowcase(access, { story_version: saved.data.version, confirm_phrase: slugOf(k) });
     let deckId: number | null = null;
     if (opts.deck) {
       const ed = await deck.getEditableDeck(access);
@@ -446,7 +448,8 @@ async function studioStory(k: F.TeamKey, opts: { deck?: boolean } = {}) {
   });
 }
 const kestrelStudio = await studioStory("kestrel", { deck: true });
-for (const k of ["reel", "glitch", "stills", "draftpost", "claims"] as const) await studioStory(k);
+await studioStory("reel", { publish: true });
+for (const k of ["glitch", "stills", "draftpost", "claims"] as const) await studioStory(k);
 await query(
   `insert into render_jobs (project_id, source_version, kind, status, error_code, attempt_count, idempotency_key, started_at, finished_at)
    values ($1, 1, 'mp4_video', 'failed', 'RENDER_FAILED', 3, $2, now() - interval '20 minutes', now() - interval '19 minutes')`,
