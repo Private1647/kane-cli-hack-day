@@ -212,6 +212,8 @@ test("joining a team by any route leaves the matchmaking pool", { skip }, async 
     [formed.teamId],
   );
   assert.deepEqual(lk, { state: "roster_locked", recruiting_open: false, open_invites: 0 });
+  const note = await m.db.query<{ member_id: number }>("select member_id from member_notifications where kind = 'team_locked' and member_id = any($1::bigint[])", [[capId, otherId]]);
+  assert.deepEqual(note.map((n) => Number(n.member_id)), [otherId]); // teammates told once, the captain not
   assert.ok(pending);
   assert.equal((await m.flow.flowState(c.id)).stage, "activate");
   assert.equal((await m.flow.flowState(d.id)).stage, "activate");

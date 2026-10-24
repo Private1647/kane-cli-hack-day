@@ -17,7 +17,7 @@ import { joinPoolAction } from "../match/actions";
 import { IntroButtons } from "../match/parts";
 import { Panel, StateLine } from "./blocks";
 import PublicPool from "./PublicPool";
-import { CreateTeamForm, FinalTeamConfirm, InviteForm, JoinByCodeForm, LeaveTeamForm, RevokeInviteButton, SettingsForm } from "./parts";
+import { CreateTeamForm, FinalTeamConfirm, InviteForm, WaitingForCaptain, JoinByCodeForm, LeaveTeamForm, RevokeInviteButton, SettingsForm } from "./parts";
 
 export const metadata: Metadata = { title: "Your team" };
 
@@ -226,9 +226,7 @@ async function Personal({ searchParams }: Pick<PageProps<"/team">, "searchParams
               ) : captain ? (
                 <FinalTeamConfirm slug={team.slug} teamName={team.name} members={roster.map((r) => r.name)} cap={team.cap} />
               ) : (
-                <p className="font-plex text-sm text-lightgray">
-                  Waiting for your captain to confirm the final team. Once they do, the team is locked and you can go on to activation.
-                </p>
+                <WaitingForCaptain captainName={roster.find((r) => r.role === "captain")?.name ?? null} />
               )}
             </div>
           </div>

@@ -1,3 +1,4 @@
+import { notifyTeam } from "./member-notifications";
 import "server-only";
 import { randomBytes } from "node:crypto";
 import type { PoolClient } from "pg";
@@ -431,6 +432,7 @@ export async function confirmFinalTeam(who: ActingMember, teamId: number) {
     if (!team.locked) {
       await tx.query("update teams set state = 'roster_locked', roster_locked_at = now(), recruiting_open = false where id = $1", [teamId]);
       await tx.query("update invitations set revoked_at = now() where team_id = $1 and revoked_at is null and accepted_at is null", [teamId]);
+      await notifyTeam(tx, teamId, { kind: "team_locked", title: `${team.name} is locked in`, body: "Your captain confirmed the final team. On to activation.", href: "/activate" }, who.member.id);
     }
     const now = await txNow(tx);
     return { result: receiptOf(`T-${teamId}`, now), resourceId: teamId, before: { state: team.state }, reason: "Captain confirmed the final team" };

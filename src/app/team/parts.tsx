@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useActionState, useEffect, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { FormError, Label, SubmitButton, Toggle, inputCls } from "@/components/forms/fields";
 import CopyField from "@/components/ui/CopyField";
@@ -300,6 +301,42 @@ export function FinalTeamConfirm({ slug, teamName, members, cap }: { slug: strin
         </button>
       </div>
     </form>
+  );
+}
+
+/**
+ * Teammates (not the captain) of a team that isn't confirmed yet: a muted
+ * "Next: activate" and a note. Polls the flow every 5s and moves on to
+ * /activate by itself once the captain confirms.
+ */
+export function WaitingForCaptain({ captainName }: { captainName: string | null }) {
+  const router = useRouter();
+  useEffect(() => {
+    let stop = false;
+    const tick = async () => {
+      try {
+        const r = await fetch("/api/v1/me/flow", { cache: "no-store" });
+        const j = (await r.json()) as { stage: string | null; next?: string };
+        if (!stop && j.stage && j.stage !== "team" && j.next) router.push(j.next);
+      } catch {
+        // offline for a moment: try again on the next tick
+      }
+    };
+    const id = setInterval(tick, 5000);
+    return () => {
+      stop = true;
+      clearInterval(id);
+    };
+  }, [router]);
+  return (
+    <div className="space-y-2">
+      <button type="button" disabled aria-disabled="true" className="inline-flex min-h-11 cursor-not-allowed items-center border border-hairline px-5 font-plex text-sm text-lightgray/60">
+        Next: activate →
+      </button>
+      <p className="font-plex text-sm text-lightgray">
+        Waiting for {captainName ?? "your captain"} to confirm the final team. This page moves on to activation by itself once they do.
+      </p>
+    </div>
   );
 }
 
