@@ -133,6 +133,12 @@ export function ProfileStep({ defaults, signedIn, hasPassword }: { defaults: Pro
 
 type CheckStatus = "idle" | "checking" | "verified" | "not_found" | "unknown" | "invalid";
 
+const INVALID: Record<"linkedin" | "x" | "github", string> = {
+  linkedin: "That link has no profile name. It should look like linkedin.com/in/your-name.",
+  x: "That isn’t an X handle. Use @handle or x.com/handle.",
+  github: "That isn’t a GitHub username. Use your-name or github.com/your-name.",
+};
+
 const NOT_FOUND: Record<"linkedin" | "x" | "github", string> = {
   linkedin: "We couldn’t find this LinkedIn profile. Check the spelling, or paste the link from your profile page.",
   x: "There’s no X account with this handle. Check the spelling.",
@@ -159,7 +165,7 @@ function SocialInput({ kind, invalid, className, ...input }: { kind: "linkedin" 
     setStatus(out?.status ?? "unknown");
     setUrl(out?.url ?? null);
   };
-  const tone = status === "verified" ? "border-lime" : status === "not_found" ? "border-danger" : "";
+  const tone = status === "verified" ? "border-lime" : status === "not_found" || status === "invalid" ? "border-danger" : "";
   return (
     <>
       <div className="relative">
@@ -175,7 +181,7 @@ function SocialInput({ kind, invalid, className, ...input }: { kind: "linkedin" 
           className={`${className} pr-11 ${tone}`}
         />
         <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 font-plex text-lg" aria-hidden="true">
-          {status === "verified" ? <span className="text-lime">✓</span> : status === "not_found" ? <span className="text-danger">✕</span> : status === "checking" ? <span className="text-lightgray">…</span> : null}
+          {status === "verified" ? <span className="text-lime">✓</span> : status === "not_found" || status === "invalid" ? <span className="text-danger">✕</span> : status === "checking" ? <span className="text-lightgray">…</span> : null}
         </span>
       </div>
       <p className="mt-2 min-h-5 font-plex text-sm" aria-live="polite">
@@ -191,7 +197,8 @@ function SocialInput({ kind, invalid, className, ...input }: { kind: "linkedin" 
           </span>
         )}
         {status === "not_found" && <span className="text-danger">✕ {NOT_FOUND[kind]}</span>}
-        {status === "unknown" && kind === "linkedin" && <span className="text-lightgray">LinkedIn didn’t let us check automatically. Make sure the link opens your profile.</span>}
+        {status === "invalid" && <span className="text-danger">✕ {INVALID[kind]}</span>}
+        {status === "unknown" && kind === "linkedin" && <span className="text-lightgray">LinkedIn didn’t let us check this one automatically. Open the link once to make sure it’s your profile.</span>}
       </p>
     </>
   );
