@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import Button from "@/components/ui/Button";
 import DegradedServiceAlert from "@/components/ui/DegradedServiceAlert";
 import StatusPill from "@/components/ui/StatusPill";
@@ -132,15 +131,9 @@ async function IdeaLab({ team, me }: HubContext) {
             </Panel>
 
             <div className="flex flex-wrap gap-3">
-              <Button href={`/t/${slug}/idea/radar`} variant="secondary" className="min-h-11">
-                Idea Radar
-              </Button>
               <Button href={`/t/${slug}/idea/print`} variant="secondary" className="min-h-11">
                 Printable checklist
               </Button>
-              <Link href={"/team"} className="inline-flex min-h-11 items-center font-plex text-sm text-lightgray underline decoration-hairline underline-offset-4 hover:text-lime">
-                Roster & invites
-              </Link>
             </div>
           </div>
         </div>
