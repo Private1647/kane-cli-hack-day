@@ -38,6 +38,14 @@
     "required_for": "build"
   },
   {
+    "id": "idea_validation",
+    "label": "Supplied local idea-validator advisory assessment",
+    "depends_on": [
+      "project"
+    ],
+    "required_for": "advisory"
+  },
+  {
     "id": "build",
     "label": "Build with Kane; wait for participant readiness",
     "depends_on": [
@@ -85,6 +93,14 @@
       "execution"
     ],
     "required_for": "page"
+  },
+  {
+    "id": "video_upload",
+    "label": "Supplied video workflow or upload option",
+    "depends_on": [
+      "build"
+    ],
+    "required_for": "artifact_option"
   },
   {
     "id": "submission_page",

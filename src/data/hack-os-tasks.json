@@ -145,5 +145,54 @@
     "title": "Connect mandatory X verification and eligibility",
     "acceptance": "Verify team author, public post with both URLs, event window and audited outage exceptions.",
     "dependency": "Missing API integration"
+  },
+  {
+    "id": "idea-validator-supply",
+    "stage_id": "idea",
+    "title": "Supply local idea-validator subskill",
+    "acceptance": "Provide versioned entrypoint, actual rubric and input/output contract.",
+    "dependency": "Supplied subskill pending"
+  },
+  {
+    "id": "idea-validator-wire",
+    "stage_id": "idea",
+    "title": "Route idea analysis through the local validator",
+    "acceptance": "Keep analysis local; bind assessment to idea revision and preserve pending/missing status.",
+    "dependency": "Integration pending supplied skill"
+  },
+  {
+    "id": "video-skill-guidelines",
+    "stage_id": "video",
+    "title": "Supply video skills and recording guidelines",
+    "acceptance": "Define supported video workflow and let participants choose manual recording or existing video.",
+    "dependency": "Supplied video resources pending"
+  },
+  {
+    "id": "video-upload",
+    "stage_id": "video",
+    "title": "Provide and connect video upload endpoint",
+    "acceptance": "Supply upload contract, verify asset URL/receipt and link video to the team page.",
+    "dependency": "Video endpoint pending"
+  },
+  {
+    "id": "team-status-contract",
+    "stage_id": "team-status",
+    "title": "Supply POST team-status endpoint contract",
+    "acceptance": "Define auth, phase/status schema, ordering, acknowledgement and latest-state readback.",
+    "dependency": "POST endpoint pending"
+  },
+  {
+    "id": "team-status-trigger",
+    "stage_id": "team-status",
+    "title": "Connect Codex turn-completion lifecycle adapter",
+    "acceptance": "Cover all team-scoped turns, including waiting/error/build turns; validate host support.",
+    "dependency": "Turn adapter pending"
+  },
+  {
+    "id": "team-status-delivery",
+    "stage_id": "team-status",
+    "title": "Connect durable status delivery and recovery",
+    "acceptance": "Persist outbox; deduplicate/retry; avoid stale snapshots and cross-team status writes.",
+    "dependency": "Integration pending endpoint and trigger"
   }
 ]

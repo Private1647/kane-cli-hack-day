@@ -21,3 +21,5 @@ Organizer must confirm / provide:
 8. Validated dependency versions and clean macOS/Windows installer runs; installer currently only reports missing Kane prerequisites. No authenticated end-to-end proof yet.
 
 All 12 deployed upstream phase procedures are included as .txt references for progressive loading; install only the single hack-os skill folder. They are a dated snapshot and must be refreshed against deployed tool schemas on use. Blueprint source and current installer differ; do not represent the blueprint as live state.
+
+USER UPDATE: Local idea analysis uses the supplied validator subskill (pending); see idea-validator.txt. Video uses supplied skills/guidelines and an option to upload an existing video via a supplied endpoint (pending); see video.txt. After every team-scoped Codex turn, persist and POST team lifecycle status through the supplied endpoint when available; see after-turn-status.txt for acknowledgement, outbox, retry and host-adapter gaps. General activity hooks remain separate.

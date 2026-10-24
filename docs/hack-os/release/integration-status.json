@@ -1,6 +1,6 @@
 {
   "as_of": "2026-10-24",
-  "package_version": "1.1.0",
+  "package_version": "1.2.0",
   "participant_state": "not inspected; no participant session used",
   "confirmed": [
     "Live installer 0.1.3 downloaded and inspected",
@@ -11,7 +11,10 @@
     "User confirmed mandatory v2.5 X gate",
     "User confirmed public evidence bucket API will be provided later",
     "User confirmed new submission-page API needs to be supplied",
-    "Branch source reviewed: existing team APIs, browser signup, event entitlement functions and human-only finalization handoffs"
+    "Branch source reviewed: existing team APIs, browser signup, event entitlement functions and human-only finalization handoffs",
+    "User will supply local idea-validator subskill",
+    "User will supply video skills/guidelines and video-upload endpoint",
+    "User requires team lifecycle POST after every team-scoped Codex turn; endpoint will be supplied"
   ],
   "unverified": [
     "Authenticated MCP tool discovery and end-to-end participant flow",
@@ -30,7 +33,10 @@
     "Provision participant session to validate remaining capabilities",
     "Expose installer-first registration/session and entitlement/roster adapters or supported human handoffs",
     "Supply public evidence bucket upload contract",
-    "Supply team submission-page create/update/readback contract"
+    "Supply team submission-page create/update/readback contract",
+    "Supply and wire local idea-validator subskill",
+    "Supply video skills/guidelines and upload endpoint",
+    "Supply POST team-status endpoint and validate turn-completion adapter/durable delivery"
   ],
   "sources": [
     "README_AGENT_START_HERE.md",

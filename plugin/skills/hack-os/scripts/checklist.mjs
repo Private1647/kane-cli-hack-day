@@ -22,7 +22,7 @@ try {
    const identity=['event_id','participant_id','team_id'].some(changed);
    const source=['git_sha','plan_revision'].some(changed);
    for(const [id,item] of Object.entries(state.items)) {
-    if(identity||source&&['plan','execution','proof','public_evidence','submission_page','submission','showcase','x','eligibility'].includes(id)) state.items[id]={...item,status:'stale',reason:'Scope changed; recheck canonical state'};
+    if(identity||source&&['plan','execution','proof','public_evidence','video_upload','submission_page','submission','showcase','x','eligibility'].includes(id)) state.items[id]={...item,status:'stale',reason:'Scope changed; recheck canonical state'};
    }
    state.scope={...state.scope,...data.scope};
   }
@@ -44,6 +44,7 @@ try {
   renameSync(tmp,path); chmodSync(path,0o600);
  } else if(command!=='status') die('Expected status or record');
  const rows=gates.map(g=>({...g,...(state.items[g.id]??{status:'unknown'}),cached:true}));
- const next=rows.find(g=>!['done','waived'].includes(g.status)&&g.depends_on.every(id=>['done','waived'].includes(state.items[id]?.status)));
+ const actionable=rows.filter(g=>!['done','waived'].includes(g.status)&&g.depends_on.every(id=>['done','waived'].includes(state.items[id]?.status)));
+ const next=actionable.find(g=>!['advisory','artifact_option','milestone'].includes(g.required_for))??actionable[0];
  console.log(JSON.stringify({navigation_cache_only:true,recheck_cached_done_before_skipping:true,scope:state.scope,rows,waiting_for_participant:state.items.build?.status==='building',resume_prompt:state.items.build?.status==='building'?'$hack-os, ready to submit':null,next:next?.id??null},null,2));
 } catch(e) {console.error(JSON.stringify({error:e.message}));process.exitCode=2;}

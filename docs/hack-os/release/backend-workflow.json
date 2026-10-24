@@ -64,16 +64,17 @@
     {
       "id": "idea",
       "phase": "Get ready",
-      "title": "Confirm idea and build plan",
+      "title": "Idea \u2192 local validator \u2192 build plan",
       "participant": "Choose the creation and meaningful Kane workflow.",
-      "skill": "Save/refine idea; agree expected behavior, evidence and feedback loop using the official Kane skill.",
-      "backend": "Persist team project/idea revisions, permissions and optional consented discovery.",
-      "status": "existing",
-      "note": "Idea/team MCP tools exist in branch source. Authenticated runtime remains unverified.",
+      "skill": "Load the user-supplied validator subskill and analyse the idea locally; refine findings and the Kane feedback loop.",
+      "backend": "Persist approved idea revisions if requested. Local analysis does not require the hosted validator API; private text stays local.",
+      "status": "pending",
+      "note": "USER WILL SUPPLY the local idea-validator subskill, entrypoint and rubric. Existing hosted idea/team tools do not substitute for this local assessment.",
       "sources": [
         "src/server/mcp.ts",
         "src/server/ideas.ts"
-      ]
+      ],
+      "status_label": "Local validator subskill pending"
     },
     {
       "id": "build",
@@ -91,6 +92,21 @@
       ]
     },
     {
+      "id": "team-status",
+      "phase": "After every team-scoped turn",
+      "title": "POST current team lifecycle status",
+      "participant": "Continue working, wait for a human action, or resume later; status reporting preserves the current phase.",
+      "skill": "At turn completion, persist a minimal snapshot; POST when configured; track acknowledgement or pending delivery separately.",
+      "backend": "Future endpoint authorizes team scope, deduplicates turn events, rejects stale updates, stores current/history and returns acknowledgement/version.",
+      "status": "pending",
+      "status_label": "POST endpoint + turn adapter pending",
+      "note": "ENDPOINT WILL BE PROVIDED. Needs a supported turn-completion adapter to cover turns outside $hack-os. Queue failed sends; never upload transcripts/code or treat status as verified proof. No heartbeat while idle.",
+      "sources": [
+        "plugin/skills/hack-os/references/after-turn-status.txt",
+        "plugin/hooks/README.md"
+      ]
+    },
+    {
       "id": "evidence",
       "phase": "Finish and submit",
       "title": "Upload evidence separately",
@@ -105,6 +121,21 @@
       ]
     },
     {
+      "id": "video",
+      "phase": "Finish and submit",
+      "title": "Video guideline / skill / upload option",
+      "participant": "Use the supplied video skill/guideline, record manually, or choose an existing video for upload.",
+      "skill": "Load the provided video guidance; preview the actual file, upload via the supplied endpoint, then link the acknowledged asset to the team page.",
+      "backend": "Future upload endpoint issues scoped authorization, validates accepted video/visibility, stores asset and returns URL/receipt for page linkage.",
+      "status": "pending",
+      "status_label": "Video resources + upload API pending",
+      "note": "USER WILL PROVIDE video skills/guidelines and upload endpoint. Generated draft, local file, uploaded asset and page-linked video are separate states. Do not assume evidence bucket is the video upload endpoint.",
+      "sources": [
+        "plugin/skills/hack-os/references/video.txt",
+        "src/server/submission.ts"
+      ]
+    },
+    {
       "id": "page",
       "phase": "Finish and submit",
       "title": "Create team submission page",
@@ -112,7 +143,7 @@
       "skill": "Call supplied page API with reviewed artifacts and public evidence references; save receipt and returned /t/{team-id} URL.",
       "backend": "Future API creates/updates authorized team page idempotently, links artifacts, handles HTML isolation, visibility, versions/jobs and readback.",
       "status": "pending",
-      "note": "PAGE API WILL BE SUPPLIED. Existing /t/[slug] is a hub, not evidence that the new artifact-page API exists. Resolve ID/slug mapping and page access in the contract.",
+      "note": "PAGE API WILL BE SUPPLIED. Existing /t/[slug] is a hub, not evidence that the new artifact-page API exists. Resolve ID/slug mapping and page access in the contract. Include the independent video-upload receipt; the endpoint is still pending.",
       "sources": [
         "src/app/t/[slug]/page.tsx",
         "src/server/submission.ts"
@@ -154,5 +185,12 @@
     "local": "Checkpoint implemented locally",
     "gap": "Requested flow needs integration",
     "pending": "API contract to be supplied"
-  }
+  },
+  "user_supplied_components_pending": [
+    "local idea-validator subskill",
+    "video skills/guidelines",
+    "video upload endpoint",
+    "team status POST endpoint",
+    "Codex turn-completion adapter"
+  ]
 }

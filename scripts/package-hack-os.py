@@ -13,11 +13,11 @@ with gzip.GzipFile(fileobj=buf, mode="wb", mtime=0) as gz:
                 entry = tarfile.TarInfo("hack-os/" + path.relative_to(root).as_posix())
                 entry.size, entry.mode, entry.mtime = len(data), 0o644, 0
                 archive.addfile(entry, io.BytesIO(data))
-output = repo / "public/hack-os-skills-1.1.0.tgz"
+output = repo / "public/hack-os-skills-1.2.0.tgz"
 output.write_bytes(buf.getvalue())
 sha = hashlib.sha256(output.read_bytes()).hexdigest()
 release = repo / "docs/hack-os/release"
-(release / "SHA256SUMS").write_text(sha + "  public/hack-os-skills-1.1.0.tgz\n")
+(release / "SHA256SUMS").write_text(sha + "  public/hack-os-skills-1.2.0.tgz\n")
 patch = release / "installer-hack-os.patch"
 patch.write_text(re.sub(r'(?m)^\+SKILLS_SHA256="[a-f0-9]+"', '+SKILLS_SHA256="' + sha + '"', patch.read_text()))
 print(sha + "  " + str(output))
