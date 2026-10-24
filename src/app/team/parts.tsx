@@ -10,6 +10,7 @@ import { slugify } from "@/lib/slug";
 import { suggestTeamName } from "@/data/team-names";
 import {
   advanceStateAction,
+  confirmFinalTeamAction,
   createInviteAction,
   createTeamAction,
   joinTeamAction,
@@ -250,6 +251,54 @@ export function AdvanceStateButton({ slug, to, label }: { slug: string; to: "for
     <form action={action} className="space-y-2">
       <PendingButton className={smallBtn}>{label}</PendingButton>
       <ActionNote state={state} ok="Team state updated." />
+    </form>
+  );
+}
+
+/**
+ * "Next: activate" for the captain of an unlocked team: confirm this is the final
+ * team first. Confirming locks the roster for everyone and goes to /activate.
+ */
+export function FinalTeamConfirm({ slug, teamName, members, cap }: { slug: string; teamName: string; members: string[]; cap: number }) {
+  const [open, setOpen] = useState(false);
+  const [state, action] = useActionState<TeamFormState, FormData>(confirmFinalTeamAction.bind(null, slug), null);
+  if (!open) {
+    return (
+      <button type="button" onClick={() => setOpen(true)} className="inline-flex min-h-11 items-center bg-bright px-5 font-plex text-sm text-ink transition-colors hover:bg-lime">
+        Next: activate →
+      </button>
+    );
+  }
+  const seats = cap - members.length;
+  return (
+    <form action={action} role="alertdialog" aria-labelledby="final-team-title" className="w-full space-y-4 border border-warning bg-ink p-5">
+      <p className="font-pixel text-[10px] uppercase tracking-[0.2em] text-warning">Before you activate</p>
+      <h3 id="final-team-title" className="font-display text-2xl text-bright">
+        Is this your final team?
+      </h3>
+      <p className="font-plex text-sm leading-relaxed text-lightgray">
+        Continuing locks <span className="text-bright">{teamName}</span> with{" "}
+        <span className="text-bright">
+          {members.length} {members.length === 1 ? "person" : "people"}
+        </span>
+        : {members.join(", ")}. Nobody can join or leave after this, and open invite codes stop working. Only an organizer can change it.
+      </p>
+      {seats > 0 && (
+        <p className="border-l-2 border-warning pl-3 font-plex text-sm text-warning">
+          You still have {seats} open {seats === 1 ? "seat" : "seats"}. If a teammate hasn&apos;t joined yet, wait for them first.
+        </p>
+      )}
+      <label className="flex min-h-11 cursor-pointer items-start gap-3 font-plex text-sm text-bright">
+        <input type="checkbox" name="confirm" required className="mt-1 h-5 w-5 accent-[var(--lime)]" />
+        <span>Yes, this is our final team. Lock it.</span>
+      </label>
+      <ActionNote state={state} />
+      <div className="flex flex-wrap items-center gap-3">
+        <PendingButton className="inline-flex min-h-11 items-center bg-lime px-5 font-plex text-sm text-ink hover:bg-bright disabled:opacity-60">Lock the team and continue →</PendingButton>
+        <button type="button" onClick={() => setOpen(false)} className={smallBtn}>
+          Not yet
+        </button>
+      </div>
     </form>
   );
 }

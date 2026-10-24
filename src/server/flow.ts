@@ -40,8 +40,9 @@ export type FlowState = { stage: FlowStage; next: string; teamSlug: string | nul
 
 /** Where this person is in the flow, and the page that continues it. */
 export async function flowState(memberId: number): Promise<FlowState> {
-  const [m] = await query<{ photo_step_at: Date | null; looking_for_team: boolean | null; slug: string | null; ticks: number; paired: boolean; has_password: boolean }>(
+  const [m] = await query<{ photo_step_at: Date | null; looking_for_team: boolean | null; slug: string | null; locked: boolean; ticks: number; paired: boolean; has_password: boolean }>(
     `select m.photo_step_at, m.looking_for_team, t.slug, m.password_hash is not null as has_password,
+            (t.roster_locked_at is not null or t.state in ('roster_locked','submitted','withdrawn')) as locked,
             (select count(*)::int from activation_ticks a where a.member_id = m.id) as ticks,
             exists (select 1 from member_tokens k where k.member_id = m.id and k.kind = 'bearer' and k.revoked_at is null) as paired
        from members m left join teams t on t.id = m.team_id
@@ -54,6 +55,9 @@ export async function flowState(memberId: number): Promise<FlowState> {
     if (m.looking_for_team === null) return { stage: "choice", next: "/register", teamSlug: null };
     return m.looking_for_team ? { stage: "pool", next: "/match", teamSlug: null } : { stage: "team", next: "/team", teamSlug: null };
   }
+  // The captain confirms the final team (which locks it) before anyone activates.
+  // People who already finished activation aren't sent back.
+  if (!m.locked && m.ticks < 3) return { stage: "team", next: "/team", teamSlug: m.slug };
   if (m.ticks < 3) return { stage: "activate", next: "/activate", teamSlug: m.slug };
   if (!m.paired) return { stage: "codex", next: "/setup", teamSlug: m.slug };
   return { stage: "hub", next: `/t/${m.slug}`, teamSlug: m.slug };

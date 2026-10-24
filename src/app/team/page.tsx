@@ -17,7 +17,7 @@ import { joinPoolAction } from "../match/actions";
 import { IntroButtons } from "../match/parts";
 import { Panel, StateLine } from "./blocks";
 import PublicPool from "./PublicPool";
-import { CreateTeamForm, InviteForm, JoinByCodeForm, LeaveTeamForm, RevokeInviteButton, SettingsForm } from "./parts";
+import { CreateTeamForm, FinalTeamConfirm, InviteForm, JoinByCodeForm, LeaveTeamForm, RevokeInviteButton, SettingsForm } from "./parts";
 
 export const metadata: Metadata = { title: "Your team" };
 
@@ -218,10 +218,18 @@ async function Personal({ searchParams }: Pick<PageProps<"/team">, "searchParams
                 </li>
               ))}
             </ul>
-            <div className="mt-6 flex flex-wrap gap-3">
-              <Button href="/activate" className="min-h-11">
-                Next: activate →
-              </Button>
+            <div className="mt-6 flex flex-wrap items-center gap-3">
+              {team.locked ? (
+                <Button href="/activate" className="min-h-11">
+                  Next: activate →
+                </Button>
+              ) : captain ? (
+                <FinalTeamConfirm slug={team.slug} teamName={team.name} members={roster.map((r) => r.name)} cap={team.cap} />
+              ) : (
+                <p className="font-plex text-sm text-lightgray">
+                  Waiting for your captain to confirm the final team. Once they do, the team is locked and you can go on to activation.
+                </p>
+              )}
             </div>
           </div>
 

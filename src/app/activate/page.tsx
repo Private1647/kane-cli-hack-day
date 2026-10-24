@@ -48,7 +48,9 @@ async function Checklist({ searchParams }: Pick<PageProps<"/activate">, "searchP
     const code = typeof sp.code === "string" ? sp.code : "";
     redirect(code ? `/passport/login?mode=code&code=${encodeURIComponent(code)}&next=/me` : "/passport/login?next=/activate");
   }
-  if (!member.team_id) redirect((await flowState(member.id)).next);
+  // Not on a team yet, or the team isn't confirmed (locked) yet: back to that step.
+  const flow = await flowState(member.id);
+  if (!member.team_id || flow.stage === "team") redirect(flow.next);
   const view = await getActivationView(member.id);
   const step1 = view.ticks.has("testmu_signup");
 

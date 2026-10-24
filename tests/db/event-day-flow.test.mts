@@ -199,7 +199,22 @@ test("joining a team by any route leaves the matchmaking pool", { skip }, async 
   const formed = await m.teams.formTeamFromPool(organizer, { member_ids: [String(c.id), String(d.id)], name: `${tag} Formed`, track: "Wildcard", reason: "cut-off" });
   assert.equal(formed.members.length, 2);
   assert.ok(!(await inPool()).includes(c.id) && !(await inPool()).includes(d.id));
+  // Activation waits until the captain confirms the final team (which locks it).
+  assert.equal((await m.flow.flowState(c.id)).stage, "team");
+  const [fc] = await m.db.query<{ captain_id: number }>("select captain_id from teams where id = $1", [formed.teamId]);
+  const [capId, otherId] = Number(fc.captain_id) === c.id ? [c.id, d.id] : [d.id, c.id];
+  await assert.rejects(m.teams.confirmFinalTeam(acting((await m.auth.getMemberById(otherId))!), formed.teamId), /Only the team captain/);
+  const pending = await m.teams.createInvite(acting((await m.auth.getMemberById(capId))!), formed.teamId, { hours: 24 });
+  await m.teams.confirmFinalTeam(acting((await m.auth.getMemberById(capId))!), formed.teamId);
+  await m.teams.confirmFinalTeam(acting((await m.auth.getMemberById(capId))!), formed.teamId); // twice is fine
+  const [lk] = await m.db.query<{ state: string; recruiting_open: boolean; open_invites: number }>(
+    "select state, recruiting_open, (select count(*)::int from invitations where team_id = $1 and revoked_at is null and accepted_at is null) as open_invites from teams where id = $1",
+    [formed.teamId],
+  );
+  assert.deepEqual(lk, { state: "roster_locked", recruiting_open: false, open_invites: 0 });
+  assert.ok(pending);
   assert.equal((await m.flow.flowState(c.id)).stage, "activate");
+  assert.equal((await m.flow.flowState(d.id)).stage, "activate");
   // Someone already on a team can't be formed again.
   await assert.rejects(m.teams.formTeamFromPool(organizer, { member_ids: [String(c.id), String(d.id)], name: `${tag} Again`, track: "Wildcard" }), /Already on a team/);
 });

@@ -419,6 +419,24 @@ export const captainSettingsSchema = z.object({
     .transform((v) => normalizeTags(v)),
 });
 
+/**
+ * Captain only: "this is our final team". Locks the roster (no joins, leaves or
+ * invites; an organizer can reopen it), stops recruiting and revokes open invites.
+ * Done once, on the way to activation. Already locked → no-op.
+ */
+export async function confirmFinalTeam(who: ActingMember, teamId: number) {
+  return withAudit(who.actor, "team.roster_lock_confirmed", "team", async (tx) => {
+    const team = await lockTeam(tx, teamId);
+    assertCaptain(team, who.member.id);
+    if (!team.locked) {
+      await tx.query("update teams set state = 'roster_locked', roster_locked_at = now(), recruiting_open = false where id = $1", [teamId]);
+      await tx.query("update invitations set revoked_at = now() where team_id = $1 and revoked_at is null and accepted_at is null", [teamId]);
+    }
+    const now = await txNow(tx);
+    return { result: receiptOf(`T-${teamId}`, now), resourceId: teamId, before: { state: team.state }, reason: "Captain confirmed the final team" };
+  });
+}
+
 /** Captain only: recruiting switch, public summary, table, repo, skills wanted. Never anyone's consent. */
 export async function updateTeamSettings(who: ActingMember, teamId: number, input: unknown) {
   const data = parse(captainSettingsSchema, input);

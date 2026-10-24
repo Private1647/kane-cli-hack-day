@@ -15,6 +15,7 @@ import {
   removeMember,
   revokeInvite,
   transferCaptain,
+  confirmFinalTeam,
   updateTeamSettings,
   type ActingMember,
   type CreatedInvite,
@@ -75,6 +76,13 @@ export async function updateSettingsAction(slug: string, _prev: TeamFormState, f
     refresh();
     return { data: null, receipt };
   });
+}
+
+/** "This is our final team": lock the roster, then on to activation. */
+export async function confirmFinalTeamAction(slug: string): Promise<TeamFormState> {
+  const r = await runAction(async () => ({ data: null, receipt: await confirmFinalTeam(await actingMember(), await teamId(slug)) }));
+  if (!r.ok) return r;
+  redirect("/activate");
 }
 
 export async function removeMemberAction(slug: string, memberId: number): Promise<TeamFormState> {
