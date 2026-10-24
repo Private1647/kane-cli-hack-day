@@ -74,7 +74,8 @@ async function IdeaLab({ team, me }: HubContext) {
                 slug={slug}
                 disabled={!canEdit}
                 defaults={{
-                  title: idea.title,
+                  // A new idea row starts with the team name as its title; don't show that as an answer.
+                  title: idea.revision === 0 && idea.title.trim() === team.name.trim() ? "" : idea.title,
                   app_type: idea.app_type,
                   private_description: idea.private_description,
                   kane_plan: idea.kane_plan,

@@ -5,7 +5,7 @@
 // the static event info lives on the home page.
 export const HUB_TABS = [
   { id: "", label: "Dashboard" },
-  { id: "setup", label: "Setup" },
+  { id: "setup", label: "Setup", nav: false },
   { id: "brief", label: "Brief", nav: false },
   { id: "idea", label: "Idea" },
   { id: "proof", label: "Proof" },
