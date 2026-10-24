@@ -8,7 +8,6 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 const SAVED_SELECTS: [file: string, name: string, value: string][] = [
-  ["src/app/t/[slug]/idea/parts.tsx", "project_type", "defaults.project_type"],
   ["src/app/t/[slug]/submit/SubmissionForm.tsx", "project_type", "draft.project_type"],
 ];
 

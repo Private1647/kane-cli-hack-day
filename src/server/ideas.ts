@@ -36,6 +36,9 @@ export type Idea = {
   team_id: number;
   title: string;
   private_description: string;
+  app_type: string;
+  kane_plan: string;
+  extra_info: string;
   public_summary: string | null;
   discovery_opt_in: boolean;
   project_type: ProjectType;
@@ -100,7 +103,7 @@ export type IdeaInput = { title: string; description: string; project_type: Proj
 // ── Reads ────────────────────────────────────────────────────────────────────
 
 const IDEA_SELECT = `
-  select i.id, i.team_id, i.title, i.private_description, i.public_summary, i.discovery_opt_in, i.project_type,
+  select i.id, i.team_id, i.title, i.private_description, i.app_type, i.kane_plan, i.extra_info, i.public_summary, i.discovery_opt_in, i.project_type,
          i.qualification, i.status, i.frozen_at, i.updated_at, e.idea_lock_at,
          (i.status = 'frozen' or now() >= e.idea_lock_at) as locked,
          coalesce((select max(r.revision) from idea_revisions r where r.idea_id = i.id), 0)::int as revision
@@ -163,6 +166,10 @@ export const ideaSchema = z
   .object({
     title: zx.text(120),
     private_description: z.string().trim().max(4000).default(""),
+    // Left out (e.g. an older MCP client) → the current value stays.
+    app_type: z.string().trim().max(120).optional(),
+    kane_plan: z.string().trim().max(4000).optional(),
+    extra_info: z.string().trim().max(4000).optional(),
     public_summary: zx.optText(400),
     discovery_opt_in: zx.checkbox.default(false),
     project_type: z.enum(PROJECT_TYPES).default("other"),
@@ -177,7 +184,13 @@ export async function saveIdea(who: ActingMember, teamId: number, input: unknown
   if (!cur) throw new AppError("NOT_FOUND");
   if (cur.locked) throw new AppError("DEADLINE_PASSED", { userMessage: "Ideas froze at the idea lock. Ask an organizer if something needs to change." });
 
-  const textChanged = cur.title !== data.title || cur.private_description !== data.private_description || cur.project_type !== data.project_type;
+  const next = { app_type: data.app_type ?? cur.app_type, kane_plan: data.kane_plan ?? cur.kane_plan, extra_info: data.extra_info ?? cur.extra_info };
+  const textChanged =
+    cur.title !== data.title ||
+    cur.private_description !== data.private_description ||
+    cur.project_type !== data.project_type ||
+    cur.app_type !== next.app_type ||
+    cur.kane_plan !== next.kane_plan;
   const qualification = textChanged ? "draft" : cur.qualification;
   const status: IdeaStatus =
     cur.status === "selected" ? "selected" : data.discovery_opt_in ? "shared" : qualification !== "draft" ? "validated" : "draft";
@@ -186,7 +199,7 @@ export async function saveIdea(who: ActingMember, teamId: number, input: unknown
     const { rows } = await tx.query<{ now: Date; revision: number }>(
       `with u as (
          update ideas set title = $2, private_description = $3, public_summary = $4, discovery_opt_in = $5, project_type = $6,
-                qualification = $7, status = $8, updated_at = now()
+                qualification = $7, status = $8, app_type = $11, kane_plan = $12, extra_info = $13, updated_at = now()
           where id = $1 and status <> 'frozen' returning id)
        insert into idea_revisions (idea_id, revision, user_submitted, actor_id)
        select u.id, coalesce((select max(revision) from idea_revisions where idea_id = u.id), 0) + 1, $9, $10 from u
@@ -200,8 +213,11 @@ export async function saveIdea(who: ActingMember, teamId: number, input: unknown
         data.project_type,
         qualification,
         status,
-        JSON.stringify({ title: data.title, private_description: data.private_description, public_summary: data.public_summary, discovery_opt_in: data.discovery_opt_in, project_type: data.project_type }),
+        JSON.stringify({ title: data.title, private_description: data.private_description, ...next, public_summary: data.public_summary, discovery_opt_in: data.discovery_opt_in, project_type: data.project_type }),
         who.member.id,
+        next.app_type,
+        next.kane_plan,
+        next.extra_info,
       ],
     );
     if (!rows[0]) throw new AppError("DEADLINE_PASSED", { userMessage: "Ideas froze at the idea lock." });
@@ -309,7 +325,15 @@ export async function validateTeamIdea(who: ActingMember, teamId: number, opts: 
   await requireFlag("idea");
   const idea = await getIdea(teamId);
   if (!idea) throw new AppError("NOT_FOUND");
-  const text = [idea.private_description, idea.public_summary].filter(Boolean).join("\n\n");
+  const text = [
+    idea.app_type && `Type of app: ${idea.app_type}`,
+    idea.private_description,
+    idea.kane_plan && `How we'll use Kane CLI: ${idea.kane_plan}`,
+    idea.extra_info,
+    idea.public_summary,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
   if (text.trim().length < 20) throw new AppError("VALIDATION_FAILED", { userMessage: "Describe the idea in a sentence or two first, then validate." });
 
   const assessment = await assessIdea({ title: idea.title, description: text, project_type: idea.project_type }, { useAi: opts.useAi });

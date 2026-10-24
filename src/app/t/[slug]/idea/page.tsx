@@ -5,7 +5,7 @@ import DegradedServiceAlert from "@/components/ui/DegradedServiceAlert";
 import StatusPill from "@/components/ui/StatusPill";
 import { formatEventTime, getEvent } from "@/lib/event";
 import { isEnabled } from "@/lib/flags";
-import { PROJECT_TYPES, PROJECT_TYPE_LABEL, getIdea, latestAssessment, listRevisions, type IdeaStatus } from "@/server/ideas";
+import { getIdea, latestAssessment, listRevisions, type IdeaStatus } from "@/server/ideas";
 import { getTeamInfo } from "@/server/teams";
 import { Panel } from "@/app/team/blocks";
 import Hub, { type HubContext } from "../hub";
@@ -74,10 +74,12 @@ async function IdeaLab({ team, me }: HubContext) {
               <IdeaForm
                 slug={slug}
                 disabled={!canEdit}
-                types={PROJECT_TYPES.map((t) => ({ id: t, label: PROJECT_TYPE_LABEL[t] }))}
                 defaults={{
                   title: idea.title,
+                  app_type: idea.app_type,
                   private_description: idea.private_description,
+                  kane_plan: idea.kane_plan,
+                  extra_info: idea.extra_info,
                   public_summary: idea.public_summary ?? "",
                   discovery_opt_in: idea.discovery_opt_in,
                   project_type: idea.project_type,

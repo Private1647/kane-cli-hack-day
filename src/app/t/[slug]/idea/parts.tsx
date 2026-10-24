@@ -11,68 +11,65 @@ import { radarAction, saveIdeaAction, selectIdeaAction, validateIdeaAction, type
 
 export function IdeaForm({
   slug,
-  types,
   defaults,
   disabled,
 }: {
   slug: string;
-  types: { id: string; label: string }[];
-  defaults: { title: string; private_description: string; public_summary: string; discovery_opt_in: boolean; project_type: string };
+  defaults: { title: string; app_type: string; private_description: string; kane_plan: string; extra_info: string; public_summary: string; discovery_opt_in: boolean; project_type: string };
   disabled: boolean;
 }) {
   const [state, action] = useActionState<IdeaFormState, FormData>(saveIdeaAction.bind(null, slug), null);
-  const [share, setShare] = useState(defaults.discovery_opt_in);
   return (
-    <form action={action} className="space-y-5">
-      <fieldset disabled={disabled} className="space-y-5 disabled:opacity-60">
+    <form action={action} className="space-y-6">
+      <fieldset disabled={disabled} className="space-y-6 disabled:opacity-60">
         <div>
-          <Label htmlFor="i-title">Working title</Label>
-          <input id="i-title" name="title" required maxLength={120} defaultValue={defaults.title} className={inputCls} />
-        </div>
-        <div>
-          <Label htmlFor="i-type">What you&apos;re making</Label>
-          <select key={defaults.project_type} id="i-type" name="project_type" defaultValue={defaults.project_type} className={`${inputCls} min-h-11`}>
-            {types.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.label}
-              </option>
-            ))}
-          </select>
-          <p className="mt-2 font-plex text-xs text-lightgray">A standalone validation harness, CI pipeline or plugin is fully eligible on its own.</p>
-        </div>
-        <div>
-          <Label htmlFor="i-desc" hint="Private · your team and organizers only">
-            The idea
+          <Label htmlFor="i-title" hint="Product name">
+            What are you building?
           </Label>
+          <input id="i-title" name="title" required maxLength={120} defaultValue={defaults.title} className={inputCls} placeholder="e.g. Ledger" />
+        </div>
+        <div>
+          <Label htmlFor="i-type">What type of app is it?</Label>
+          <input id="i-type" name="app_type" maxLength={120} defaultValue={defaults.app_type} className={inputCls} placeholder="Web app, mobile app, CLI tool, browser extension…" />
+        </div>
+        <div>
+          <Label htmlFor="i-desc">Description</Label>
+          <p className="mb-2 font-plex text-sm text-lightgray">Give us the gist in a few lines: what it does, who the users are, and what problem or gap it solves.</p>
           <textarea
             id="i-desc"
             name="private_description"
             maxLength={4000}
-            rows={7}
+            rows={6}
             defaultValue={defaults.private_description}
             className={inputCls}
-            placeholder="What you'll build with your coding agent, which flows Kane verifies, what happens when a run fails, and what you'll show as proof."
+            placeholder={"What it does: …\nWho the users are: …\nWhat problem or gap it solves: …"}
           />
         </div>
-        <div className="border-y border-dashed border-hairline py-2">
-          <Toggle
-            name="discovery_opt_in"
-            label="Share a public summary with other teams"
-            checked={share}
-            onChange={setShare}
-            description="Only the summary below is shared, in the Idea Radar. Your private description never is."
+        <div>
+          <Label htmlFor="i-kane">How are you planning to use Kane CLI?</Label>
+          <p className="mb-2 font-plex text-sm text-lightgray">Which flows Kane CLI will test, and how it helps your app.</p>
+          <textarea
+            id="i-kane"
+            name="kane_plan"
+            maxLength={4000}
+            rows={4}
+            defaultValue={defaults.kane_plan}
+            className={inputCls}
+            placeholder="e.g. Kane checks sign-up and checkout after every change Codex makes, and we fix whatever it finds before moving on."
           />
         </div>
-        {share && (
-          <div>
-            <Label htmlFor="i-public" hint="Public to opted-in teams">
-              Public summary
-            </Label>
-            <textarea id="i-public" name="public_summary" required maxLength={400} rows={3} defaultValue={defaults.public_summary} className={inputCls} placeholder="One or two sentences: problem, approach, audience." />
-          </div>
-        )}
-        {!share && <input type="hidden" name="public_summary" value={defaults.public_summary} />}
+        <div>
+          <Label htmlFor="i-extra" hint="Optional">
+            Anything else you want to share?
+          </Label>
+          <textarea id="i-extra" name="extra_info" maxLength={4000} rows={3} defaultValue={defaults.extra_info} className={inputCls} />
+        </div>
+        {/* Kept as they are: the Idea Radar sharing choice and the old project-type field aren't asked here any more. */}
+        <input type="hidden" name="project_type" value={defaults.project_type} />
+        <input type="hidden" name="public_summary" value={defaults.public_summary} />
+        {defaults.discovery_opt_in && <input type="hidden" name="discovery_opt_in" value="on" />}
       </fieldset>
+      <p className="font-plex text-xs text-lightgray">Shared with your team and the organizers only. Anyone on the team can edit it; each save is a new revision.</p>
       <ActionNote state={state} ok="Saved as a new revision." />
       {!disabled && (
         <SubmitButton pending="Saving…" className="min-h-11">

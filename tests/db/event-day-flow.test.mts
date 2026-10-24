@@ -310,6 +310,19 @@ test("Codex codes: distinct under concurrency, re-shown, empty pool, upload dedu
   await assert.rejects(m.act.reassignCodexCode(organizer, b.id, "qa reassign"), /out of codes/);
 });
 
+test("the idea's type, Kane plan and extra info save, and a save without them keeps them", { skip }, async () => {
+  const { saveIdea, getIdea } = await import("../../src/server/ideas.ts");
+  await register("ideaA");
+  const me = (await viewer())!;
+  const { teamId } = await m.teams.createTeam(acting(me), { name: `${tag} Idea` });
+  await saveIdea(acting(me), teamId, { title: "Ledger", app_type: "Web app", private_description: "Tracks shared expenses for flatmates.", kane_plan: "Kane checks sign-up and settle-up after every change.", extra_info: "" });
+  let idea = (await getIdea(teamId))!;
+  assert.deepEqual([idea.title, idea.app_type, idea.kane_plan, idea.extra_info], ["Ledger", "Web app", "Kane checks sign-up and settle-up after every change.", ""]);
+  await saveIdea(acting(me), teamId, { title: "Ledger 2", private_description: "Tracks shared expenses.", source: "mcp" }); // an older client
+  idea = (await getIdea(teamId))!;
+  assert.deepEqual([idea.title, idea.app_type, idea.kane_plan], ["Ledger 2", "Web app", "Kane checks sign-up and settle-up after every change."]);
+});
+
 test("skills added on /match survive a later profile save", { skip }, async () => {
   await register("keepSkills", { skills: "", interests: "" });
   const me = (await viewer())!;
