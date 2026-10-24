@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { HUB_TABS, hubPath } from "@/lib/hub";
+import { NAV_TABS, hubPath } from "@/lib/hub";
 
 // The hub's tab row. Scrolls sideways on narrow screens rather than wrapping.
 export default function TabNav({ slug }: { slug: string }) {
@@ -10,7 +10,7 @@ export default function TabNav({ slug }: { slug: string }) {
   return (
     <nav aria-label="Team hub" className="mt-8 -mb-px overflow-x-auto">
       <ul className="flex min-w-max gap-1">
-        {HUB_TABS.map((t) => {
+        {NAV_TABS.map((t) => {
           const href = hubPath(slug, t.id);
           const active = pathname === href;
           return (
