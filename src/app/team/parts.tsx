@@ -36,7 +36,7 @@ export function CreateTeamForm({ idempotencyKey }: { idempotencyKey: string }) {
       <input type="hidden" name="idempotency_key" value={idempotencyKey} />
       <div>
         <Label htmlFor="team-name" hint="Becomes your page address">
-          Team name
+          {solo ? "Project name" : "Team name"}
         </Label>
         <div className="flex gap-2">
           <input id="team-name" name="name" required maxLength={60} autoComplete="off" value={name} onChange={(e) => setName(e.target.value)} aria-describedby="team-slug" className={inputCls} placeholder="Release Gate Crew" />
@@ -60,7 +60,6 @@ export function CreateTeamForm({ idempotencyKey }: { idempotencyKey: string }) {
           )}
         </p>
       </div>
-      <Toggle name="solo" label="Going solo" description="Just you. A teammate joining later turns this into a team." checked={solo} onChange={setSolo} />
       {!solo && (
         <div className="space-y-4 border-2 border-hairline p-5 has-[input[name=recruiting_open]:checked]:border-lime has-[input[name=recruiting_open]:checked]:bg-lime-deep">
           <label className="flex cursor-pointer items-start gap-4">
@@ -82,9 +81,24 @@ export function CreateTeamForm({ idempotencyKey }: { idempotencyKey: string }) {
           )}
         </div>
       )}
+      <details className="group border border-dashed border-hairline" open={solo || undefined}>
+        <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 font-plex text-base text-bright marker:hidden hover:text-lime">
+          <span>Are you participating solo?</span>
+          <span aria-hidden="true" className="text-lightgray transition-transform group-open:rotate-90">
+            ›
+          </span>
+        </summary>
+        <div className="space-y-3 border-t border-dashed border-hairline px-4 py-4">
+          <p className="font-plex text-sm leading-relaxed text-lightgray">You can build on your own: same challenge, same judging. If someone joins you later with an invite code, you become a team.</p>
+          <label className="flex min-h-11 cursor-pointer items-center gap-3 font-plex text-sm text-bright">
+            <input type="checkbox" name="solo" checked={solo} onChange={(e) => setSolo(e.target.checked)} className="h-5 w-5 accent-[var(--lime)]" />
+            Yes, I’m going solo
+          </label>
+        </div>
+      </details>
       <ActionNote state={state} />
-      <SubmitButton pending="Creating…" className="min-h-11">
-        Create team →
+      <SubmitButton pending="Creating…" className="min-h-12 text-base">
+        {solo ? "Start solo →" : "Create team · I’m the captain →"}
       </SubmitButton>
     </form>
   );
@@ -97,7 +111,9 @@ export function JoinByCodeForm({ code, idempotencyKey, teamName }: { code: strin
     <form action={action} className="space-y-4">
       <input type="hidden" name="idempotency_key" value={idempotencyKey} />
       <div>
-        <Label htmlFor="join-code">Invite code</Label>
+        <Label htmlFor="join-code" hint="From your captain">
+          Invite code
+        </Label>
         <input id="join-code" name="code" required defaultValue={code} autoComplete="off" placeholder="XXXX-XXXX" className={`${inputCls} uppercase tracking-[0.2em]`} />
       </div>
       {/* Pressing "Join team" is the confirmation the server asks for. */}

@@ -58,17 +58,40 @@ async function Personal({ searchParams }: Pick<PageProps<"/team">, "searchParams
     return (
       <section className="py-12 sm:py-16">
         <div className="container-page space-y-10">
-          <p className="max-w-2xl font-plex text-sm text-lightgray">
+          <p className="inline-flex items-center gap-2 border border-hairline px-3 py-1.5 font-plex text-sm text-lightgray">
+            <span aria-hidden="true">◷</span>
             {lockPassed
-              ? `The team lock passed at ${formatEventTime(event.teamLockAt, event)}. You can still start a solo team; an organizer can add people.`
-              : `Rosters lock at ${formatEventTime(event.teamLockAt, event)}.`}
+              ? `The team lock passed at ${formatEventTime(event.teamLockAt, event)}. You can still start solo; an organizer can add people.`
+              : `Teams lock at ${formatEventTime(event.teamLockAt, event)}. Up to 4 people per team.`}
           </p>
-          <div className="grid gap-12 lg:grid-cols-2">
-            <Panel title="Create a team" id="create">
+          <div className="grid items-start gap-6 lg:grid-cols-2">
+            <section id="create" className="brackets flex flex-col gap-6 border border-hairline p-6 sm:p-8" aria-labelledby="create-title">
+              <div>
+                <p className="font-pixel text-[10px] uppercase tracking-[0.2em] text-lime">Start a team</p>
+                <h2 id="create-title" className="mt-2 font-display text-3xl text-bright">
+                  Name it. You’re the captain.
+                </h2>
+                <ol className="mt-4 grid gap-2 font-plex text-sm text-lightgray sm:grid-cols-3">
+                  {["Name your team", "You become captain", "Invite your teammates"].map((t, i) => (
+                    <li key={t} className="flex items-center gap-2 border border-dashed border-hairline px-3 py-2">
+                      <span className="font-pixel text-[10px] text-lime">{i + 1}</span>
+                      {t}
+                    </li>
+                  ))}
+                </ol>
+                <p className="mt-3 font-plex text-sm text-lightgray">Right after you create it, you get an invite code to send your teammates.</p>
+              </div>
               <CreateTeamForm idempotencyKey={randomUUID()} />
-            </Panel>
-            <Panel title="Join with an invite code" id="join">
-              {code && !preview && <p className="mb-4 border-l-2 border-warning pl-3 font-plex text-sm text-warning">That code has expired, was used, or was revoked. Ask your teammate for a new one.</p>}
+            </section>
+            <section id="join" className="flex flex-col gap-6 border border-hairline p-6 sm:p-8" aria-labelledby="join-title">
+              <div>
+                <p className="font-pixel text-[10px] uppercase tracking-[0.2em] text-lightgray">Already have a team?</p>
+                <h2 id="join-title" className="mt-2 font-display text-3xl text-bright">
+                  Join a team?
+                </h2>
+                <p className="mt-3 font-plex text-sm leading-relaxed text-lightgray">Your captain creates the team and sends you an invite code (or a link). Enter it here and you’re on the team straight away.</p>
+              </div>
+              {code && !preview && <p className="border-l-2 border-warning pl-3 font-plex text-sm text-warning">That code has expired, was used, or was revoked. Ask your captain for a new one.</p>}
               {preview?.forYou && (
                 <div className="brackets mb-5 border border-lime p-4" data-invite-team={preview.team.slug}>
                   <p className="font-pixel text-[10px] uppercase tracking-[0.2em] text-lime">You’re invited to</p>
@@ -88,7 +111,7 @@ async function Personal({ searchParams }: Pick<PageProps<"/team">, "searchParams
                 </div>
               )}
               <JoinByCodeForm code={code} idempotencyKey={randomUUID()} teamName={preview?.forYou ? preview.team.name : null} />
-            </Panel>
+            </section>
           </div>
           {pool?.looking !== true && (
             <form action={joinPoolAction} className="flex flex-wrap items-center gap-4 border-t border-dashed border-hairline pt-6">
