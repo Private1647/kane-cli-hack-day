@@ -40,7 +40,7 @@ export const ACTIVATION_STEPS: { id: ActivationStepId; n: string; title: string;
 
 export const PLAN_MESSAGES = {
   claimed: "Plan activated.",
-  notRegistered: (email: string) => `Looks like you haven’t registered with TestMu AI yet. Register (step 1) with ${email}, then press Try again.`,
+  notRegistered: (email: string) => `You’re not signed up on TestMu AI yet. Sign up with ${email}: your hack-day plan is saved and switches on as soon as you do. Then press Check again.`,
   error: "Something went wrong activating your plan. Please reach out to the support staff at the help desk (or /help).",
   outOfCodes: "We’re out of codes right now. Please reach out to the support staff at the help desk.",
 } as const;

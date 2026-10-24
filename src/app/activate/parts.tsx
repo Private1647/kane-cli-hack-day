@@ -41,12 +41,12 @@ export function TickButton({ step, done, label = "Done" }: { step: ActivationSte
   );
 }
 
-export function ClaimPlanButton({ retry }: { retry: boolean }) {
+export function ClaimPlanButton({ retry, label }: { retry: boolean; label?: string }) {
   const [state, setState] = useState<ActState>(null);
   return (
     <form action={async () => setState(await claimPlanAction())} className="flex flex-wrap items-center gap-3">
       <Submit className={primary} pending="Activating…">
-        {retry ? "Try again" : "Activate my plan"}
+        {label ?? (retry ? "Try again" : "Activate my plan")}
       </Submit>
       {state?.outcome === "in_progress" && <p className="basis-full font-plex text-sm text-lightgray">{state.message}</p>}
       {state && !state.outcome && <Note state={state} />}

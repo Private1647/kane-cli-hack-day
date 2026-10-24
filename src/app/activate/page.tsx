@@ -118,20 +118,25 @@ function PlanStep({ view, email }: { view: ActivationView; email: string }) {
   return (
     <div className="space-y-3">
       {plan?.status === "not_registered" && (
-        <p role="alert" className="border-l-2 border-warning pl-3 font-plex text-sm text-warning">
-          Looks like you haven&apos;t registered with TestMu AI yet.{" "}
-          <a href={TESTMU_SIGNUP_URL} target="_blank" rel="noopener noreferrer" className="underline underline-offset-4">
-            Register ↗
-          </a>{" "}
-          with <span className="text-bright">{email}</span>, tick step 1, then press Try again.
-        </p>
+        <div role="alert" className="space-y-3 border-l-2 border-warning pl-3">
+          <p className="font-plex text-sm font-semibold text-warning">You’re not signed up on TestMu AI yet.</p>
+          <p className="font-plex text-sm text-bright">
+            Sign up with <span className="text-lime">{email}</span>. Your hack-day plan is already saved and switches on as soon as your account exists.
+          </p>
+          <div className="flex flex-wrap items-center gap-3">
+            <a href={TESTMU_SIGNUP_URL} target="_blank" rel="noopener noreferrer" className={linkCls}>
+              Sign up on TestMu AI ↗
+            </a>
+            <span className="font-plex text-xs text-lightgray">Then come back and press Check again.</span>
+          </div>
+        </div>
       )}
       {plan?.status === "error" && (
         <p role="alert" className="border-l-2 border-danger pl-3 font-plex text-sm text-danger">
           {PLAN_MESSAGES.error}
         </p>
       )}
-      <ClaimPlanButton retry={!!plan && plan.status !== "pending"} />
+      <ClaimPlanButton retry={!!plan && plan.status !== "pending"} label={plan?.status === "not_registered" ? "Check again" : undefined} />
       <p className="font-plex text-xs text-lightgray">Uses the email on your profile ({email}). Change it on your profile if it isn&apos;t the one you used for TestMu AI.</p>
     </div>
   );

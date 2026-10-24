@@ -20,6 +20,13 @@ test("404 and 'user/account not found' 4xx answers mean: register with TestMu AI
   assert.equal(mapClaimResponse(400, { message: "Account not found" }).outcome, "not_registered");
 });
 
+test("NON_SIGNEDUP means not signed up, even with a 2xx", () => {
+  const body = { code: "NON_SIGNEDUP", message: "Claim recorded. Trial will be activated after signup." };
+  for (const s of [200, 201, 202, 400, 404, 422]) assert.equal(mapClaimResponse(s, body).outcome, "not_registered");
+  assert.match(mapClaimResponse(200, body).detail ?? "", /HTTP 200 · NON_SIGNEDUP · Claim recorded/);
+  assert.equal(mapClaimResponse(200, { status: "success" }).outcome, "claimed");
+});
+
 test("everything else is a plain error with a detail for staff", () => {
   // The documented empty-email answer is a request problem, not an unknown user.
   const empty = mapClaimResponse(422, { code: "INVALID_REQUEST", errors: { email: ["The email field is required."] } });

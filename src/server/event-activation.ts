@@ -103,7 +103,8 @@ type RawAnswer = { status: number | null; body: unknown; failure?: string };
 function stubAnswer(mode: string): RawAnswer {
   switch (mode) {
     case "not_registered":
-      return { status: 404, body: { code: "USER_NOT_FOUND", errors: { email: ["No account exists for this email."] } } };
+      // The real API's answer for an email with no TestMu AI account.
+      return { status: 200, body: { code: "NON_SIGNEDUP", message: "Claim recorded. Trial will be activated after signup." } };
     case "invalid":
       return { status: 422, body: { code: "INVALID_REQUEST", errors: { email: ["The email must be a valid email address."] } } };
     case "error":
