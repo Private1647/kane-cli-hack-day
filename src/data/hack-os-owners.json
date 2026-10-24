@@ -2,8 +2,8 @@
   "schema_version": 1,
   "event_slug": "kane-cli-hack-day-2026",
   "source": "user_approved_local_export",
-  "exported_at": "2026-10-24T06:34:15.629Z",
-  "source_sha256": "aeadbfb1cf6c637397420e1605de9f102ec1ed44733e858efb530e8af0734e85",
+  "exported_at": "2026-10-24T06:50:23.029Z",
+  "source_sha256": "b12e0189f08e9879a1182b7eff285cd1194cef0afb0752d070a79eb4c709a93b",
   "assignments": [
     {
       "id": "release",
@@ -31,7 +31,7 @@
     },
     {
       "id": "team-api",
-      "owner_name": "Sparsh",
+      "owner_name": "Umar",
       "status": "pending",
       "note": "Surya to ensure teams are created in single org. Sparsh to provide the endpoint"
     },
@@ -49,9 +49,9 @@
     },
     {
       "id": "codex-credits",
-      "owner_name": "Sparsh",
+      "owner_name": "Samyak",
       "status": "pending",
-      "note": ""
+      "note": "Sparsh to provide"
     },
     {
       "id": "idea-plan",
@@ -85,7 +85,7 @@
     },
     {
       "id": "bucket-contract",
-      "owner_name": "Sparsh",
+      "owner_name": "Umar",
       "status": "pending",
       "note": "Sparsh to create the public bucket to store evidence."
     },
@@ -97,9 +97,9 @@
     },
     {
       "id": "page-contract",
-      "owner_name": "Sparsh",
+      "owner_name": "Umar",
       "status": "pending",
-      "note": ""
+      "note": "For submission of final repo."
     },
     {
       "id": "page-wiring",

@@ -60,7 +60,7 @@
     ]
   },
   "approved_assignment_import": {
-    "source": "user-exported hack-os-local-assignments.json",
+    "source": "user-exported hack-os-local-assignments (1).json",
     "imported_records": 21,
     "named_records": 17,
     "additional_unassigned_tasks": 7,
@@ -75,6 +75,14 @@
     "limits": [
       "No live event database modified",
       "Imported Done values are user planning decisions, not independent implementation verification"
+    ],
+    "exported_at": "2026-10-24T06:50:23.029Z",
+    "source_sha256": "b12e0189f08e9879a1182b7eff285cd1194cef0afb0752d070a79eb4c709a93b",
+    "latest_changed_task_ids": [
+      "team-api",
+      "codex-credits",
+      "bucket-contract",
+      "page-contract"
     ]
   }
 }
