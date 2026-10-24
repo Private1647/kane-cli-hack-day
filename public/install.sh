@@ -3,11 +3,12 @@
 # Version: 0.1.3
 #
 # Read me before you run me. This script:
-#   - checks OS/arch, Node, Git, Chrome, Codex (optional), Kane CLI, Kane auth,
+#   - checks OS/arch, Node, Git, Chrome, OpenAI Codex CLI, Kane CLI, Kane auth,
 #     the official Kane CLI skill, the hack skills and whether the event API answers
-#   - asks before it installs anything, and only installs the `kanehack` helper
-#     into ~/.kanehack and the hack-* skills into ~/.agents/skills (where Codex reads
-#     them), each from a tarball whose sha256 is pinned below
+#   - asks before it installs anything, and only installs the OpenAI Codex CLI
+#     (npm i -g @openai/codex, if it's missing), the `kanehack` helper into
+#     ~/.kanehack and the hack-* skills into ~/.agents/skills (where Codex reads
+#     them), the last two from tarballs whose sha256 is pinned below
 #   - if you have Codex, offers to add the event MCP server to it. ~/.codex/config.toml
 #     gets the server URL and `kanehack mcp-headers` (which prints the auth header when
 #     Codex connects), never the token itself; config.toml is backed up first
@@ -110,7 +111,27 @@ else
 fi
 if [ -n "$CHROME" ]; then pass chrome; else fail chrome "missing" "Install Google Chrome: Kane drives a real browser"; fi
 
-if have codex; then pass codex "$(bounded codex --version 2>/dev/null | head -n1)"; else warn codex "not found" "npm i -g @openai/codex   (the web app works without it)"; fi
+# OpenAI Codex CLI: the event's coding agent. Missing → offer `npm i -g @openai/codex`
+# (never with sudo: if npm's global folder isn't yours, say how to fix that instead).
+if have codex; then pass codex "$(bounded codex --version 2>/dev/null | head -n1)"
+elif ! have npm; then fail codex "missing" "Install Node (with npm) first, then: npm i -g @openai/codex"
+else
+  NPM_G="$(npm prefix -g 2>/dev/null || true)"
+  if [ -n "$NPM_G" ] && { [ -w "$NPM_G/lib/node_modules" ] || { [ ! -e "$NPM_G/lib/node_modules" ] && [ -w "$NPM_G" ]; }; }; then
+    if ask "OpenAI Codex CLI is not installed. Install it now (npm i -g @openai/codex)?"; then
+      if npm install -g --silent --no-audit --no-fund @openai/codex >/dev/null 2>"${TMPDIR:-/tmp}/kanehack-codex.$$"; then
+        rm -f "${TMPDIR:-/tmp}/kanehack-codex.$$"; hash -r 2>/dev/null || true
+        if have codex; then pass codex "installed $(bounded codex --version 2>/dev/null | head -n1). Sign in with: codex login"
+        else warn codex "installed, but not on your PATH" "Add ${NPM_G%/}/bin to your PATH, then: codex login"; fi
+      else
+        cat "${TMPDIR:-/tmp}/kanehack-codex.$$" >&2; rm -f "${TMPDIR:-/tmp}/kanehack-codex.$$"
+        fail codex "npm install failed" "See the npm output above, or ask at the help desk"
+      fi
+    else warn codex "not installed" "npm i -g @openai/codex   (then: codex login)"; fi
+  else
+    fail codex "missing" "npm's global folder (${NPM_G:-unknown}) needs sudo. Don't use sudo: npm config set prefix ~/.npm-global, add ~/.npm-global/bin to PATH, then npm i -g @openai/codex"
+  fi
+fi
 
 if have kane-cli; then
   pass kane_cli "$(bounded kane-cli --version 2>/dev/null | head -n1)"

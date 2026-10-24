@@ -1,11 +1,12 @@
 # Kane CLI Hack Day installer for Windows: https://www.kaneclihack.sh/install.ps1
 # Version: 0.1.3
 #
-# Read me before you run me. This script checks Node, Git, Chrome, Codex
-# (optional), Kane CLI, Kane auth, the official Kane CLI skill, the hack skills
+# Read me before you run me. This script checks Node, Git, Chrome, the OpenAI
+# Codex CLI, Kane CLI, Kane auth, the official Kane CLI skill, the hack skills
 # and whether the event API answers. It asks before installing anything, and
-# only installs the `kanehack` helper into %USERPROFILE%\.kanehack and the hack-*
-# skills into .agents\skills (where Codex reads them), each from a tarball whose
+# only installs the OpenAI Codex CLI (npm i -g @openai/codex, if missing), the
+# `kanehack` helper into %USERPROFILE%\.kanehack and the hack-* skills into
+# .agents\skills (where Codex reads them), the last two from tarballs whose
 # sha256 is pinned below. To make `kanehack` a command it puts a small
 # kanehack.cmd shim in npm's global folder (already on your PATH), or offers to add
 # .kanehack\bin to your user PATH. If you have Codex, it offers to add the event
@@ -78,7 +79,23 @@ if (Have git) { Pass "git" ((git --version) -replace "git version ", "") } else 
 $chromePaths = @("$env:ProgramFiles\Google\Chrome\Application\chrome.exe", "${env:ProgramFiles(x86)}\Google\Chrome\Application\chrome.exe", "$env:LOCALAPPDATA\Google\Chrome\Application\chrome.exe")
 if ($chromePaths | Where-Object { $_ -and (Test-Path $_) }) { Pass "chrome" } else { Fail "chrome" "missing" "Install Google Chrome: Kane drives a real browser" }
 
-if (Have codex) { Pass "codex" } else { Warn "codex" "not found" "npm i -g @openai/codex   (the web app works without it)" }
+# OpenAI Codex CLI: the event's coding agent. Missing -> offer `npm i -g @openai/codex`.
+if (Have codex) { Pass "codex" }
+elseif (-not (Have npm)) { Fail "codex" "missing" "Install Node (with npm) first, then: npm i -g @openai/codex" }
+elseif (Ask "OpenAI Codex CLI is not installed. Install it now (npm i -g @openai/codex)?") {
+  $codexLog = Join-Path ([IO.Path]::GetTempPath()) "kanehack-codex.log"
+  & npm install -g --silent --no-audit --no-fund "@openai/codex" *> $codexLog
+  if ($LASTEXITCODE -eq 0) {
+    $env:Path = [Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [Environment]::GetEnvironmentVariable("Path", "User")
+    if (Have codex) { Pass "codex" "installed. Sign in with: codex login" }
+    else { Warn "codex" "installed, but not on PATH yet" "Open a new terminal, then: codex login" }
+  } else {
+    Get-Content $codexLog | Write-Host
+    Fail "codex" "npm install failed" "See the npm output above, or ask at the help desk"
+  }
+  Remove-Item $codexLog -ErrorAction SilentlyContinue
+}
+else { Warn "codex" "not installed" "npm i -g @openai/codex   (then: codex login)" }
 
 if (Have kane-cli) {
   Pass "kane_cli" ((kane-cli --version) | Select-Object -First 1)
