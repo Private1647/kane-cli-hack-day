@@ -79,6 +79,18 @@ const VALID_RUNS = `
             or exists (select 1 from members m where m.id = r.member_id and m.team_id = r.team_id))
   )`;
 
+/** Verified run endings per bucket for /dashboard; bucket 0 ends at `now`. */
+export async function readRunBuckets(eventId: number, now: Date, bucketMinutes: number, buckets: number): Promise<{ b: number; n: string }[]> {
+  return query<{ b: number; n: string }>(
+    `with ${VALID_RUNS}
+     select floor(extract(epoch from ($2::timestamptz - done_at)) / ($3::int * 60))::int as b, count(*) as n
+       from valid_runs
+      where verified and done_at > $2::timestamptz - make_interval(mins => $3::int * $4::int) and done_at <= $2::timestamptz
+      group by 1`,
+    [eventId, now, bucketMinutes, buckets],
+  );
+}
+
 const num = (v: unknown) => (v == null ? null : Number(v));
 
 type Q = Pick<PoolClient, "query">;
