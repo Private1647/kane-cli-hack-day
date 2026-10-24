@@ -173,6 +173,30 @@ async function Personal({ searchParams }: Pick<PageProps<"/team">, "searchParams
               )}
             </div>
           )}
+          {seatsOpen && (
+            <section id="invite" className="brackets border-2 border-lime bg-lime-deep p-6" aria-labelledby="invite-title">
+              <p className="font-pixel text-[10px] uppercase tracking-[0.2em] text-lime">Step 1</p>
+              <h2 id="invite-title" className="mt-2 font-display text-2xl text-bright">
+                Invite your teammates
+              </h2>
+              <p className="mt-2 mb-5 font-plex text-sm leading-relaxed text-lightgray">
+                Create a code and send it to each teammate (one code per person). They open the link, or type the code on their Team page after building their profile, and join straight away.
+              </p>
+              <InviteForm slug={team.slug} />
+              {invites.length > 0 && (
+                <ul className="mt-6 border-t border-dashed border-hairline">
+                  {invites.map((i) => (
+                    <li key={i.id} className="flex flex-wrap items-center justify-between gap-3 border-b border-dashed border-hairline py-2.5 font-plex text-xs text-lightgray">
+                      <span>
+                        Open invite{i.for_member ? ` for ${i.for_member}` : ""} · by {i.created_by_name ?? "—"} · expires {i.expires_at.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+                      </span>
+                      <RevokeInviteButton slug={team.slug} inviteId={i.id} />
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          )}
           <div className="brackets border border-hairline p-5" data-team-slug={team.slug}>
             <div className="flex flex-wrap items-center justify-between gap-3">
               <p className="font-pixel text-[10px] uppercase tracking-[0.2em] text-lightgray">Your team</p>
@@ -241,24 +265,6 @@ async function Personal({ searchParams }: Pick<PageProps<"/team">, "searchParams
             </Panel>
           )}
 
-          {seatsOpen && (
-            <Panel title={created ? "Team created. Invite your teammates" : "Invite a teammate"}>
-              <p className="mb-4 font-plex text-sm text-lightgray">Already know who you’re teaming up with? Create a code and send it to them. Each code works for one person: they open the link, or type the code on their Team page after building their profile.</p>
-              <InviteForm slug={team.slug} />
-              {invites.length > 0 && (
-                <ul className="mt-6 border-t border-dashed border-hairline">
-                  {invites.map((i) => (
-                    <li key={i.id} className="flex flex-wrap items-center justify-between gap-3 border-b border-dashed border-hairline py-2.5 font-plex text-xs text-lightgray">
-                      <span>
-                        Open invite{i.for_member ? ` for ${i.for_member}` : ""} · by {i.created_by_name ?? "—"} · expires {i.expires_at.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
-                      </span>
-                      <RevokeInviteButton slug={team.slug} inviteId={i.id} />
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </Panel>
-          )}
         </div>
 
         <aside className="space-y-10">
