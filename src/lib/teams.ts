@@ -6,14 +6,8 @@ import { hashPassword } from "./password";
 // The published rule: solo, or teams of up to 4 (same cap as src/server/teams.ts TEAM_SIZE_CAP).
 export const MAX_MEMBERS = 4;
 
-export const slugify = (s: string) =>
-  s
-    .toLowerCase()
-    .normalize("NFKD")
-    .replace(/[̀-ͯ]/g, "")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "")
-    .slice(0, 48);
+import { slugify } from "./slug";
+export { slugify };
 
 export type Member = { id: number; name: string; email: string };
 export type Team = {

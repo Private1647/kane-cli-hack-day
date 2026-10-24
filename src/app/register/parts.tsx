@@ -2,72 +2,129 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useActionState, useState } from "react";
+import { useActionState, useState, type FormEvent, type ReactNode } from "react";
 import { FormError, Label, SubmitButton, inputCls } from "@/components/forms/fields";
 import HumanCameraCheckpoint from "@/components/camera/HumanCameraCheckpoint";
+import { checkProfileFields } from "@/lib/profile-fields";
 import { choiceAction, profileAction, skipPhotoAction, type ChoiceState, type ProfileState } from "./actions";
 
 // The three /register steps. The server decides which one shows.
 
-export type ProfileDefaults = { name: string; email: string; skills: string; interests: string; github: string; x: string };
+export type ProfileDefaults = {
+  name: string;
+  email: string;
+  github: string;
+  x: string;
+  linkedin: string;
+  looking: boolean;
+};
+
+// Larger type than the shared form fields: this is the first form people fill in.
+const field = `${inputCls.replace("text-sm", "text-base").replace("py-2.5", "py-3")} aria-[invalid=true]:border-danger`;
+
+function Field({ id, label, hint, error, children }: { id: string; label: string; hint?: string; error?: string; children: ReactNode }) {
+  return (
+    <div>
+      <label htmlFor={id} className="mb-2 flex items-baseline justify-between gap-3">
+        <span className="font-pixel text-xs uppercase tracking-[0.2em] text-bright">{label}</span>
+        {hint && <span className="font-plex text-sm text-lightgray">{hint}</span>}
+      </label>
+      {children}
+      {error && (
+        <p id={`${id}-error`} className="mt-2 font-plex text-sm text-danger">
+          <span aria-hidden="true">✕ </span>
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
 
 export function ProfileStep({ defaults, signedIn, hasPassword }: { defaults: ProfileDefaults; signedIn: boolean; hasPassword: boolean }) {
   const [state, action] = useActionState<ProfileState, FormData>(profileAction, null);
   const v = { ...defaults, ...(state?.values ?? {}) };
+  const looking = state?.values ? state.values.looking === "yes" : defaults.looking;
+  // Checked in the browser on submit (same rules as the server); a field's message clears as soon as it's edited.
+  const [checked, setChecked] = useState<Record<string, string> | null>(null);
+  const fe: Record<string, string> = checked ?? state?.fieldErrors ?? {};
+  const onSubmit = (e: FormEvent<HTMLFormElement>) => {
+    const f = new FormData(e.currentTarget);
+    const get = (k: string) => String(f.get(k) ?? "");
+    const problems = checkProfileFields(
+      {
+        name: get("name"),
+        email: get("email"),
+        linkedin: get("linkedin"),
+        x: get("x"),
+        github: get("github"),
+        password: get("password"),
+      },
+      { passwordRequired: !hasPassword && !state?.needsProof },
+    );
+    const first = Object.keys(problems)[0];
+    // Passing the browser check hands over to the server's answer (state.fieldErrors).
+    setChecked(first ? problems : null);
+    if (first) {
+      e.preventDefault();
+      const el = e.currentTarget.querySelector<HTMLElement>(`[name="${first}"]:not([type=hidden])`) ?? document.getElementById(`r-${first}`);
+      el?.focus();
+      el?.scrollIntoView({ block: "center", behavior: "smooth" });
+    }
+  };
+  const onInput = (e: FormEvent<HTMLFormElement>) => {
+    const name = (e.target as HTMLInputElement).name;
+    if (name && fe[name]) setChecked(Object.fromEntries(Object.entries(fe).filter(([k]) => k !== name)));
+  };
+  const count = Object.keys(fe).length;
+  const err = (k: string) => (fe[k] ? { "aria-invalid": true, "aria-describedby": `r-${k}-error` } : {});
   // Remount after each answer so the fields show what was typed (React resets forms after an action).
   const formKey = JSON.stringify(state?.values ?? defaults) + (state?.needsProof ? ":proof" : "");
   return (
-    <form key={formKey} action={action} className="space-y-6" data-step="profile">
+    <form key={formKey} action={action} onSubmit={onSubmit} onInput={onInput} noValidate className="space-y-7" data-step="profile">
+      <Field id="r-name" label="Your name" error={fe.name}>
+        <input id="r-name" name="name" required minLength={2} maxLength={60} autoComplete="name" defaultValue={v.name} className={field} {...err("name")} />
+      </Field>
+      <Field id="r-email" label="Email" hint="The one you used on Luma" error={fe.email}>
+        <input id="r-email" name="email" type="email" required autoComplete="email" defaultValue={v.email} className={field} {...err("email")} />
+      </Field>
       <div className="grid gap-6 sm:grid-cols-2">
-        <div>
-          <Label htmlFor="r-name">Your name</Label>
-          <input id="r-name" name="name" required minLength={2} maxLength={60} autoComplete="name" defaultValue={v.name} className={inputCls} />
-        </div>
-        <div>
-          <Label htmlFor="r-email" hint="The one you used on Luma">
-            Email
-          </Label>
-          <input id="r-email" name="email" type="email" required autoComplete="email" defaultValue={v.email} className={inputCls} />
-        </div>
+        <Field id="r-linkedin" label="LinkedIn" hint="Profile link" error={fe.linkedin}>
+          <input id="r-linkedin" name="linkedin" required defaultValue={v.linkedin} placeholder="linkedin.com/in/your-name" autoComplete="url" className={field} {...err("linkedin")} />
+        </Field>
+        <Field id="r-x" label="X (Twitter)" error={fe.x}>
+          <input id="r-x" name="x" required defaultValue={v.x} placeholder="@handle" autoComplete="off" className={field} {...err("x")} />
+        </Field>
       </div>
-      <div>
-        <Label htmlFor="r-skills" hint="Comma separated">
-          Skills
-        </Label>
-        <input id="r-skills" name="skills" defaultValue={v.skills} placeholder="react, python, playwright, design" className={inputCls} />
-      </div>
-      <div>
-        <Label htmlFor="r-interests" hint="Comma separated">
-          Interests
-        </Label>
-        <input id="r-interests" name="interests" defaultValue={v.interests} placeholder="agents, testing, voice, dev tools" className={inputCls} />
-      </div>
-      <div className="grid gap-6 sm:grid-cols-2">
-        <div>
-          <Label htmlFor="r-gh" hint="Optional">
-            GitHub
-          </Label>
-          <input id="r-gh" name="github" defaultValue={v.github} placeholder="your-username" autoComplete="off" className={inputCls} />
-        </div>
-        <div>
-          <Label htmlFor="r-x" hint="Optional">
-            X
-          </Label>
-          <input id="r-x" name="x" defaultValue={v.x} placeholder="@handle" autoComplete="off" className={inputCls} />
-        </div>
-      </div>
-      <div>
-        <Label htmlFor="r-pw" hint={hasPassword ? "Optional · leave blank to keep yours" : "8+ characters"}>
-          {hasPassword ? "New password" : "Choose a password"}
-        </Label>
-        <input id="r-pw" name="password" type="password" minLength={8} required={!hasPassword && !state?.needsProof} autoComplete="new-password" className={inputCls} />
-        <p className="mt-2 font-plex text-xs text-lightgray">So you can sign back in on another device with your email and this password.</p>
-      </div>
+      <Field id="r-gh" label="GitHub" hint="Optional" error={fe.github}>
+        <input id="r-gh" name="github" defaultValue={v.github} placeholder="your-username" autoComplete="off" className={field} {...err("github")} />
+      </Field>
+      <Field id="r-pw" label={hasPassword ? "New password" : "Choose a password"} hint={hasPassword ? "Optional · leave blank to keep yours" : "8+ characters"} error={fe.password}>
+        <input id="r-pw" name="password" type="password" minLength={8} required={!hasPassword && !state?.needsProof} autoComplete="new-password" className={field} {...err("password")} />
+        <p className="mt-2 font-plex text-sm text-lightgray">So you can sign back in on another device with your email and this password.</p>
+      </Field>
+
+      <label className="flex min-h-11 cursor-pointer items-start gap-4 border-2 border-hairline p-5 transition-colors has-[:checked]:border-lime has-[:checked]:bg-lime-deep">
+        <input type="checkbox" name="looking" value="yes" defaultChecked={looking} className="mt-1 h-6 w-6 shrink-0 accent-[var(--lime)]" />
+        <span>
+          <span className="block font-display text-xl text-bright">Are you looking to form a team? Join matchmaking</span>
+          <span className="mt-1 block font-plex text-sm leading-relaxed text-lightgray">
+            Tick this and you go into the matchmaking round. Next you add your skills so people and teams with open seats can find you (they never see your email), and an organizer can put a team
+            together for you. Leave it unticked if you already have a team or will create one.
+          </span>
+        </span>
+      </label>
 
       {state?.needsProof && !signedIn && <ProofFields />}
 
-      <FormError message={state?.error} />
-      <SubmitButton pending="Saving…" className="min-h-11">
+      {count > 0 ? (
+        <p role="alert" className="border-l-2 border-danger pl-4 font-plex text-base text-danger">
+          {count === 1 ? "One thing to fix above: " + Object.values(fe)[0] : `${count} things to fix above. Each one is marked in red.`}
+          {checked === null && !signedIn && !hasPassword ? " Then type your password again." : ""}
+        </p>
+      ) : (
+        <FormError message={checked === null ? state?.error : undefined} />
+      )}
+      <SubmitButton pending="Saving…" className="min-h-12 text-base">
         {signedIn ? "Save and continue →" : state?.needsProof ? "Confirm it’s me →" : "Create my profile →"}
       </SubmitButton>
     </form>

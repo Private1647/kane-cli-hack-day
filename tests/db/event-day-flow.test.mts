@@ -97,7 +97,7 @@ const signedOut = () => m.jar.clear();
 const viewer = () => m.auth.getPersonalMember();
 async function register(who: string, extra: Record<string, string> = {}) {
   signedOut();
-  return m.flow.submitProfile({ name: `QA ${who}`, email: email(who), skills: "react, ci", interests: "agents", password: "correct-horse-1", ...extra }, null);
+  return m.flow.submitProfile({ name: `QA ${who}`, email: email(who), skills: "react, ci", interests: "agents", linkedin: `linkedin.com/in/qa-${who}`, x: "@qa_user", password: "correct-horse-1", ...extra }, null);
 }
 const memberByEmail = async (e: string) => (await m.db.query<import("../../src/server/auth.ts").MemberRow & { looking_for_team: boolean | null; guest_id: number | null }>("select *, 'participant' as role from members where lower(email) = lower($1)", [e]))[0];
 const acting = (mem: import("../../src/server/auth.ts").MemberRow) => ({ member: mem, actor: m.auth.memberActor(mem) });
@@ -173,6 +173,25 @@ test("joining a team by any route leaves the matchmaking pool", { skip }, async 
   assert.equal(answered.joined, `QA poolE`);
   assert.equal((await memberByEmail(email("poolE"))).team_id, team.teamId);
   assert.equal((await memberByEmail(email("poolE"))).looking_for_team, false);
+  // Route 3b: the team invites someone from the pool; they accept and join.
+  await register("poolF");
+  const f = (await viewer())!;
+  await m.flow.setTeamChoice(f, true);
+  const { inviteToTeam, listIntros } = await import("../../src/server/match.ts");
+  await inviteToTeam(acting((await m.auth.getMemberById(a.id))!), f.id, "join us");
+  await assert.rejects(inviteToTeam(acting((await m.auth.getMemberById(a.id))!), a.id, null), /That's you/);
+  const [invite] = (await listIntros(f.id)).filter((i) => i.direction === "incoming");
+  assert.equal(invite.from_team, `${tag} Pool Team`);
+  const took = await m.flow.answerIntro(acting(f), invite.id, true);
+  assert.equal(took.joinedTeam, `${tag} Pool Team`);
+  assert.equal((await memberByEmail(email("poolF"))).team_id, team.teamId);
+  assert.ok(!(await inPool()).includes(f.id));
+  // A team without a track is Wildcard.
+  await register("poolG");
+  const g = (await viewer())!;
+  const noTrack = await m.teams.createTeam(acting(g), { name: `${tag} No Track`, seeking_skills: "react, go" });
+  const [nt] = await m.db.query<{ track: string }>("select track from teams where id = $1", [noTrack.teamId]);
+  assert.equal(nt.track, "Wildcard");
   // Route 4: an organizer forms a team at the cut-off.
   await register("poolD");
   const d = (await viewer())!;
@@ -272,4 +291,50 @@ test("Codex codes: distinct under concurrency, re-shown, empty pool, upload dedu
   const [row] = await m.db.query<{ id: number }>("select id from codex_credit_codes where code = $1", [cb.code]);
   await m.act.revokeCodexCode(organizer, row.id, "qa revoke test");
   await assert.rejects(m.act.reassignCodexCode(organizer, b.id, "qa reassign"), /out of codes/);
+});
+
+test("skills added on /match survive a later profile save", { skip }, async () => {
+  await register("keepSkills", { skills: "", interests: "" });
+  const me = (await viewer())!;
+  await m.flow.updateMatchProfile(me, { skills: "rust, go", interests: "voice" });
+  await m.flow.submitProfile({ name: "QA keepSkills", email: email("keepSkills"), linkedin: "linkedin.com/in/qa-keep", x: "@qa_keep", password: "" }, (await viewer())!);
+  const row = await memberByEmail(email("keepSkills"));
+  assert.deepEqual((row as unknown as { skills: string[] }).skills, ["rust", "go"]);
+});
+
+test("join requests, intros, invites and answers notify the right people", { skip }, async () => {
+  const { requestIntro, inviteToTeam, listIntros } = await import("../../src/server/match.ts");
+  const { listMyNotifications } = await import("../../src/server/member-notifications.ts");
+  await register("bellCap");
+  const cap = (await viewer())!;
+  const team = await m.teams.createTeam(acting(cap), { name: `${tag} Bell Team`, recruiting_open: "on" });
+  await register("bellMate");
+  const mate = (await viewer())!;
+  const inv = await m.teams.createInvite(acting((await m.auth.getMemberById(cap.id))!), team.teamId, {});
+  await m.teams.joinTeam(acting(mate), { code: inv.code, confirm: "on" });
+  await register("bellAsker");
+  const asker = (await viewer())!;
+  await m.flow.setTeamChoice(asker, true);
+
+  // Ask to join → every team member hears about it.
+  await requestIntro(acting(asker), { target_team_id: String(team.teamId), message: "I do CI" });
+  for (const id of [cap.id, mate.id]) {
+    const { items, unread } = await listMyNotifications(id);
+    assert.ok(unread >= 1);
+    assert.match(items[0].title, /QA bellAsker asked to join your team/);
+  }
+  // Accepting → the asker hears back.
+  const [req] = (await listIntros(cap.id)).filter((i) => i.direction === "incoming" && i.via_team);
+  await m.flow.answerIntro(acting((await m.auth.getMemberById(cap.id))!), req.id, true);
+  assert.match((await listMyNotifications(asker.id)).items[0].title, /accepted your request/);
+
+  // A team invite → the invited person; declining → the inviter.
+  await register("bellInvitee");
+  const invitee = (await viewer())!;
+  await m.flow.setTeamChoice(invitee, true);
+  await inviteToTeam(acting((await m.auth.getMemberById(cap.id))!), invitee.id, null);
+  assert.match((await listMyNotifications(invitee.id)).items[0].title, /Bell Team invited you/);
+  const [ti] = (await listIntros(invitee.id)).filter((i) => i.direction === "incoming");
+  await m.flow.answerIntro(acting(invitee), ti.id, false);
+  assert.match((await listMyNotifications(cap.id)).items[0].title, /declined the invite/);
 });

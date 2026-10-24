@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
 import CopyField from "@/components/ui/CopyField";
-import PageHeader from "@/components/ui/PageHeader";
+import GreetingHeader from "@/components/ui/GreetingHeader";
 import StatusPill from "@/components/ui/StatusPill";
 import { CONNECT, INSTALL, PAIR, PROVE, SKILL_GROUPS, type Cmd } from "@/data/agent-setup";
 import { getMember } from "@/server/auth";
@@ -23,7 +23,8 @@ const eyebrow = "font-pixel text-[10px] uppercase tracking-[0.2em] text-lightgra
 export default function SetupPage() {
   return (
     <main>
-      <PageHeader
+      <GreetingHeader
+        greet={(n) => ({ dim: `${n}, your agent,`, bright: "on the team." })}
         eyebrow="Setup"
         dim="Your agent,"
         bright="on the team."

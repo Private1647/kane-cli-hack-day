@@ -4,6 +4,10 @@ import { useActionState, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { FormError, Label, SubmitButton, Toggle, inputCls } from "@/components/forms/fields";
 import CopyField from "@/components/ui/CopyField";
+import TagInput from "@/components/forms/TagInput";
+import { SKILL_SUGGESTIONS } from "@/data/profile-tags";
+import { slugify } from "@/lib/slug";
+import { suggestTeamName } from "@/data/team-names";
 import {
   advanceStateAction,
   createInviteAction,
@@ -20,9 +24,13 @@ import {
 } from "./actions";
 import { ActionNote, dangerBtn, smallBtn } from "./ui";
 
-export function CreateTeamForm({ tracks, idempotencyKey }: { tracks: string[]; idempotencyKey: string }) {
+export function CreateTeamForm({ idempotencyKey }: { idempotencyKey: string }) {
   const [state, action] = useActionState<TeamFormState, FormData>(createTeamAction, null);
   const [solo, setSolo] = useState(false);
+  const [name, setName] = useState("");
+  // Off by default: a team that's already complete shouldn't show up as recruiting.
+  const [recruiting, setRecruiting] = useState(false);
+  const slug = slugify(name);
   return (
     <form action={action} className="space-y-6">
       <input type="hidden" name="idempotency_key" value={idempotencyKey} />
@@ -30,37 +38,50 @@ export function CreateTeamForm({ tracks, idempotencyKey }: { tracks: string[]; i
         <Label htmlFor="team-name" hint="Becomes your page address">
           Team name
         </Label>
-        <input id="team-name" name="name" required maxLength={60} autoComplete="off" className={inputCls} placeholder="Release Gate Crew" />
+        <div className="flex gap-2">
+          <input id="team-name" name="name" required maxLength={60} autoComplete="off" value={name} onChange={(e) => setName(e.target.value)} aria-describedby="team-slug" className={inputCls} placeholder="Release Gate Crew" />
+          <button
+            type="button"
+            onClick={() => setName((n) => suggestTeamName(n))}
+            className="inline-flex min-h-11 shrink-0 items-center gap-2 border border-hairline px-4 font-plex text-sm text-bright transition-colors hover:border-lime hover:text-lime"
+          >
+            <span aria-hidden="true">✦</span> Suggest a name
+          </button>
+        </div>
+        <p id="team-slug" className="mt-2 font-plex text-sm text-lightgray" aria-live="polite">
+          {slug ? (
+            <>
+              Your team page: <span className="text-bright">/t/{slug}</span>
+            </>
+          ) : name.trim() ? (
+            <span className="text-danger">Use some letters or numbers in the name.</span>
+          ) : (
+            "Your team page address appears here as you type."
+          )}
+        </p>
       </div>
-      <div>
-        <Label htmlFor="team-track">Track</Label>
-        <select id="team-track" name="track" required defaultValue="" className={`${inputCls} min-h-11`}>
-          <option value="" disabled>
-            Pick a track
-          </option>
-          {tracks.map((t) => (
-            <option key={t} value={t}>
-              {t}
-            </option>
-          ))}
-        </select>
-      </div>
-      <div className="border-y border-dashed border-hairline py-2">
-        <Toggle name="solo" label="Going solo" description="You can still accept an invite-holder later; a teammate joining turns this into a team." checked={solo} onChange={setSolo} />
-        <Toggle
-          name="recruiting_open"
-          label="Open seats in matchmaking"
-          description="People looking for a team can ask to join; any teammate can accept. Only the team name, track and public summary are shown."
-          defaultChecked
-          disabled={solo}
-        />
-      </div>
-      <div>
-        <Label htmlFor="team-summary" hint="Optional · public">
-          Public summary
-        </Label>
-        <textarea id="team-summary" name="summary_public" maxLength={280} rows={3} className={inputCls} placeholder="What you're building and who you're looking for. Shown to other participants. Keep the details of your idea private." />
-      </div>
+      <Toggle name="solo" label="Going solo" description="Just you. A teammate joining later turns this into a team." checked={solo} onChange={setSolo} />
+      {!solo && (
+        <div className="space-y-4 border-2 border-hairline p-5 has-[input[name=recruiting_open]:checked]:border-lime has-[input[name=recruiting_open]:checked]:bg-lime-deep">
+          <label className="flex cursor-pointer items-start gap-4">
+            <input type="checkbox" name="recruiting_open" checked={recruiting} onChange={(e) => setRecruiting(e.target.checked)} className="mt-1 h-6 w-6 shrink-0 accent-[var(--lime)]" />
+            <span>
+              <span className="block font-display text-xl text-bright">Looking for more teammates?</span>
+              <span className="mt-1 block font-plex text-sm leading-relaxed text-lightgray">
+                Your team shows up under “Teams with open seats” in matchmaking, and you can browse people looking for a team and invite them. Up to 4 people per team.
+              </span>
+            </span>
+          </label>
+          {recruiting && (
+            <div>
+              <Label htmlFor="team-seeking" hint="Optional">
+                Skills you need
+              </Label>
+              <TagInput id="team-seeking" name="seeking_skills" defaultValue="" options={SKILL_SUGGESTIONS} placeholder="Start typing: fr… → frontend" />
+            </div>
+          )}
+        </div>
+      )}
       <ActionNote state={state} />
       <SubmitButton pending="Creating…" className="min-h-11">
         Create team →
@@ -69,7 +90,7 @@ export function CreateTeamForm({ tracks, idempotencyKey }: { tracks: string[]; i
   );
 }
 
-/** Join with an invite code from a teammate: type it (or arrive with ?code=), confirm, done. */
+/** Join with an invite code from a teammate: type it (or arrive with ?code=) and press Join. */
 export function JoinByCodeForm({ code, idempotencyKey, teamName }: { code: string; idempotencyKey: string; teamName: string | null }) {
   const [state, action] = useActionState<TeamFormState, FormData>(joinTeamAction, null);
   return (
@@ -79,13 +100,11 @@ export function JoinByCodeForm({ code, idempotencyKey, teamName }: { code: strin
         <Label htmlFor="join-code">Invite code</Label>
         <input id="join-code" name="code" required defaultValue={code} autoComplete="off" placeholder="XXXX-XXXX" className={`${inputCls} uppercase tracking-[0.2em]`} />
       </div>
-      <label className="flex min-h-11 cursor-pointer items-start gap-3 font-plex text-sm text-bright">
-        <input type="checkbox" name="confirm" required className="mt-1 h-5 w-5 accent-[var(--lime)]" />
-        <span>{teamName ? <>Yes, I want to join <span className="text-lime">{teamName}</span></> : "Yes, I want to join the team this code is for"}</span>
-      </label>
+      {/* Pressing "Join team" is the confirmation the server asks for. */}
+      <input type="hidden" name="confirm" value="on" />
       <ActionNote state={state} />
       <SubmitButton pending="Joining…" className="min-h-11">
-        Join team →
+        {teamName ? `Join ${teamName} →` : "Join team →"}
       </SubmitButton>
     </form>
   );
@@ -96,24 +115,11 @@ export function InviteForm({ slug }: { slug: string }) {
   const invite = state?.ok ? state.data : null;
   return (
     <div className="space-y-4">
-      <form action={action} className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end">
-        <div>
-          <Label htmlFor="inv-hours">Expires after</Label>
-          <select id="inv-hours" name="hours" defaultValue="24" className={`${inputCls} min-h-11`}>
-            <option value="2">2 hours</option>
-            <option value="8">8 hours</option>
-            <option value="24">24 hours</option>
-            <option value="72">3 days</option>
-          </select>
-        </div>
-        <div>
-          <Label htmlFor="inv-for" hint="Optional">
-            Only for P-code
-          </Label>
-          <input id="inv-for" name="for_code" placeholder="P-1234" autoComplete="off" className={inputCls} />
-        </div>
-        <SubmitButton pending="Creating…" className="min-h-11">
-          New invite
+      <form action={action}>
+        {/* Good for the whole day; each code works for one person. */}
+        <input type="hidden" name="hours" value="24" />
+        <SubmitButton pending="Creating…" className="min-h-11 text-base">
+          Create an invite code
         </SubmitButton>
       </form>
       {state && !state.ok && <ActionNote state={state} />}

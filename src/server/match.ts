@@ -1,6 +1,7 @@
 import "server-only";
 import { query } from "@/lib/db";
 import { AppError, parse, withAudit, z, zx, type Receipt } from "./core";
+import { notifyMembers, notifyTeam } from "./member-notifications";
 import { TEAM_SIZE_CAP, currentTeamOf, listRecruitingTeams, normalizeTags, receiptOf, type ActingMember } from "./teams";
 
 // Matchmaker (SPEC §4). People opt in to being discoverable; suggestions rank
@@ -306,7 +307,65 @@ export async function requestIntro(who: ActingMember, input: unknown): Promise<R
        values ($1, $2, $3, $4) returning id, now() as now`,
       [who.member.id, data.target_member_id ?? null, data.target_team_id ?? null, message],
     );
+    const from = who.member.display_name ?? who.member.name;
+    const note = data.message?.trim() ? `“${data.message.trim()}”` : "";
+    if (data.target_member_id) {
+      await notifyMembers(tx, [data.target_member_id], { kind: "intro_request", title: `${from} wants to team up with you`, body: note, href: "/match" });
+    } else if (data.target_team_id) {
+      await notifyTeam(
+        tx,
+        data.target_team_id,
+        data.kind === "collaborate"
+          ? { kind: "collab_request", title: `${from} wants to collaborate with your team`, body: note, href: "/team" }
+          : { kind: "join_request", title: `${from} asked to join your team`, body: note || "Accept from your Team page and they join straight away.", href: "/team" },
+        who.member.id,
+      );
+    }
     return { result: receiptOf(`IN-${rows[0].id}`, rows[0].now), resourceId: rows[0].id, payload: { kind: data.kind } };
+  });
+}
+
+/**
+ * A team member invites someone from the matchmaking pool to their team. The
+ * person sees "<team> invites you" on /match; accepting puts them on the team
+ * (flow.answerIntro) if a seat is still free.
+ */
+export async function inviteToTeam(who: ActingMember, targetMemberId: number, message: string | null): Promise<Receipt> {
+  const myTeam = await currentTeamOf(who.member.id);
+  if (!myTeam) throw new AppError("CONFLICT", { userMessage: "Create or join a team first." });
+  if (targetMemberId === who.member.id) throw new AppError("VALIDATION_FAILED", { userMessage: "That's you." });
+  const text = message?.trim().slice(0, 280) || null;
+  return withAudit(who.actor, "match.team_invite", "teammate_introduction", async (tx) => {
+    const { rows: team } = await tx.query<{ ok: boolean; name: string }>(
+      `select t.name, (t.state not in ('roster_locked','submitted','withdrawn') and t.roster_locked_at is null
+               and (select count(*) from team_memberships tm where tm.team_id = t.id and tm.left_at is null) < least(t.max_size, ${TEAM_SIZE_CAP})) as ok
+         from teams t where t.id = $1`,
+      [myTeam.team_id],
+    );
+    if (!team[0]?.ok) throw new AppError("CONFLICT", { userMessage: "Your team is full or its roster is locked." });
+    const { rows: target } = await tx.query(
+      `select 1 from members m
+         join teammate_profiles p on p.member_id = m.id and p.discoverable
+         join member_consent_current c on c.member_id = m.id and c.category = 'teammate_discovery' and c.granted
+        where m.id = $1 and m.looking_for_team and m.deleted_at is null
+          and not exists (select 1 from team_memberships tm where tm.member_id = m.id and tm.left_at is null)`,
+      [targetMemberId],
+    );
+    if (!target[0]) throw new AppError("CONFLICT", { userMessage: "They’ve found a team or left matchmaking." });
+    const { rows: open } = await tx.query<{ n: number }>("select count(*)::int as n from teammate_introductions where requester_id = $1 and status = 'proposed'", [who.member.id]);
+    if (open[0].n >= MAX_OPEN_REQUESTS) throw new AppError("RATE_LIMITED", { userMessage: `You have ${open[0].n} invites waiting. Wait for answers or withdraw some.` });
+    const { rows } = await tx.query<{ id: number; now: Date }>(
+      `insert into teammate_introductions (requester_id, target_member_id, from_team_id, message)
+       values ($1, $2, $3, $4) returning id, now() as now`,
+      [who.member.id, targetMemberId, myTeam.team_id, text],
+    );
+    await notifyMembers(tx, [targetMemberId], {
+      kind: "team_invite",
+      title: `${team[0].name} invited you to join their team`,
+      body: text ? `“${text}” · from ${who.member.display_name ?? who.member.name}` : `From ${who.member.display_name ?? who.member.name}. Accept on your matchmaking page.`,
+      href: "/match",
+    });
+    return { result: receiptOf(`IN-${rows[0].id}`, rows[0].now), resourceId: rows[0].id, payload: { team_id: myTeam.team_id } };
   });
 }
 
@@ -321,6 +380,27 @@ export async function respondIntro(who: ActingMember, introId: number, accept: b
       [introId, accept ? "accepted" : "declined", who.member.id, myTeam?.team_id ?? null],
     );
     if (!rows[0]) throw new AppError("NOT_FOUND", { userMessage: "That request is gone or already answered." });
+    const { rows: info } = await tx.query<{ requester_id: number; target_team: string | null; from_team: string | null }>(
+      `select i.requester_id, tt.name as target_team, ft.name as from_team from teammate_introductions i
+         left join teams tt on tt.id = i.target_team_id left join teams ft on ft.id = i.from_team_id where i.id = $1`,
+      [introId],
+    );
+    const me = who.member.display_name ?? who.member.name;
+    const i = info[0];
+    if (i) {
+      const n = i.from_team
+        ? accept
+          ? { kind: "invite_accepted", title: `${me} accepted your invite and joined ${i.from_team}`, href: "/team" }
+          : { kind: "invite_declined", title: `${me} declined the invite to ${i.from_team}`, href: "/team" }
+        : i.target_team
+          ? accept
+            ? { kind: "join_accepted", title: `You’re in! ${i.target_team} accepted your request`, body: "Next: activate your tools.", href: "/activate" }
+            : { kind: "join_declined", title: `${i.target_team} said no this time`, body: "Other teams still have open seats.", href: "/match" }
+          : accept
+            ? { kind: "intro_accepted", title: `${me} said yes to teaming up`, body: "Find each other; one of you creates the team and invites the other.", href: "/match" }
+            : { kind: "intro_declined", title: `${me} passed on teaming up`, href: "/match" };
+      await notifyMembers(tx, [i.requester_id], n);
+    }
     return { result: receiptOf(`IN-${introId}`, rows[0].now), resourceId: introId };
   });
 }
@@ -348,6 +428,8 @@ export type IntroRow = {
   /** Who it's from (incoming) or to (outgoing). */
   other: string;
   via_team: string | null;
+  /** Set when a team member invited this person to their team. */
+  from_team: string | null;
   contact: Contact | null;
 };
 
@@ -364,14 +446,16 @@ export async function listIntros(memberId: number): Promise<IntroRow[]> {
     requester_name: string;
     target_name: string | null;
     target_team: string | null;
+    from_team: string | null;
   }>(
-    `select i.id, i.requester_id, i.target_member_id, i.target_team_id, i.status, i.message, i.created_at,
+    `select i.id, i.requester_id, i.target_member_id, i.target_team_id, i.status, i.message, i.created_at, ft.name as from_team,
             coalesce(r.display_name, r.name) as requester_name,
             coalesce(tm.display_name, tm.name) as target_name, tt.name as target_team
        from teammate_introductions i
        join members r on r.id = i.requester_id
        left join members tm on tm.id = i.target_member_id
        left join teams tt on tt.id = i.target_team_id
+       left join teams ft on ft.id = i.from_team_id
       where i.requester_id = $1 or i.target_member_id = $1 or (i.target_team_id is not null and i.target_team_id = $2)
       order by i.created_at desc
       limit 100`,
@@ -394,6 +478,7 @@ export async function listIntros(memberId: number): Promise<IntroRow[]> {
       created_at: r.created_at,
       other: outgoing ? (r.target_name ?? r.target_team ?? "—") : r.requester_name,
       via_team: !outgoing && r.target_team_id ? r.target_team : null,
+      from_team: r.from_team,
       contact,
     });
   }

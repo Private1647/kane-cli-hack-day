@@ -1,13 +1,11 @@
 import type { Metadata } from "next";
 import { event } from "@/data/hackday";
-import { getMemberProfiles } from "@/lib/photos";
 import { PROGRESS_ITEMS, shippedMinimum } from "@/lib/progress";
 import { MAX_MEMBERS, getActivity, getProgress } from "@/lib/teams";
 import { to12h } from "@/lib/time";
 import Hub, { type HubContext } from "./hub";
 import Link from "next/link";
 import { AutoRefresh, CopyLink, ProgressRow, SessionButtons } from "./parts";
-import { ConsentChoice } from "./photos/parts";
 
 export const metadata: Metadata = { title: "Team" };
 
@@ -23,8 +21,7 @@ const clock = new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-dig
 
 async function Dashboard({ team, members, me }: HubContext) {
   const slug = team.slug;
-  const [progress, activity, profiles] = await Promise.all([getProgress(team.id), getActivity(team.id), getMemberProfiles(team.id)]);
-  const unanswered = me ? profiles.find((p) => p.id === me.id)?.consent_social === null : false;
+  const [progress, activity] = await Promise.all([getProgress(team.id), getActivity(team.id)]);
   const byItem = new Map(progress.map((p) => [p.item, p]));
   const done = new Set(progress.filter((p) => p.done).map((p) => p.item));
   const shipped = shippedMinimum(done);
@@ -32,11 +29,6 @@ async function Dashboard({ team, members, me }: HubContext) {
   return (
     <>
       <AutoRefresh seconds={20} />
-      {unanswered && (
-        <div className="container-page pt-10">
-          <ConsentChoice slug={slug} consent={null} solo={team.is_solo} prompt />
-        </div>
-      )}
       <section className="py-12 sm:py-16">
         <div className="container-page grid gap-12 lg:grid-cols-[minmax(0,8fr)_minmax(0,4fr)]">
           {/* Left: the checklist */}

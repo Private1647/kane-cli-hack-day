@@ -3,7 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import FlowProgress from "@/components/FlowProgress";
-import PageHeader from "@/components/ui/PageHeader";
+import GreetingHeader from "@/components/ui/GreetingHeader";
 import { query } from "@/lib/db";
 import { isRegistrationOpen } from "@/lib/teams";
 import { getPersonalMember } from "@/server/auth";
@@ -14,7 +14,8 @@ import { ChoiceStep, PhotoStep, ProfileStep, type ProfileDefaults } from "./part
 export const metadata: Metadata = { title: "Start here" };
 
 // The event-day profile builder. Checked in at the desk? Sit down and start
-// here: (a) profile, (b) photo, (c) "looking for a team?". The step shown is
+// here: (a) profile, ending with the "looking for a team?" tick, then (b) photo.
+// (c) asks the team question only for someone who never answered it. The step shown is
 // read from the database, so a reload or a second device resumes it.
 // ?edit=profile / ?edit=photo reopen a finished step.
 
@@ -24,7 +25,7 @@ export default function RegisterPage({ searchParams }: PageProps<"/register">) {
       <Suspense fallback={<FlowProgress stage={null} />}>
         <Progress />
       </Suspense>
-      <PageHeader eyebrow="Start here" dim="Checked in?" bright="Build your profile." intro="Two minutes: who you are, a photo for your profile, and whether you want help finding a team." />
+      <GreetingHeader greet={(n) => ({ dim: `Nice to meet you, ${n}.`, bright: "Let’s finish your profile." })} eyebrow="Start here" dim="Checked in?" bright="Build your profile." intro="Two minutes: who you are, where to find you, a photo, and whether you want help finding a team." />
       <section className="py-12 sm:py-16">
         <div className="container-page max-w-2xl">
           <Suspense fallback={<p className="font-plex text-sm text-lightgray">Loading…</p>}>
@@ -42,9 +43,9 @@ async function Progress() {
 }
 
 const STEP_TITLE: Partial<Record<FlowStage, [string, string]>> = {
-  profile: ["Step 1 of 3", "Your profile"],
-  photo: ["Step 2 of 3", "Your photo"],
-  choice: ["Step 3 of 3", "Matchmaking"],
+  profile: ["Step 1 of 2", "Your profile"],
+  photo: ["Step 2 of 2", "Your photo"],
+  choice: ["One more thing", "Matchmaking"],
 };
 
 async function Steps({ searchParams }: Pick<PageProps<"/register">, "searchParams">) {
@@ -59,7 +60,7 @@ async function Steps({ searchParams }: Pick<PageProps<"/register">, "searchParam
     return (
       <>
         <StepTitle stage="profile" />
-        <ProfileStep defaults={{ name: "", email: "", skills: "", interests: "", github: "", x: "" }} signedIn={false} hasPassword={false} />
+        <ProfileStep defaults={{ name: "", email: "", github: "", x: "", linkedin: "", looking: false }} signedIn={false} hasPassword={false} />
         <p className="mt-8 font-plex text-sm text-lightgray">
           Already have a profile?{" "}
           <Link href="/passport/login?next=/me" className="text-bright underline underline-offset-4 hover:text-lime">
@@ -75,17 +76,17 @@ async function Steps({ searchParams }: Pick<PageProps<"/register">, "searchParam
   if (stage !== "profile" && stage !== "photo" && stage !== "choice") redirect(state.next);
 
   if (stage === "profile") {
-    const [m] = await query<{ skills: string[] | null; interests: string[] | null; github_handle: string | null; x_handle: string | null; has_password: boolean }>(
-      "select skills, interests, github_handle, x_handle, password_hash is not null as has_password from members where id = $1",
+    const [m] = await query<{ skills: string[] | null; interests: string[] | null; github_handle: string | null; x_handle: string | null; linkedin: string | null; looking_for_team: boolean | null; has_password: boolean }>(
+      "select skills, interests, github_handle, x_handle, linkedin, looking_for_team, password_hash is not null as has_password from members where id = $1",
       [member.id],
     );
     const defaults: ProfileDefaults = {
       name: member.display_name ?? member.name,
       email: member.email,
-      skills: (m.skills ?? []).join(", "),
-      interests: (m.interests ?? []).join(", "),
       github: m.github_handle ?? "",
       x: m.x_handle ?? "",
+      linkedin: m.linkedin ?? "",
+      looking: !!m.looking_for_team,
     };
     return (
       <>

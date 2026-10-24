@@ -3,6 +3,7 @@ import { getMemberSession } from "@/lib/session";
 import { getMemberById } from "@/server/auth";
 import { avatarSrc, avatarVersion } from "@/server/avatar";
 import { flowState } from "@/server/flow";
+import NotificationBell from "./NotificationBell";
 
 // Navbar's right-hand side: Sign in / Start here, or (signed in as yourself)
 // a "continue" link to wherever you are in the flow and your avatar (the
@@ -23,6 +24,7 @@ export default async function Account() {
   const name = member.display_name ?? member.name;
   return (
     <span className="flex items-center gap-4">
+      <NotificationBell />
       <Link href={state.next} className="bg-bright px-3 py-1.5 font-plex text-sm text-ink transition-colors hover:bg-lime">
         {state.stage === "hub" ? "My team" : "Continue →"}
       </Link>

@@ -4,7 +4,7 @@ import { Suspense, type ReactNode } from "react";
 import FlowProgress from "@/components/FlowProgress";
 import Button from "@/components/ui/Button";
 import CopyField from "@/components/ui/CopyField";
-import PageHeader from "@/components/ui/PageHeader";
+import GreetingHeader from "@/components/ui/GreetingHeader";
 import StatusPill from "@/components/ui/StatusPill";
 import { ACTIVATION_STEPS, CODEX_REDEEM_INSTRUCTIONS, CODEX_REDEEM_URL, PLAN_MESSAGES, TESTMU_SIGNUP_URL, isPlaceholder, type ActivationStepId } from "@/data/activation-steps";
 import { getPersonalMember } from "@/server/auth";
@@ -24,7 +24,7 @@ export default function ActivatePage({ searchParams }: PageProps<"/activate">) {
       <Suspense fallback={<FlowProgress stage={null} viewing="activate" />}>
         <Progress />
       </Suspense>
-      <PageHeader eyebrow="Activate" dim="Three switches," bright="Then you build." intro="Your TestMu AI account, your TestMu AI plan, and your OpenAI Codex credits. Tick each one when it's done." />
+      <GreetingHeader greet={(n) => ({ dim: `Almost there, ${n}.`, bright: "Three switches." })} eyebrow="Activate" dim="Three switches," bright="Then you build." intro="Your TestMu AI account, your TestMu AI plan, and your OpenAI Codex credits. Tick each one when it's done." />
       <section className="py-12 sm:py-16">
         <div className="container-page max-w-3xl">
           <Suspense fallback={<p className="font-plex text-sm text-lightgray">Loading…</p>}>

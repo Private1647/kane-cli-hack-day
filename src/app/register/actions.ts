@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { isRegistrationOpen } from "@/lib/teams";
-import { getPersonalMember, requirePersonalMember } from "@/server/auth";
+import { getMemberById, getPersonalMember, requirePersonalMember } from "@/server/auth";
 import { skipAvatar } from "@/server/avatar";
 import { formObject, runAction, sha256 } from "@/server/core";
 import { setTeamChoice, submitProfile } from "@/server/flow";
@@ -11,9 +11,16 @@ import { clientKey, rateLimit } from "@/server/ratelimit";
 // /register steps. Each re-checks who is signed in on the server; the page then
 // re-renders the next step from the database, so a reload lands on the right step.
 
-export type ProfileState = { error?: string; needsProof?: boolean; values?: Record<string, string> } | null;
+export type ProfileState = { error?: string; fieldErrors?: Record<string, string>; needsProof?: boolean; values?: Record<string, string> } | null;
 
-const KEEP = ["name", "email", "skills", "interests", "github", "x"] as const;
+const KEEP = ["name", "email", "github", "x", "linkedin", "looking"] as const;
+
+/** Per-field messages from a VALIDATION_FAILED, keyed by field name. */
+function fieldErrorsOf(details: unknown): Record<string, string> | undefined {
+  const issues = (details as { issues?: { path: string; message: string }[] } | null)?.issues;
+  if (!issues?.length) return undefined;
+  return Object.fromEntries(issues.reverse().map((i) => [i.path, i.message]));
+}
 
 export async function profileAction(_prev: ProfileState, form: FormData): Promise<ProfileState> {
   const values = Object.fromEntries(KEEP.map((k) => [k, String(form.get(k) ?? "")]));
@@ -30,8 +37,16 @@ export async function profileAction(_prev: ProfileState, form: FormData): Promis
     if (!a.ok || !b.ok) return { error: "Too many tries. Wait a few minutes, or ask at the desk.", needsProof: true, values };
   }
   const r = await runAction(() => submitProfile(formObject(form), viewer));
-  if (!r.ok) return { error: r.error.message, needsProof: proving, values };
+  if (!r.ok) {
+    const fieldErrors = fieldErrorsOf(r.error.details);
+    const msgs = Object.values(fieldErrors ?? {});
+    const error = msgs.length > 1 ? "A few fields need fixing: see the messages in red." : (msgs[0] ?? r.error.message);
+    return { error: viewer ? error : `${error} Then type your password again.`, fieldErrors, needsProof: proving, values };
+  }
   if (r.data.kind === "needs_proof") return { needsProof: true, values };
+  // The matchmaking tick at the end of the form.
+  const member = await getMemberById(r.data.memberId);
+  if (member) await setTeamChoice(member, r.data.looking, { fromProfile: true });
   redirect("/register");
 }
 

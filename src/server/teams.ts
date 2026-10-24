@@ -184,11 +184,14 @@ export async function listRecruitingTeams(opts: { excludeTeamId?: number | null;
 
 export const createTeamSchema = z.object({
   name: zx.text(60),
-  track: z.string().trim().refine((s) => challenge.tracks.includes(s), "Pick a track."),
+  /** Optional now (same rubric for every track); teams created without one are Wildcard. */
+  track: z.string().trim().optional().transform((s) => s || "Wildcard").refine((s) => challenge.tracks.includes(s), "Pick a track."),
   /** Optional: lets teammates sign in on a shared device with name + password, as at registration. */
   password: z.string().max(200).optional().transform((s) => (s ? s : null)).refine((s) => s === null || s.length >= 8, "Use at least 8 characters."),
   summary_public: zx.optText(280),
   recruiting_open: zx.checkbox.default(false),
+  /** Skills the team wants, shown on its open-seats card. */
+  seeking_skills: z.string().max(600).optional().transform((v) => normalizeTags(v)),
   solo: zx.checkbox.default(false),
   idempotency_key: zx.idempotencyKey,
 });
@@ -229,6 +232,9 @@ export async function createTeam(who: ActingMember, input: unknown): Promise<Cre
       if (!team) throw new AppError("INTERNAL", { message: "No hack_events row" });
       await tx.query("insert into team_memberships (team_id, member_id, role) values ($1, $2, 'captain')", [team.id, who.member.id]);
       await tx.query("update members set team_id = $2 where id = $1", [who.member.id, team.id]);
+      if (data.seeking_skills.length) {
+        await tx.query("insert into team_recruiting (team_id, seeking_skills, updated_at) values ($1, $2, now()) on conflict (team_id) do update set seeking_skills = excluded.seeking_skills, updated_at = now()", [team.id, data.seeking_skills]);
+      }
       await tx.query("insert into projects (team_id, name, slug) values ($1, $2, $3)", [team.id, data.name, slug]);
       await tx.query("insert into ideas (team_id, title) values ($1, $2) on conflict (team_id) do nothing", [team.id, data.name.slice(0, 120)]);
       await tx.query("update projects p set idea_id = i.id from ideas i where i.team_id = p.team_id and p.team_id = $1", [team.id]);

@@ -50,7 +50,8 @@ export async function createTeamAction(_prev: TeamFormState, form: FormData): Pr
 export async function joinTeamAction(_prev: TeamFormState, form: FormData): Promise<TeamFormState> {
   return runAction(async () => {
     await joinTeam(await actingMember(), formObject(form));
-    redirect("/activate");
+    // Land on the team page: who's on it, then "Next: activate".
+    redirect("/team?joined=1");
   });
 }
 
