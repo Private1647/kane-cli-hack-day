@@ -8,6 +8,7 @@ import { CONNECT, INSTALL, PAIR, PROVE, SKILL_GROUPS, type Cmd } from "@/data/ag
 import { getMember } from "@/server/auth";
 import { listBearerTokens } from "@/server/pairing";
 import { getPassport } from "@/server/passport";
+import OnToIdea from "./OnToIdea";
 
 export const metadata: Metadata = {
   title: "Set up your agent",
@@ -118,7 +119,7 @@ function Cmds({ cmds }: { cmds: Cmd[] }) {
   );
 }
 
-/** For a signed-in participant: is a machine paired, and has a run been reported yet? */
+/** For a signed-in participant: is a machine paired, and has a run been reported yet? Both → on to the Idea tab. */
 async function YourStatus() {
   const member = await getMember();
   if (!member) {
@@ -149,6 +150,11 @@ async function YourStatus() {
         <Link href={`/t/${p.team.slug}/proof`} className="ml-auto font-plex text-sm text-bright underline underline-offset-4 hover:text-lime">
           Your team&apos;s Proof tab →
         </Link>
+      )}
+      {p.team && (
+        <div className="basis-full">
+          <OnToIdea ideaUrl={`/t/${p.team.slug}/idea`} done={paired && proven} />
+        </div>
       )}
     </div>
   );

@@ -60,7 +60,8 @@ export async function flowState(memberId: number): Promise<FlowState> {
   if (!m.locked && m.ticks < 3) return { stage: "team", next: "/team", teamSlug: m.slug };
   if (m.ticks < 3) return { stage: "activate", next: "/activate", teamSlug: m.slug };
   if (!m.paired) return { stage: "codex", next: "/setup", teamSlug: m.slug };
-  return { stage: "hub", next: `/t/${m.slug}`, teamSlug: m.slug };
+  // Set up: the day starts with the team's idea.
+  return { stage: "hub", next: `/t/${m.slug}/idea`, teamSlug: m.slug };
 }
 
 // ── Profile ──────────────────────────────────────────────────────────────────

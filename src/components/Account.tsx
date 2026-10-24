@@ -28,7 +28,7 @@ export default async function Account() {
   return (
     <span className="flex items-center gap-4">
       <NotificationBell />
-      <Link href={state.next} className="bg-bright px-3 py-1.5 font-plex text-sm text-ink transition-colors hover:bg-lime">
+      <Link href={state.stage === "hub" && state.teamSlug ? `/t/${state.teamSlug}` : state.next} className="bg-bright px-3 py-1.5 font-plex text-sm text-ink transition-colors hover:bg-lime">
         {state.stage === "hub" ? "My team" : "Continue →"}
       </Link>
       <Link href="/passport" aria-label={`Your profile (${name})`} title={name} className="block shrink-0" data-avatar={v ? "photo" : "monogram"}>
