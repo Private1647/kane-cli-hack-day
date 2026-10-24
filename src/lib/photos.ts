@@ -27,12 +27,13 @@ export function hasExportToken(request: Request) {
 
 // ── Social handles ──────────────────────────────────────────────────────────
 
-/** Accepts a profile URL or "in/name"; returns a canonical https://www.linkedin.com/in/... URL, "" for blank, null if invalid. */
+/** Accepts a profile URL, "in/name" or just the name; returns a canonical https://www.linkedin.com/in/... URL, "" for blank, null if invalid. */
 export function normalizeLinkedin(raw: string) {
-  const s = raw.trim();
+  const s = raw.trim().replace(/^@/, "");
   if (!s) return "";
-  const m = s.match(/^(?:https?:\/\/)?(?:[\w-]+\.)?linkedin\.com\/(in|company)\/([\w\-%.]+)\/?(?:[?#].*)?$/i) ?? s.match(/^(in)\/([\w\-%.]+)\/?$/i);
-  return m ? `https://www.linkedin.com/${m[1].toLowerCase()}/${m[2]}` : null;
+  const m =
+    s.match(/^(?:https?:\/\/)?(?:[\w-]+\.)?linkedin\.com\/(in|company)\/([\w\-%.]+)\/?(?:[?#].*)?$/i) ?? s.match(/^(in)\/([\w\-%.]+)\/?$/i) ?? s.match(/^()([\w\-%.]{3,100})$/);
+  return m ? `https://www.linkedin.com/${(m[1] || "in").toLowerCase()}/${m[2]}` : null;
 }
 
 /** Accepts @handle, handle or an x.com / twitter.com URL; returns the bare handle, "" for blank, null if invalid. */

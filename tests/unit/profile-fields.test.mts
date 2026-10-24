@@ -17,7 +17,7 @@ test("LinkedIn and X are required, GitHub is optional", () => {
 });
 
 test("each bad field gets its own plain message", () => {
-  const e = checkProfileFields({ name: "A", email: "a@b", linkedin: "riya", x: "riya dev!", github: "cwec,cwe`", password: "short" }, { passwordRequired: true });
+  const e = checkProfileFields({ name: "A", email: "a@b", linkedin: "riya k", x: "riya dev!", github: "cwec,cwe`", password: "short" }, { passwordRequired: true });
   assert.deepEqual(Object.keys(e).sort(), ["email", "github", "linkedin", "name", "password", "x"]);
   assert.match(e.github, /GitHub username/);
   assert.match(e.password, /it has 5/);
@@ -31,4 +31,14 @@ test("password is only required when asked", () => {
 test("GitHub links become usernames", () => {
   assert.equal(githubFromInput(" https://github.com/riya-dev/ "), "riya-dev");
   assert.equal(githubFromInput("riya-dev"), "riya-dev");
+});
+
+test("LinkedIn, X and GitHub take a link or just the name", async () => {
+  const { normalizeLinkedin, normalizeX } = await import("../../src/lib/photos.ts");
+  assert.equal(normalizeLinkedin("riya-k"), "https://www.linkedin.com/in/riya-k");
+  assert.equal(normalizeLinkedin("https://www.linkedin.com/in/riya-k/"), "https://www.linkedin.com/in/riya-k");
+  assert.equal(normalizeLinkedin("riya k"), null);
+  assert.equal(normalizeX("x.com/riya_dev"), "riya_dev");
+  assert.equal(normalizeX("@riya_dev"), "riya_dev");
+  assert.deepEqual(checkProfileFields({ ...ok, linkedin: "riya-k", x: "x.com/riya_dev", github: "github.com/riya-dev" }, { passwordRequired: true }), {});
 });

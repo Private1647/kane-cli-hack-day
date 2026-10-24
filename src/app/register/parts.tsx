@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useActionState, useState, type FormEvent, type ReactNode } from "react";
+import { useActionState, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { FormError, Label, SubmitButton, inputCls } from "@/components/forms/fields";
 import HumanCameraCheckpoint from "@/components/camera/HumanCameraCheckpoint";
 import { checkProfileFields } from "@/lib/profile-fields";
@@ -88,15 +88,15 @@ export function ProfileStep({ defaults, signedIn, hasPassword }: { defaults: Pro
         <input id="r-email" name="email" type="email" required autoComplete="email" defaultValue={v.email} className={field} {...err("email")} />
       </Field>
       <div className="grid gap-6 sm:grid-cols-2">
-        <Field id="r-linkedin" label="LinkedIn" hint="Profile link" error={fe.linkedin}>
-          <input id="r-linkedin" name="linkedin" required defaultValue={v.linkedin} placeholder="linkedin.com/in/your-name" autoComplete="url" className={field} {...err("linkedin")} />
+        <Field id="r-linkedin" label="LinkedIn" hint="Link or name" error={fe.linkedin}>
+          <SocialInput kind="linkedin" id="r-linkedin" name="linkedin" required defaultValue={v.linkedin} placeholder="your-name or linkedin.com/in/your-name" className={field} invalid={err("linkedin")} />
         </Field>
-        <Field id="r-x" label="X (Twitter)" error={fe.x}>
-          <input id="r-x" name="x" required defaultValue={v.x} placeholder="@handle" autoComplete="off" className={field} {...err("x")} />
+        <Field id="r-x" label="X (Twitter)" hint="Link or @handle" error={fe.x}>
+          <SocialInput kind="x" id="r-x" name="x" required defaultValue={v.x} placeholder="@handle or x.com/handle" className={field} invalid={err("x")} />
         </Field>
       </div>
-      <Field id="r-gh" label="GitHub" hint="Optional" error={fe.github}>
-        <input id="r-gh" name="github" defaultValue={v.github} placeholder="your-username" autoComplete="off" className={field} {...err("github")} />
+      <Field id="r-gh" label="GitHub" hint="Optional · link or username" error={fe.github}>
+        <SocialInput kind="github" id="r-gh" name="github" defaultValue={v.github} placeholder="username or github.com/username" className={field} invalid={err("github")} />
       </Field>
       <Field id="r-pw" label={hasPassword ? "New password" : "Choose a password"} hint={hasPassword ? "Optional · leave blank to keep yours" : "8+ characters"} error={fe.password}>
         <input id="r-pw" name="password" type="password" minLength={8} required={!hasPassword && !state?.needsProof} autoComplete="new-password" className={field} {...err("password")} />
@@ -128,6 +128,72 @@ export function ProfileStep({ defaults, signedIn, hasPassword }: { defaults: Pro
         {signedIn ? "Save and continue →" : state?.needsProof ? "Confirm it’s me →" : "Create my profile →"}
       </SubmitButton>
     </form>
+  );
+}
+
+type CheckStatus = "idle" | "checking" | "verified" | "not_found" | "unknown" | "invalid";
+
+const NOT_FOUND: Record<"linkedin" | "x" | "github", string> = {
+  linkedin: "We couldn’t find this LinkedIn profile. Check the spelling, or paste the link from your profile page.",
+  x: "There’s no X account with this handle. Check the spelling.",
+  github: "There’s no GitHub user with this name. Check the spelling.",
+};
+
+/**
+ * A LinkedIn / X / GitHub field that checks the profile is real when you leave
+ * it: ✓ verified, ✕ not found. LinkedIn often refuses automated checks, so
+ * "couldn't check" is shown quietly and never blocks anyone.
+ */
+function SocialInput({ kind, invalid, className, ...input }: { kind: "linkedin" | "x" | "github"; invalid: object; className: string } & React.InputHTMLAttributes<HTMLInputElement>) {
+  const [status, setStatus] = useState<CheckStatus>("idle");
+  const [url, setUrl] = useState<string | null>(null);
+  const last = useRef("");
+  const check = async (value: string) => {
+    const v = value.trim();
+    if (!v || v === last.current) return;
+    last.current = v;
+    setStatus("checking");
+    const r = await fetch("/api/v1/profile/check", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ kind, value: v }) }).catch(() => null);
+    if (last.current !== v) return;
+    const out = r ? ((await r.json().catch(() => null)) as { status: CheckStatus; url: string | null } | null) : null;
+    setStatus(out?.status ?? "unknown");
+    setUrl(out?.url ?? null);
+  };
+  const tone = status === "verified" ? "border-lime" : status === "not_found" ? "border-danger" : "";
+  return (
+    <>
+      <div className="relative">
+        <input
+          {...input}
+          {...invalid}
+          autoComplete="off"
+          onBlur={(e) => void check(e.target.value)}
+          onChange={() => {
+            last.current = "";
+            setStatus("idle");
+          }}
+          className={`${className} pr-11 ${tone}`}
+        />
+        <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 font-plex text-lg" aria-hidden="true">
+          {status === "verified" ? <span className="text-lime">✓</span> : status === "not_found" ? <span className="text-danger">✕</span> : status === "checking" ? <span className="text-lightgray">…</span> : null}
+        </span>
+      </div>
+      <p className="mt-2 min-h-5 font-plex text-sm" aria-live="polite">
+        {status === "checking" && <span className="text-lightgray">Checking…</span>}
+        {status === "verified" && (
+          <span className="text-lime">
+            ✓ Verified{" "}
+            {url && (
+              <a href={url} target="_blank" rel="noreferrer" className="text-lightgray underline underline-offset-4 hover:text-lime">
+                {url.replace(/^https:\/\/(www\.)?/, "")}
+              </a>
+            )}
+          </span>
+        )}
+        {status === "not_found" && <span className="text-danger">✕ {NOT_FOUND[kind]}</span>}
+        {status === "unknown" && kind === "linkedin" && <span className="text-lightgray">LinkedIn didn’t let us check automatically. Make sure the link opens your profile.</span>}
+      </p>
+    </>
   );
 }
 
