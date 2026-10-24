@@ -12,9 +12,6 @@ const links = [
   { href: "/#prizes", label: "Prizes" },
   { href: "/#judges", label: "Judges" },
   { href: "/#rules", label: "Rules" },
-  { href: "/live", label: "Live" },
-  { href: "/ship", label: "Showcase" },
-  { href: "/help", label: "Help" },
 ];
 
 /** `account` is the server-rendered Log in / Register or My team control. */
