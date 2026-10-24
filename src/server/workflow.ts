@@ -1,5 +1,6 @@
 import "server-only";
 import { query } from "@/lib/db";
+import initialOwners from "@/data/hack-os-owners.json";
 import { WORKFLOW_TASKS, type WorkflowTask, type WorkflowStatus } from "@/lib/workflow";
 import { hasRole, staffActor, type Staff } from "./auth";
 import { AppError, parse, withAudit, z } from "./core";
@@ -8,11 +9,16 @@ type Stored = { task_id: string; owner_name: string; status: WorkflowStatus; not
 const authorize = (staff: Staff) => { if (!hasRole(staff, "organizer")) throw new AppError("FORBIDDEN"); };
 export async function listWorkflowTasks(staff: Staff): Promise<WorkflowTask[]> {
   authorize(staff);
-  const rows = await query<Stored>("select task_id, owner_name, status, note, revision, updated_by, updated_at from workflow_ownership where event_id = current_event_id()");
+  const [rows, events] = await Promise.all([
+    query<Stored>("select task_id, owner_name, status, note, revision, updated_by, updated_at from workflow_ownership where event_id = current_event_id()"),
+    query<{ slug: string }>("select slug from hack_events where id = current_event_id()"),
+  ]);
+  const defaults = new Map((events[0]?.slug === initialOwners.event_slug ? initialOwners.assignments : []).map(row => [row.id, row]));
   const stored = new Map(rows.map(row => [row.task_id, row]));
   return WORKFLOW_TASKS.map(task => {
     const row = stored.get(task.id);
-    return { ...task, owner_name: row?.owner_name ?? "", status: row?.status ?? "pending", note: row?.note ?? "", revision: row?.revision ?? 0, updated_by: row?.updated_by ?? null, updated_at: row ? new Date(row.updated_at).toISOString() : null };
+    const initial = defaults.get(task.id);
+    return { ...task, owner_name: row?.owner_name ?? initial?.owner_name ?? "", status: row?.status ?? (initial?.status as WorkflowStatus | undefined) ?? "pending", note: row?.note ?? initial?.note ?? "", revision: row?.revision ?? 0, updated_by: row?.updated_by ?? null, updated_at: row ? new Date(row.updated_at).toISOString() : null };
   });
 }
 const inputSchema = z.object({

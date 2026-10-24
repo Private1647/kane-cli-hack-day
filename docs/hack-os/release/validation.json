@@ -58,5 +58,23 @@
       "No lifecycle host adapter installed or live status POST/video upload performed",
       "No browser-rendering check; file:// browser automation is blocked"
     ]
+  },
+  "approved_assignment_import": {
+    "source": "user-exported hack-os-local-assignments.json",
+    "imported_records": 21,
+    "named_records": 17,
+    "additional_unassigned_tasks": 7,
+    "checks": [
+      "Exact owner/status/note preservation against approved export",
+      "Embedded static planning defaults match committed snapshot",
+      "TypeScript and targeted ESLint passed",
+      "Actual shared service uses approved event-specific defaults",
+      "Saved shared records including cleared owners override imported defaults",
+      "Revision conflicts, authorization, audit and event isolation passed in isolated embedded PostgreSQL"
+    ],
+    "limits": [
+      "No live event database modified",
+      "Imported Done values are user planning decisions, not independent implementation verification"
+    ]
   }
 }
