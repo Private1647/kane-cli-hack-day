@@ -4,6 +4,9 @@ import { getMemberById } from "@/server/auth";
 import { avatarSrc, avatarVersion } from "@/server/avatar";
 import { flowState } from "@/server/flow";
 import NotificationBell from "./NotificationBell";
+import { Avatar } from "./ui/Avatar";
+
+export { Avatar };
 
 // Navbar's right-hand side: Sign in / Start here, or (signed in as yourself)
 // a "continue" link to wherever you are in the flow and your avatar (the
@@ -48,23 +51,3 @@ export function SignedOut() {
   );
 }
 
-const initials = (name: string) =>
-  name
-    .trim()
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((p) => p[0]?.toUpperCase() ?? "")
-    .join("") || "?";
-
-/** A round photo, or the person's initials on a hairline circle. */
-export function Avatar({ name, src, size = 36 }: { name: string; src: string | null; size?: number }) {
-  if (src) {
-    // eslint-disable-next-line @next/next/no-img-element -- private, cookie-gated image; not for the optimizer
-    return <img src={src} alt="" width={size} height={size} style={{ width: size, height: size }} className="rounded-full border border-hairline object-cover" />;
-  }
-  return (
-    <span aria-hidden="true" style={{ width: size, height: size }} className="inline-flex items-center justify-center rounded-full border border-lime bg-lime-deep font-pixel text-[11px] text-lime">
-      {initials(name)}
-    </span>
-  );
-}

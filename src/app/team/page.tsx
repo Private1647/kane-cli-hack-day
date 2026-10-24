@@ -14,8 +14,9 @@ import { flowState, listPool } from "@/server/flow";
 import { currentTeamOf, getRoster, getTeamInfo, listOpenInvites, previewInvite } from "@/server/teams";
 import { listIntros } from "@/server/match";
 import { joinPoolAction } from "../match/actions";
-import { IntroButtons, InviteToTeam } from "../match/parts";
+import { IntroButtons } from "../match/parts";
 import { Panel, StateLine } from "./blocks";
+import PublicPool from "./PublicPool";
 import { CreateTeamForm, InviteForm, JoinByCodeForm, LeaveTeamForm, RevokeInviteButton, SettingsForm } from "./parts";
 
 export const metadata: Metadata = { title: "Your team" };
@@ -197,60 +198,6 @@ async function Personal({ searchParams }: Pick<PageProps<"/team">, "searchParams
               )}
             </section>
           )}
-          {seatsOpen && (
-            <section id="people" aria-labelledby="pool-title" className="space-y-4">
-              <div className="flex flex-wrap items-end justify-between gap-3">
-                <div>
-                  <p className="font-pixel text-[10px] uppercase tracking-[0.2em] text-lime">Step 2 · optional</p>
-                  <h2 id="pool-title" className="mt-2 font-display text-2xl text-bright">
-                    Public pool
-                  </h2>
-                </div>
-                <p className="font-plex text-sm text-lightgray">
-                  {people.length} looking · {team.cap - team.member_count} open {team.cap - team.member_count === 1 ? "seat" : "seats"}
-                </p>
-              </div>
-              <p className="font-plex text-sm leading-relaxed text-lightgray">
-                Everyone here is looking for a team. Invite someone and they can accept from their matchmaking page; they join straight away.
-                {wanted.size > 0 ? " People with the skills you need come first, highlighted in lime." : ""}
-              </p>
-              {people.length === 0 ? (
-                <p className="border border-dashed border-hairline p-4 font-plex text-sm text-lightgray">Nobody is in the pool right now. Check back soon, or send an invite code above.</p>
-              ) : (
-                <ul className="grid gap-3 sm:grid-cols-2">
-                  {people.map((p) => (
-                    <li key={p.member_id} className="flex flex-col gap-3 border border-hairline p-4">
-                      <div className="flex items-center gap-3">
-                        <Avatar name={p.name} src={p.photo ? avatarSrc(p.member_id, p.photo) : null} size={40} />
-                        <div className="min-w-0">
-                          <p className="truncate font-display text-lg text-bright">{p.name}</p>
-                          {p.interests.length > 0 && <p className="truncate font-plex text-xs text-lightgray">Into {p.interests.join(", ")}</p>}
-                        </div>
-                      </div>
-                      {p.skills.length > 0 && (
-                        <div className="flex flex-wrap gap-1.5">
-                          {p.skills.map((s) => (
-                            <span key={s} className={`border px-2 py-0.5 font-plex text-xs ${wanted.has(s.toLowerCase()) ? "border-lime text-lime" : "border-hairline text-lightgray"}`}>
-                              {s}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                      <div className="mt-auto">
-                        {p.intro === "proposed" ? (
-                          <p className="font-plex text-sm text-lightgray">Invited · waiting for an answer</p>
-                        ) : p.intro === "declined" ? (
-                          <p className="font-plex text-sm text-lightgray">Declined</p>
-                        ) : (
-                          <InviteToTeam memberId={p.member_id} teamName="team" />
-                        )}
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
-          )}
           <div className="brackets border border-hairline p-5" data-team-slug={team.slug}>
             <div className="flex flex-wrap items-center justify-between gap-3">
               <p className="font-pixel text-[10px] uppercase tracking-[0.2em] text-lightgray">Your team</p>
@@ -282,6 +229,13 @@ async function Personal({ searchParams }: Pick<PageProps<"/team">, "searchParams
         </div>
 
         <aside className="space-y-10">
+          {seatsOpen && (
+            <PublicPool
+              people={people.map((p) => ({ member_id: p.member_id, name: p.name, skills: p.skills, interests: p.interests, photo: p.photo ? avatarSrc(p.member_id, p.photo) : null, intro: p.intro }))}
+              wanted={[...wanted]}
+              openSeats={team.cap - team.member_count}
+            />
+          )}
           {joinRequests(intros).length > 0 && (
             <Panel title="Asking to join">
               <ul className="border-t border-dashed border-hairline">
