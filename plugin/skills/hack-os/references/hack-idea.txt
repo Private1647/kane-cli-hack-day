@@ -1,0 +1,25 @@
+UPSTREAM PROCEDURE: installer 0.1.3, inspected 2026-10-24. Central SKILL.md governs resume and v2.5 gates.
+
+# hack-idea
+
+Event skill for Kane CLI Hack Day (KANE HACK OS). It drives the event MCP tools **idea_validate, idea_check_overlap, harness_get_capabilities** and hands Kane CLI mechanics to the official Kane CLI skill.
+
+## Procedure
+
+1. Ask for the idea in a few sentences: what it builds, who uses it, where Kane CLI runs in it.
+2. Call `idea_validate` with `project_idea` and `publication_intent` (`private` unless they want to share a summary). The verdict is **advisory**: say so. It is never a judging score.
+3. Walk through the 8 criteria (functional deliverable, agent use, Kane integration, repeatability, feedback loop, actual proof, engineering impact, feasible demo) and the three suggested changes. Help them rewrite, then validate again if they want.
+4. Use `harness_get_capabilities` to suggest the Kane path (run → testrun → cover).
+5. `idea_check_overlap` only compares opted-in public summaries. If they haven't opted in, explain the opt-in on the Idea tab; never paste another team's private idea.
+
+## Done when
+
+The verdict, which criteria are met, three concrete changes, and the Kane path.
+
+## Fallback
+
+The Idea tab in the team hub has the same checklist by hand.
+
+## Privacy
+
+Private idea text stays in the team. Overlap uses opted-in public summaries only.

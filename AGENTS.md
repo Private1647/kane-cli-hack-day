@@ -7,3 +7,13 @@ This version has breaking changes — APIs, conventions, and file structure may 
 This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
 
 <!-- END:nextjs-agent-rules -->
+
+## Hack OS event-day contribution context
+
+All further changes belong in this shared repository; base branch event-day-flow. User requests one installer-first hack-os skill, signup/team API guidance, an hours-long building checkpoint, separate public evidence upload, and a future /t/{team-id} artifact page. Public bucket and page API contracts will be supplied later. Keep mandatory v2.5 Ship Page + hosted deck + verified X eligibility separate from submission acceptance. Existing finalization/publishing tools are browser handoffs. Source presence is not runtime verification.
+
+Ops /workflow tracks ownership of implementation and event-operation gaps with editable owner names, shared database status/notes, filtering and audit. Start tasks unassigned/pending; do not infer done from source code. Apply db/034_workflow_ownership.sql via existing migration runner. Organizer/admin authorization and optimistic revision checks protect shared edits. These readiness records never grant participant eligibility.
+
+Keep context in this AGENTS.md. Reuse the existing README and existing Markdown; do not add planning Markdown or another README. SKILL.md is required for the requested skill format; phase references use .txt. Skill source: plugin/skills/hack-os; diagram: public/hack-os-flow.html; shared owner board: /ops/workflow; gap contracts: docs/hack-os/release/pending-contracts.json. Preserve upstream source Markdown. Use official Kane CLI assurance when designing/generating participant test suites.
+
+Contribution target: user-created fork https://github.com/Private1647/kane-cli-hack-day, PR base SparshKesari/kane-cli-hack-day:event-day-flow. GitHub connector write calls return 403 even on fork; gh CLI succeeds with network access (the sandbox-only auth check was inconclusive). Use normal authenticated git/gh with network access. Validation includes typecheck/lint, 41 existing tests and actual ownership service checks against an isolated embedded PostgreSQL; no live DB or participant data used. Default Turbopack port binding is restricted; webpack production build is the applicable fallback. npm ci reveals existing picomatch lock inconsistency; package lock was preserved.

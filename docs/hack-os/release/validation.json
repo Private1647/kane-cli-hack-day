@@ -1,0 +1,39 @@
+{
+  "as_of": "2026-10-24",
+  "package_version": "1.1.0",
+  "checks": [
+    "Both helper scripts pass Node syntax checks",
+    "Expanded onboarding/build/upload/page gate graph has valid dependencies and no cycles",
+    "Building checkpoint persists across invocations and returns explicit participant resume prompt",
+    "Build readiness ends wait; pending page API preserves independently uploaded evidence receipt",
+    "Changed commit invalidates public evidence and submission-page cache for reconciliation",
+    "Building status rejected for non-build gates without modifying cache",
+    "Skill YAML and every direct reference validate",
+    "Interactive diagram data and JavaScript validate; both future APIs labelled pending",
+    "Rebuilt one-skill archive matches all source files and installer checksum"
+  ],
+  "limits": [
+    "No production deployment or live database mutation",
+    "No participant credentials, authenticated event calls or uploads",
+    "Public bucket upload and /t page API contracts confirmed pending",
+    "Browser rendering not exercised; diagram script/data syntax checked",
+    "PyYAML unavailable; frontmatter parsed using Ruby standard-library YAML"
+  ],
+  "ownership_contribution": {
+    "checks": [
+      "next typegen and tsc --noEmit passed",
+      "Targeted ESLint passed",
+      "All 41 existing unit tests passed",
+      "Ownership migration applied twice to isolated embedded PostgreSQL",
+      "Actual ownership service save/readback, stale revision rejection, role enforcement, owner normalization, clear owner, transactional audit and event isolation passed",
+      "Production next build --webpack passed; /ops/workflow route emitted"
+    ],
+    "limits": [
+      "No live database or participant data used",
+      "Default Turbopack build failed on restricted worker port binding; webpack mode used for production validation",
+      "npm ci blocked by pre-existing picomatch lock inconsistency; local dependency install preserved package-lock.json",
+      "GitHub connector writes returned 403, CLI network auth verified for fork contribution",
+      "Build used existing app fallback paths for unavailable local database and external metrics; production data not exercised"
+    ]
+  }
+}

@@ -34,3 +34,9 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## Hack OS workflow and owners
+
+Open `/ops/workflow` as organizer/admin to assign owner names, track pending/in-progress/blocked/done work, add blockers/next actions and filter by person or workflow step. Assignments are shared in the event database and audited; run `npm run db:migrate` to apply `034_workflow_ownership.sql` before using the board. Concurrent stale saves are rejected; refresh before retrying.
+
+The participant/skill/backend diagram is `/hack-os-flow.html`. The single skill lives at `plugin/skills/hack-os`, with a distribution archive at `public/hack-os-skills-1.1.0.tgz`. The current production installer is unchanged; `docs/hack-os/release` contains pending API contracts, validation notes and a rollout patch proposal. The public-bucket and team-page APIs remain pending until their contracts are supplied. Owners and readiness statuses are organizer decisions, separate from participant completion and judging eligibility.
